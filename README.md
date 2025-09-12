@@ -10,19 +10,22 @@ have to modify the Makefile.
 To build the PDF, simply do the following:
 
 ```
-~/Mizar-system/lit$ cd img
-~/Mizar-system/lit/img$ make
-...
-~/Mizar-system/lit/img$ cd ..
 ~/Mizar-system/lit$ make
 ```
 
-This will produce a 398 page PDF.
+This will run Metapost (and mptopdf) on the relevant files in the
+`img/` subdirectory, then run produce a 466 page PDF from the current
+draft of the `parser.web` file.
 
 # Plans
 
-**Short-term goal:** Right now, I am trying to transcribe the files
-needed for the [esmprocessor.dpr](../base/esmprocessor.dpr) program. 
+**Short-term goal:** Right now, I am trying to annotate and transcribe the files
+needed for the Parser.
+
+I have transcribed most of the files (I believe I need to finish transcribing
+`base/wsmarticle.pas`).
+
+I am in the process of annotating the `parser.pas` file.
 
 **Long-term goal:** A question lurking in the back of my mind is,
 "What does the Mizar system do which is not covered in the
@@ -42,21 +45,14 @@ to strip out common types like `integer` and `boolean` from the index...)
 There is a lot of code in Mizar, not all of it is used. Most of it is
 surprisingly well coded.
 
+There are some bugs and possible improvements, but nothing severe so
+far.
+
 # Progress
 
-So far I have transcribed and annotated 5780 lines of code (there are
-about 13870 lines of code left to be transcribed and annotated). These
-are in 557 numbered "chunks" spanning 162 pages. At this rate, we
-should expect an additional 389 pages in 1337 chunks for the remainder
-of the code. So we should expect this document to be something like
-551 pages for the transcription, and 48 pages for the index.
-
-In short, just transcribing `esmprocessor.dpr` and the files needed
-for it to compile would yield an approximately 600 page document.
-
-There are 23662 lines of code in the `base` directory, which means
-that 4012 lines of code in 6 files are not involved in the
-`esmprocessor.dpr`.
+So far I have transcribed and annotated about 18549 lines of code. These
+are in 1610 numbered "chunks" spanning 545 pages (with an additional
+161 pages of backmatter), for a total of 606 pages.
 
 This is not even considering the `kernel` directory, which contains
 40244 lines of code in 54 files.
