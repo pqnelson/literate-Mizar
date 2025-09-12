@@ -10,6 +10,7 @@
 # Ignore the raw output of WEAVE
 CONTENTS.tex
 esmprocessor.tex
+parser.tex
 galley.tex
 labels.tex
 labels2.tex

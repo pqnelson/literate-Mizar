@@ -29,7 +29,7 @@
 %% [ ] ./base/first_identification.pas 3407 lines
 %% [ ] ./base/esmprocessor.dpr           44 lines
 
-\def\title{Even More Strict Mizar Processor}
+\def\title{Mizar Parser}
 
 @* [C] Introduction.
 We are trying to understand Mizar. So I am transcribing the source

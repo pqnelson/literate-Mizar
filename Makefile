@@ -1,8 +1,8 @@
-FILE=esmprocessor
+FILE=parser
 TEX=pdftex
 GALLEY=galley
 
-all: labels
+all: images labels
 	weave -p $(FILE) - $(FILE)
 	bash cleanindex.sh
 	$(TEX) $(FILE)
@@ -13,13 +13,13 @@ all: labels
 galley: labels next
 	@:
 
-next: labels
+next: images labels
 	weave -p $(GALLEY) - $(GALLEY)
 	bash cleanindex.sh
 	$(TEX) $(GALLEY)
 	$(TEX) $(GALLEY)
 
-dvi: labels
+dvi: images labels
 	weave $(FILE) - $(FILE)
 	bash cleanindex.sh
 	tex $(FILE)
@@ -28,7 +28,7 @@ dvi: labels
 classic: dvi
 	dvipdfmx $(FILE).dvi
 
-twill: labels
+twill: images labels
 	twill $(FILE).web - $(FILE)
 	twill $(FILE).web - $(FILE)
 	tex $(FILE)
@@ -37,6 +37,9 @@ twill: labels
 
 labels:
 	touch labels.tex
+
+images:
+	cd img && make && cd ..
 
 clean:
 	rm *.log CONTENTS.tex
