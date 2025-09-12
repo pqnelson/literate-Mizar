@@ -45,6 +45,11 @@ this license in one place.
 the default case does not add a new format to the \\{gFormatsColl} dictionary.
 \bug In \\{CreateArgs} (\section\xref{CreateArgs}) in \texttt{parseraddition.pas}, when |aBase <= 0|, this
 will set |TermNbr| to a negative number.
+\bug In the Subexpression class, there is duplicate code
+(\section\xref{extSubexpObj.CompleteAttributeArguments}) ---
+the \\{CompleteAttributeArguments} and \\{FinishAttributeArguments}
+are identical, but only the latter is consistent with the naming
+conventions for the parser. Or (probably more likely) I am misunderstanding the naming conventions?
 \bug In \\{CompleteArgument}
 (\section\xref{CompleteArgument:parser.pas}), we should also test
 that \\{fParenthCnt} is positive, shouldn't we?
@@ -596,6 +601,8 @@ variable.
 Recall that \\{ProofPragma} means ``check the proof is valid?'' In
 other words, when \\{ProofPragma} is false, we are skipping the
 proofs.
+
+\section{thesis-formula:macro-def}
 
 @d thesis_formula == new(ThesisFormulaPtr,Init(CurPos))
 @d thesis_prop == new(PropositionPtr,
@@ -2092,7 +2099,7 @@ function is precisely step (2).
 
 \label{extItemObj.ProcessFunctorSymbol}
 @<Extended item implementation@>=
-procedure @? extItemObj.ProcessFunctorSymbol;
+procedure @? extItemObj.@!ProcessFunctorSymbol;
 begin
    gPatternPos:=CurPos;
    if CurWord.Kind = InfixOperatorSymbol then
@@ -2250,7 +2257,7 @@ var lFormatNr: integer;
 begin
    lFormatNr:=gFormatsColl.CollectPrefixForm('U',CurWord.Nr,1);
    gStructFieldsSegment^.Insert(new(FieldSymbolPtr,Init(CurPos,CurWord.Nr)));
-   Inc(gFieldsNbr);
+   inc(gFieldsNbr);
 end;
 
 @ After each field has been parsed, the Parser invokes this method to
@@ -3060,11 +3067,45 @@ end;
 
 
 @* [S] Extended subexpression class.
+\node{Aside: refactoring.}
+We should probably refactor a private procedure \\{PushTermStack} to
+push a new term onto the term stack, and a private
+function \\{PopTermStack} to return the top of the term stack (and
+mutate the term stack), and possibly a \\{ResetTermStack} procedure
+(which will clear the term stack and possibly the objects stored in it?).
+
+We see that \\{TermNbr} is
+decremented when popping the \\{Term} stack (via \\{FinishTerm});
+when \\{FinishQualifyingFormula} is invoked, it decrements the \\{TermNbr};
+when \\{FinishAttributiveFormula} is invoked, it decrements the \\{TermNbr};
+but these latter two methods can (and should) be refactored to use
+the \\{FinishTerm} to pop the term stack and decrement the \\{TermNbr}
+state variable.
+
+Assigning the \\{TermNbr} occurs
+when \\{CreateArgs} method is invoked;
+the \\{InsertIncorrBasic} method resets the \\{TermNbr} to the \\{nTermBase};
+the \\{ProcessAtomicFormula}, when a 157 error is raised, will reset
+the \\{TermNbr} to the \\{nTermBase};
+when the constructor for an \\{extExpression} object is invoked, it
+resets the \\{TermNbr} to zero (which happens in
+the \\{extItem}'s \\{CreateExpression} method---which occurs
+frequently enough to be a worry).
+
+The only time when the \\{TermNbr} is incremented is when we push a
+new term onto the \\{Term} stack.
+
+
+@
 There is a comment in Polish ``teraz jest to kolekcja
 MultipleTypeExp'', which Google translates to ``now it is a
 MultipleTypeExp collection''. I have made this replacement in the code
 below, prefixed with a ``+'' sign (to distinguish it from the other
 comment already in English).
+
+Also note: the \\{nRestriction} refers to the subformula in a
+universally quantified formula
+$$\hbox{\texttt{for }}\<Variables>\hbox{ \texttt{st} }\<Restriction>\hbox{ \texttt{holds} }\dots$$
 
 \label{extSubexprObj:class}
 
@@ -3087,11 +3128,11 @@ comment already in English).
       @! nRightSideOfPredPos: Position;
       @! nMultipredicateList:MList; @#
       
-      @! nSample: TermPtr;
+      @! nSample: TermPtr; {for Fraenkel terms}
       @! nAllPos: Position;
       @! nPostQualList: MList; {+ now it is a MultipleTypeExp collection}
       @! nQualifiedSegments: MList;
-      @! nSegmentIdentColl: MList; {keeps spellings of vars}
+      @! nSegmentIdentColl: MList; {quantified variables, keeps spellings of vars}
       @! nSegmentPos: Position; @#
 
       @! nFirstSententialOperand: FormulaPtr;
@@ -3113,7 +3154,9 @@ comment already in English).
    end;
 
 
-@ The |TermNbr| is used to treat a list of terms as a stack data structure.
+@ The |TermNbr| is used to treat a list of terms as a stack data
+structure. Specifically, the \\{Term} array is treated as a stack, and
+the \\{TermNbr} is the index of the ``top'' of the stack.
 
 @<Local variables for parser additions@>=
   @! TermNbr: integer;
@@ -3157,8 +3200,14 @@ begin
    nNonPos:=CurPos;
 end;
 
-@ \node{Pop arguments from term stack.} Bug: when |aBase <= 0|, this
-will set |TermNbr| to a negative number.
+@ \node{Pop arguments from term stack.} This will take some
+parameter \\{aBase} and copy pointers to each element of |Term[aBase .. TermNbr]| into a new list. 
+Then the \\{TermNbr} state variable is updated to be $\\{aBase}-1$.
+
+This means that executing ``|list1 := CreateArgs(aBase); list2 := CreateArgs(aBase);|''
+will have |list2 = nil|.
+
+Bug: when |aBase <= 0|, this will set |TermNbr| to a negative number.
 
 \label{CreateArgs}
 @<Extended subexpression implementation@>=
@@ -3173,7 +3222,21 @@ begin
    CreateArgs:=lList;
 end;
 
-@ @<Global variables introduced in \texttt{parseraddition.pas}@>=
+@ The ``process (singular) attribute'' method is invoked in
+the ``process (plural) attributes'' procedure (\section\xref{ProcessAttributes:parser.pas}), and in the \\{ATTSubexpression} procedure (\section\xref{ATTSubexpression}).
+This method will be invoked when the Parser is looking at an attribute
+token.
+
+When there is no format recorded for such an attribute, then a 175
+error will be raised.
+
+This will allocate a new Adjective object, store it in
+the \\{gLastAdjective} state variable, then append it to
+the \\{nAttrCollection} field of the caller.
+
+@^Error, 175@>
+
+@<Global variables introduced in \texttt{parseraddition.pas}@>=
   @! gLastAdjective: AdjectiveExpressionPtr;
 
 @ @<Extended subexpression implementation@>=
@@ -3195,34 +3258,51 @@ begin
             gLastAdjective:=new(NegatedAdjectivePtr,Init(nNonPos,gLastAdjective));
       end;
    end
-   else
+   else {needed for \\{ATTSubexpression} adjective cluster handling}
    begin
       gLastAdjective:=new(AdjectivePtr,Init(CurPos,0,CreateArgs(nTermBase+1)));
-   end;
+   end; @/
    nAttrCollection.Insert(gLastAdjective);
 end;
 
-@ @<Extended subexpression implementation@>=
+@ These next next method is invoked before the Parser parses arguments
+for an attribute.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.StartAttributeArguments;
 begin
    nTermBase:=TermNbr;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The next two methods are invoked after the Parser has finished
+parsing the arguments for an attribute.
+
+I am confused why there is
+duplicate code here, and the naming conventions suggest
+the \\{FinishAttributeArguments} method should be preferred.
+
+\label{extSubexpObj.CompleteAttributeArguments}
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.CompleteAttributeArguments;
 begin
    nSubexpPos:=CurPos;
    nRightArgBase:=TermNbr;
-end;
+end; @#
 
-@ @<Extended subexpression implementation@>=
 procedure @? extSubexpObj.FinishAttributeArguments;
 begin
    nSubexpPos:=CurPos;
    nRightArgBase:=TermNbr;
 end;
 
-@
+@ This allocates a new list of pointers, moves the
+caller's \\{nAttrCollection} into the list, and updates the \\{gAttrColl}
+state variable to point at them.
+
+Again, this should be named \\{FinishedAdjectiveCluster} to be
+consistent with the naming conventions seemingly adopted.
+
 \label{extSubexpObj.CompleteAdjectiveCluster}
 @<Extended subexpression implementation@>=
 procedure @? extSubexpObj.CompleteAdjectiveCluster;
@@ -3230,7 +3310,15 @@ begin
    gAttrColl:=new(PList,MoveList(nAttrCollection));
 end;
 
-@ @<Extended subexpression implementation@>=
+@ When the Parser works its way through a registration block, check
+that the \\{TermNbr} points to not farther ahead than one more token 
+ahead from the caller's \\{nTermBase} field. Raise an error if that
+happens.
+
+This method is only invoked in the Parser module's
+the \\{RegisterCluster} (\section\xref{RegisterCluster:parser.pas}) procedure.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.CompleteClusterTerm;
 begin
    if TermNbr-nTermBase > 1 then
@@ -3240,32 +3328,70 @@ begin
    end;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ A ``simple term'' appears to be a variable. This is used when the
+Parser parses an identifier as a closed term
+(\section\xref{GetClosedSubterm:identifier:parser.pas}). The state
+variable |gLastTerm| is updated to point to a newly
+allocated \\{SimpleTerm} object.
+
+This method should probably be moved closer to the other methods
+used when parsing terms.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.ProcessSimpleTerm;
 begin
    gLastTerm:=new(SimpleTermPtr,Init(CurPos,GetIdentifier));
 end;
 
-@ @<Extended subexpression implementation@>=
+@ \node{Qualified terms.} The Parser invokes \\{ProcessQua} when it is
+looking directly at a ``\texttt{qua}'' token, specifically in
+the \\{AppendQua} (\section\xref{AppendQua})
+procedure. The \\{ProcessQua} method is used nowhere else. It is
+solely responsible for ``marking the current position'' of the Parser,
+and storing that in the caller's \\{nQuaPos} field.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.ProcessQua;
 begin
    nQuaPos:=CurPos
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser invokes the \\{FinishedQualifiedTerm} method after
+encountering a ``\texttt{qua}'' and after parsing the type. This
+method constructs a new \\{QualifiedTerm} object reflecting the top of
+the \\{Term} stack is taken ``\texttt{qua}'' the \\{gLastType}, and
+the mutates the top of the \\{Term} stack to be this newly
+allocated \\{QualifiedTerm} object.
+
+This method does not push anything new to
+the term stack, but it does mutate the \\{Term} stack.
+
+This method is used nowhere else other than the Parser's \\{AppendQua}
+(\section\xref{AppendQua}) procedure.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.FinishQualifiedTerm;
 begin
    Term[TermNbr]:=new(QualifiedTermPtr, Init(nQuaPos,Term[TermNbr],gLastType));
 end;
 
-@ @<Extended subexpression implementation@>=
+@ Although the ``\texttt{exactly}'' reserved keyword is not used for
+anything, the method for \\{ProcessExactly} marks the current position
+and stores it in the caller's \\{nQuaPos}, then \emph{updates}
+(\textbf{not} pushes) to the top of the term
+stack by turning the top of the stack into an \\{ExactlyTerm} object.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.ProcessExactly;
 begin
    nQuaPos:=CurPos;
    Term[TermNbr]:=new(ExactlyTermPtr, Init(nQuaPos,Term[TermNbr]));
 end;
 
-@ @<Extended subexpression implementation@>=
+@ \node{Arguments to a term.} The \\{CheckTermLimit} procedure is a
+``private helper function'' for the \\{FinishArgument} method.
+
+@<Extended subexpression implementation@>=
 procedure CheckTermLimit;
 var l: integer;
 begin
@@ -3276,7 +3402,9 @@ begin
    end;
 end;
 
-@ This mutates the \\{TermNbr} and \\{Term} module-local variables.
+@ \node{Pushing the Term stack.}
+This method pushes the \\{gLastTerm} state variable's contents to
+the \\{Term} stack, mutating the \\{TermNbr} and \\{Term} module-local variables.
 
 \label{extSubexpObj.FinishArgument}
 @<Extended subexpression implementation@>=
@@ -3287,7 +3415,14 @@ begin
    Term[TermNbr]:=gLastTerm;
 end;
 
-@ This is only used in \\{AppendFunc} (\section\xref{AppendFunc:parser.pas}).
+@ \node{Pop the Term stack.} The evil twin to ``pushing'' an element
+onto a stack, ``popping'' a stack removes the top element. We pop
+the \\{Term} stack whenever we finish the term.
+
+This is only used in \\{AppendFunc} (\section\xref{AppendFunc:parser.pas}).
+
+This should probably check that the \\{Term} stack is not empty before
+being invoked.
 
 @<Extended subexpression implementation@>=
 procedure @? extSubexpObj.FinishTerm;
@@ -3298,7 +3433,8 @@ end;
 
 @* [s] Parsing Types.
 When we start parsing a new type, we make sure the \\{gLastType}
-variable is not caching an old type.
+state variable is not caching an old type. We assign it to be the |nil|
+pointer. 
 
 @<Extended subexpression implementation@>=
 procedure @? extSubexpObj.StartType;
@@ -3306,7 +3442,19 @@ begin
    gLastType:=nil;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ This is invoked only by the Parser's \\{RadixTypeSubexpression}
+(\section\xref{RadixTypeSubexpression:parser.pas}) procedure. The
+Parser delegates the work of storing the mode information to this
+method. In turn, the caller's \\{nModeKind} field stores the current word's
+token \\{Kind}, and the caller's \\{nModeNr} field stores the current
+word's number. The Parser's current position is marked and stored in
+the caller's \\{nSubexpPos} field.
+
+But no state variables are mutated by this method.
+
+\label{extSubexpObj.ProcessModeSymbol}
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.ProcessModeSymbol;
 begin
    nModeKind:=CurWord.Kind;
@@ -3316,7 +3464,25 @@ begin
    nSubexpPos:=CurPos;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser has just finished parsing a type and its arguments ---
+``\<Mode> \texttt{of} \<Term-list>'' or ``\<Structure> \texttt{over} \<Term-list>''.
+The data has been accumulated into the caller, which will now be
+constructed into an AST object. The newly allocated AST node will be
+stored in the \\{gLastType} state variable.
+
+If the caller is trying to construct a mode which does not match the
+format recorded in the \\{gFormatsColl}, a 151 error will be raised.
+
+Similarly, if the caller is trying to construct a structure which does
+not match the format recorded in the \\{gFormatsColl}, a 185 error
+will be raised.
+
+@^Error, 151@>
+@^Error, 185@>
+
+This is invoked only by the Parser's \\{RadixTypeSubexpression}
+(\section\xref{RadixTypeSubexpression:parser.pas}) procedure.
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.FinishType;
 var lFormatNr: integer;
 begin
@@ -3335,18 +3501,39 @@ begin
          end;
    othercases
    begin
-      gLastType:=new(IncorrectTypePtr, Init(CurPos));
+      gLastType:=new(IncorrectTypePtr, Init(CurPos)); @+
    end;
    endcases;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ If the Parser has the misfortune of trying to make sense of a
+malformed type expression, then with a heavy heart it invokes this
+method to update the \\{gLastType} state variable to be an incorrect
+type expression at the current position.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.InsertIncorrType;
 begin
    gLastType:=new(IncorrectTypePtr, Init(CurPos));
 end;
 
-@ @<Extended subexpression implementation@>=
+@ When the parser encounters a qualifying formula
+(``\<Term> \texttt{is} \<Type>'') or is parsing a type for a cluster
+(the ``\texttt{cluster} \dots \texttt{for} \<Type>''), after parsing
+the type, this method is invoked to \textbf{update} the \\{gLastType} state
+variable to store the \\{ClusteredType} AST node (which decorates a
+type --- the contents of \\{gLastType} at the time of calling --- with
+a bunch of attributes).
+
+The caller's \\{nAttrCollection} is transferred to the \\{gLastType}.
+At the end of the method, the caller's \\{nAttrCollection} (array of
+pointers) is freed. This does not free the objects referenced by the
+pointers, however.
+
+If |gLastType = nil|, then the Parser has somehow failed to parse the
+type expression. An error should be raised.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.CompleteType;
 var j: integer;
 begin
@@ -3369,6 +3556,13 @@ optimization problem. We shall take care to dissect this routine.
 This appears to be where operator precedence, the \\{gPriority}
 (\section\xref{gFormatsColl}) global variable, comes into play.
 
+
+@ \node{Starting a ``long term''.}
+
+We can observe that \\{nTermBase} is initialized upon construction to \\{TermNbr};
+in \\{ProcessAtomicFormula} and \\{StartPrivateFormula} it is assigned to \\{TermNbr}.
+
+
 \label{extSubexpObj.StartLongTerm}
 
 @<Extended subexpression implementation@>=
@@ -3384,9 +3578,6 @@ We should remind the reader, errors 165--175 are ``unknown functor format'',
 errors 176 is ``unknown attribute format'', and error 177 is ``unknown
 structure format''. Only when such an error occurs, the flow experiences a
 |goto AfterBalance|.
-
-We should recall (\section\xref{extSubexprObj:class})
-that \\{nArgList} is an array of ``|record Instance,SymPri: integer; FuncPos: Position; end|''.
 
 For an example of a 168, 169 error:
 \medbreak
@@ -3481,6 +3672,9 @@ Visually, this means we transform the tree as:
 $$\bigl(\cdots F_{i-1}\;x_{1},\dots,x_{\ell}\bigr),x_{\ell+1},\dots,x_{n}\; F_{i}\cdots\longleftrightarrow\cdots F_{i-1}\;x_{1},\dots,x_{\ell-1},\bigl(x_{\ell},x_{\ell+1},\dots,x_{n}\; F_{i}\cdots\bigr)$$
 Observe that ``|Exchange(i);Exchange(i)|'' is equivalent to doing nothing.
 
+We should recall (\section\xref{extSubexprObj:class})
+that \\{nArgList} is an array of ``|record Instance,SymPri: integer; FuncPos: Position; end|''.
+
 \label{extSubexpObj.FinishLongTerm}
 
 @<Extended subexpression implementation@>=
@@ -3510,7 +3704,9 @@ end;
 @ \node{Rebalancing the term tree.}
 
 Note that \\{nArgListNbr} is mutated only in \\{extSubexpObj.ProcessFunctorSymbol}
-(\section\xref{extSubexpObj.ProcessFunctorSymbol}).
+(\section\xref{extSubexpObj.ProcessFunctorSymbol}), and
+in \\{ProcessAtomicFormula}
+(\section\xref{extSubexpObj.ProcessAtomicFormula}) it is reset to zero.
 
 @d missing_functor_format == gFormatsColl.LookUp_FuncFormat(Instance,l,r) = 0
 
@@ -3777,7 +3973,7 @@ parser's \\{AppendFunc} (\section\xref{AppendFunc:parser.pas}) in a loop.
 \label{extSubexpObj.ProcessFunctorSymbol}
 
 @<Extended subexpression implementation@>=
-procedure @? extSubexpObj.ProcessFunctorSymbol;
+procedure @? extSubexpObj.@!ProcessFunctorSymbol;
 var l: integer;
 begin
    inc(nArgListNbr);
@@ -3792,7 +3988,15 @@ begin
    nFunc[nArgListNbr].Instance:=CurWord.Nr;
 end;
 
-@
+@ The Parser is in the middle of \\{AppendFunc} and has just finished
+parsing a term $t$ or a tuple of 
+terms \hbox{\texttt{(} $t_{1}$, \dots, $t_{n}$ \texttt{)}}. Before the
+Parser checks if it's looking at an infixed functor operator or not,
+the Parser invokes the \\{FinishArgList} method. It's the only time
+where the \\{FinishArgList} method is invoked.
+
+This allocates either 1 or $n$ to the length of |nArgList[nArgListNbr]|,
+to store the information for the term(s).
 
 \label{extSubexpObj.FinishArgList}
 
@@ -3802,38 +4006,73 @@ begin
    nArgList[nArgListNbr].Length:=TermNbr-nArgList[nArgListNbr].Start+1;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser is looking at ``\texttt{where}'' or (when the variables
+are all reserved) a colon ``\texttt{:}'', the Parser invokes
+the \\{StartFraenkelTerm} which will store the previous term in
+the \\{nSample} field --- so schematically, the Fraenkel term could
+look like
+$$\LB\<nSample>\hbox{ \texttt{where} }\<Postqualification> : \<Formula>\RB$$
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.StartFraenkelTerm;
 begin
    nSample:=gLastTerm;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ This is only invoked in the Parser's \\{ProcessPostqualification}
+(\section\xref{ProcessPostqualification}) procedure, which is only
+invoked after the Parser calls the \\{extSubexp}
+object's \\{StartFraenkelTerm} method.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.StartPostqualification;
 begin
    nPostQualList.Init(0);
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The parser is looking at the post-qualified segment of a Fraenkel
+operator. This will be a list of variables ``\texttt{being}'' a type,
+we allocate an array for the variables. This is handled by
+the \\{StartPostQualifyingSegment} method.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.StartPostQualifyingSegment;
 begin
    nSegmentIdentColl.Init(2);
 end;
 
-@ @<Extended subexpression implementation@>=
+@ While looping over the comma-separated list of variables in a
+post-qualified segment (in a Fraenkel term), the Parser invokes
+the \\{ProcessPostqualifiedVariable} on each iteration until it has
+parsed all the variables. This allocates a new \\{Variable} object,
+and pushes it onto the \\{nSegmentIdentColl} ``stack''.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.ProcessPostqualifiedVariable;
 begin
    nSegmentIdentColl.Insert(new(VariablePtr,Init(CurPos,GetIdentifier)));
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The parser is looking at ``\texttt{is}'' or ``\texttt{are}'' in a
+Fraenkel term's post-qualification segment, but has not yet parsed the
+type. This method will assign the \\{nSegmentPos} field to be the
+current position, and assign the \\{gLastType} state variable to be
+the \&{nil} pointer.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.StartPostqualificationSpecyfication;
 begin
    nSegmentPos:=CurPos;
    gLastType:=nil;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser has just parsed either (1) a comma-separated list of variables, the
+copula ``\texttt{is}'' or ``\texttt{are}'', and the type; or (2) a
+comma-separated list of reserved variables (but no copula and no
+type). We just need to construct an appropriate node for the abstract
+syntax tree. This method will append a new Segment to the \\{nPostQualList}.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.FinishPostQualifyingSegment;
 var k: integer;
 lSegment: ExplicitlyQualifiedSegmentPtr;
@@ -3861,45 +4100,91 @@ begin
    nSegmentIdentColl.Done;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser has just finished the formula in a Fraenkel term, and it
+is staring at the closet ``$\RB$'' bracket. The Parser invokes this
+method to construct a new \\{FraenkelTerm} AST node, and updates
+the \\{gLastTerm} to point at it.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.FinishFraenkelTerm;
 begin
    gLastTerm:=new(FraenkelTermPtr,Init(CurPos,new(PList,MoveList(nPostQualList)),
                                        nSample,gLastFormula));
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser has already encountered ``\texttt{the set}'' and the next
+token is ``\texttt{of}'', which means the Parser has encountered a
+``simple'' Fraenkel term of the form ``\texttt{the set of all} \<Term>\dots''.
+This method will be invoked once the Parser has stumbled across the
+``\texttt{all}''. The caller updates its \\{nAllPos} to the Parser's
+current position.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.StartSimpleFraenkelTerm;
 begin
    nAllPos:=CurPos;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser has just finished parsing the post-qualification to the
+simple Fraenkel term, which means it has finished parsing the simple
+Fraenkel term. This method allocates a new \\{SimpleFraenkelTerm} AST
+node with the accumulated AST nodes, then updates the \\{gLastTerm} to
+point to the allocated \\{SimpleFraenkelTerm} node.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.FinishSimpleFraenkelTerm;
 begin
    gLastTerm:=new(SimpleFraenkelTermPtr,Init(nAllPos,new(PList,MoveList(nPostQualList)),nSample));
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser is looking at a closed term of the form ``\<Identifier> \texttt{(}\dots'',
+and so it looks like a private functor. This method updates the
+caller's \\{nSubexpPos} to the Parser's current position, and
+the \\{nSpelling} is assigned to the identifier's number (for the
+private functor).
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.StartPrivateTerm;
 begin
    nSubexpPos:=CurPos;
    nSpelling:=CurWord.Nr;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser just finished parsing all the arguments to the private
+functor, and is looking at the closing parentheses for the private
+functor. This method allocates a new \\{PrivateFunctorTerm} object,
+using the arguments just parsed, and updates the \\{gLastTerm} state
+variable to point to it.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.FinishPrivateTerm;
 begin
    gLastTerm:=new(PrivateFunctorTermPtr,Init(nSubexpPos,nSpelling,CreateArgs(nTermBase+1)));
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser has just encountered either a left bracket term or the
+opening left bracket for a set ``$\LB$''. The Parser calls this
+method, which just updates the caller's \\{nSymbolNr} to be whatever
+the current token's numeric ID value is.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.StartBracketedTerm;
 begin
    nSymbolNr:=CurWord.Nr;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ If the Parser is in panic mode, this method does nothing.
+
+Either the Parser has finished parsing an enumerated set
+$\LB\,x_{1},\dots,x_{n}\,\RB$ or a bracketed term. We need to double
+check the format for the bracket matches what is stored in
+the \\{gFormatsColl}, and raise a 152 error if there's a
+mismatch. Otherwise, allocate a new AST node for the bracketed term,
+and use \\{CreateArgs} on the terms contained within the brackets.
+
+@^Error, 152@>
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.FinishBracketedTerm;
 var lFormatNr: integer;
 begin
@@ -3912,13 +4197,30 @@ begin
    end;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ Remember that Mizar calls ``an instance of structure''
+an \define{Aggregate}. When the Parser is parsing for a closed subterm
+and has stumbled across a structure constructor (\section\xref{ClosedSubter:structure:parser.pas}), it first invokes this
+method. This stores the ID number for the structure in the
+caller's \\{nSymbolNr}. 
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.StartAggregateTerm;
 begin
    nSymbolNr:=CurWord.Nr;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser has just parsed the arguments for the structure
+constructor, and the Parser is now looking at the ``\texttt{\#)}''
+token. This method is invoked.
+
+We should check the format for the structure constructor is stored in
+the \\{gFormatsColl}. If not, raise a 176 error. Otherwise, we
+allocate a new \\{AggregateTerm} with the parsed arguments, and then
+update the \\{gLastTerm} pointer to point at it.
+
+@^Error, 176@>
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.FinishAggregateTerm;
 var lFormatNr: integer;
 begin
@@ -3927,7 +4229,16 @@ begin
    gLastTerm:=new(AggregateTermPtr, Init(CurPos,nSymbolNr,CreateArgs(nTermBase+1)));
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser is parsing for a closed subterm, and has stumbled across
+``\texttt{the}'' and is looking at a selector token
+(\section\xref{GetClosedSubterm:the:parser.pas}). This method is
+invoked. We assign the caller's \\{nSymbolNr} to the ID number for the
+selector token, assign the caller's \\{nSubexpPos} to the Parser's
+current position, and store the next token's kind (i.e., the
+``\texttt{of}'' token's kind) in the \\{nNextWord}
+field.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.StartSelectorTerm;
 begin
    nSymbolNr:=CurWord.Nr;
@@ -3935,7 +4246,44 @@ begin
    nNextWord:=AheadWord.Kind;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser has just parsed ``\texttt{the} \<Selector> \texttt{of} \<Term>''.
+Now this method is invoked to assemble the parsed data into an AST
+node.
+
+If there is no selector with this matching format, then a 182 error
+will be raised.
+
+If the caller's \\{nNextWord} is an ``\texttt{of}'' token's kind, then
+we're describing a selector term. We update the \\{gLastTerm} state
+variable to point to a newly allocated \\{SelectorTerm} object with
+the appropriate data set.
+
+On the other hand, \define{internal selectors} occur when defining a
+structure. For example,
+
+\smallbreak
+{\tt\obeyspaces\obeylines\parindent=0pt\advance\leftskip3pc
+\noindent struct (1-sorted) multMagma \hbox{(\#}
+
+\quad carrier -> set,
+
+\quad multF -> BinOp of the carrier
+
+\ \hbox{\#);}
+\par}
+
+\smallbreak\noindent%
+Observe the \texttt{multF} specification is \texttt{BinOp of the carrier}.
+That ``\texttt{the carrier}'' is an internal selector. In this case,
+allocate a new \\{InternalSelectorTerm} object, and update
+the \\{gLastTerm} state variable to point to it.
+
+If, for some reason, the Parser is in neither situation, then
+just \\{gLastTerm} state variable to be an incorrect term.
+
+@^Error, 182@>
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.FinishSelectorTerm;
 var lFormatNr: integer;
 begin
@@ -3953,7 +4301,15 @@ begin
       end;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser is about to start parsing a forgetful functor
+(\section\xref{GetClosedSubterm:forgetful-functor:parser.pas}) --- for
+example ``\texttt{the multMagma of REAL.TopGroup}''. This
+method is invoked. The caller's \\{nSymbolNr} field is updated to the
+current token's ID Number, the \\{nSubexpPos} field is assigned the
+Parser's current position, and the \\{nNextWord} field is assigned to
+the token kind of the next token --- this is expected to be ``\texttt{of}''.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.StartForgetfulTerm;
 begin
    nSymbolNr:=CurWord.Nr;
@@ -3961,7 +4317,18 @@ begin
    nNextWord:=AheadWord.Kind;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser just finished parsing a forgetful functor. If the Parser
+is not panicking, check the format for the forgetful functor matches
+what is stored in the \\{gFormatsColl} state variable. If the format
+is invalid, raise a 184 error.
+
+Whether the Parser is panicking or not, allocate a
+new \\{ForgetfulFunctor} term, and update the \\{gLastTerm} to point
+to it.
+
+@^Error, 184@>
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.FinishForgetfulTerm;
 var lFormatNr: integer;
 begin
@@ -3974,25 +4341,66 @@ begin
    gLastTerm:= new(ForgetfulFunctorTermPtr, Init(nSubexpPos,nSymbolNr,gLastTerm));
 end;
 
-@ @<Extended subexpression implementation@>=
+@ There are several situations where this is invoked:
+\enumerate
+\item The Parser has just parsed ``\texttt{the}'' but is not looking
+  at a selector symbol (``\texttt{the multF of}\dots''), nor is the
+  Parser looking at a forgetful functor (``\texttt{the multMagma of}\dots'').
+  Then this is interpreted as looking at a choice operator
+  (\section\xref{GetClosedSubterm:the:parser.pas}).
+\item The Parser has just parsed ``\texttt{the}'' but is not looking
+  at a forgetful functor, so the Parser believes it must be looking at
+  a choice operator
+  (\section\xref{GetClosedSubterm:forgetful-functor:parser.pas}). 
+\item The Parser has just parsed ``\texttt{the}'' and is now looking
+  at ``\texttt{set}'' --- so this is invoking the axiom of choice to
+  pick ``\texttt{the set}'' (\section\xref{ParseSimpleFraenkelExprOrTheSet:parser.pas}).
+\endenumerate
+\smallbreak\noindent%
+In these three situations, the Parser invokes this method. It just
+updates the caller's \\{nSubexpPos} field to point to the Parser's
+current position.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.StartChoiceTerm;
 begin
    nSubexpPos:=CurPos;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser has just parsed a type, and now believes it has finished
+parsing a choice expression. Then it invokes this method to construct
+an appropriate AST node for the term, by specifically allocating a
+new \\{ChoiceTerm} for the \\{gLastType} type. We then update
+the \\{gLastTerm} state variable to point to this newly allocated term.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.FinishChoiceTerm;
 begin
    gLastTerm:=new(ChoiceTermPtr,Init(nSubexpPos,gLastType));
 end;
 
-@ @<Extended subexpression implementation@>=
+@ When the Parser encounters a numeral while seeking a closed subterm
+(\section\xref{GetClosedSubterm:parser.pas}), it invokes this method
+to allocate a new \\{NumeralTerm}. The \\{gLastTerm} state variable is
+updated to point to this newly allocated numeral object.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.ProcessNumeralTerm;
 begin
    gLastTerm:=new(NumeralTermPtr, Init(CurPos,CurWord.Nr));
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser tries to parse a closed subterm
+(\section\xref{GetClosedSubterm:parser.pas}) and encounters the
+``\texttt{it}'' token. Well, if the |it_Allowed| state variable is
+true, then we should allocate a new \\{ItTerm} and update
+the \\{gLastTerm} state variable to point to it.
+
+Otherwise, when the |it_Allowed| state variable is false, we should
+raise a 251 error.
+
+@^Error, 251@>
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.ProcessItTerm;
 begin
    if it_Allowed then gLastTerm:=new(ItTermPtr, Init(CurPos))
@@ -4003,7 +4411,18 @@ begin
    end;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser tries parsing for a closed subterm and has encountered a
+placeholder term for a private functor (e.g., ``\texttt{\$1}''). If
+the |dol_Allowed| state variable is true, then allocate a
+new \\{PlaceholderTerm} object and update the \\{gLastTerm} state
+variable to point at it.
+
+If the |dol_Allowed| state variable is false, then we should raise a
+181 error.
+
+@^Error, 181@>
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.ProcessLocusTerm;
 begin
    if dol_Allowed then
@@ -4015,26 +4434,49 @@ begin
    end;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ Calamity! An incorrect expression has crossed the Parser's
+path. Allocate an \\{IncorrectTerm} object located at the Parser's
+current position, then update the \\{gLastTerm} state variable to
+point to it.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.InsertIncorrTerm;
 begin
    gLastTerm:=new(IncorrectTermPtr, Init(CurPos));
 end;
 
-@ @<Extended subexpression implementation@>=
+@* [s] Parsing formulas.
+The Parser is trying to parse an atomic formula
+(\section\xref{CompleteAtomicFormula:parser.pas}), but something has
+gone awry. Allocate a new \\{IncorrectFormula} object located at the
+Parser's current position, update the \\{gLastFormula} state variable
+to point to it, and ``reset'' the \\{TermNbr} state variable to point
+to where the caller's \\{nTermBase} is located.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.InsertIncorrBasic;
 begin
    gLastFormula:=new(IncorrectFormulaPtr,Init(CurPos));
    TermNbr:=nTermBase;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ While the Parser was trying to parse a formula, it found something
+which ``doesn't quite fit''. Allocate a new \\{IncorrectFormula}
+object, then update the \\{gLastFormula} state variable to point to it.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.InsertIncorrFormula;
 begin
    gLastFormula:=new(IncorrectFormulaPtr,Init(CurPos));
 end;
 
-@ @<Extended subexpression implementation@>=
+@ If we are in a proof, allocate a new \\{ThesisFormula} object
+(recall the \WEB/ macro for this \section\xref{thesis-formula:macro-def}).
+Otherwise, raise a 65 error.
+
+@^Error, 65@>
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.ProcessThesis;
 begin
    if gProofCnt > 0 then
@@ -4046,14 +4488,26 @@ begin
    end;
 end;
 
-@ There is a Polish comment, ``Trzeba chyba wstawic recovery dla |TermNbr = nTermBase|'',
+@ The Parser has encountered ``\<Term> \texttt{is}'', or some other
+generic atomic formula
+(\section\xref{CompleteAtomicFormula:parser.pas}), this method is invoked.
+
+If more than one term appears before the ``\texttt{is}'' token (i.e.,
+if |TermNbr - nTermBase <> 1|), then a 157 error is raised.
+There is a Polish comment here, ``Trzeba chyba wstawic recovery dla |TermNbr = nTermBase|'',
 which I translated to English.
 
+This will initialize the fields for the caller in preparation for
+parsing some atomic formula.
 In particular, this is the only place where \\{TermNbr} is initialized
 to a nonzero value (and isn't in an incorrect formula).
 
+@^Error, 157@>
+
+\label{extSubexpObj.ProcessAtomicFormula}
+
 @<Extended subexpression implementation@>=
-procedure @? extSubexpObj.ProcessAtomicFormula;
+procedure @? extSubexpObj.@!ProcessAtomicFormula;
 const MaxArgListNbr = 20;
 begin
    nSubexpPos:=CurPos;
@@ -4076,7 +4530,15 @@ begin
    nArgList[0].Start:=TermNbr+1;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser is either finishing a ``predicative formula'' (\section\xref{CompletePredicativeFormula:parser.pas}) or it's parsing a predicate pattern (\section\xref{GetPredPattern:parser.pas}),
+it invokes this method to initialize the fields needed when forming an
+AST node. Specifically, the \\{nSubexpPos} is assigned to the Parser's
+current position, the \\{nSymbolNr} is updated either to the current
+token's ID number (if the current token is ``\texttt{=}'' or a
+predicate) or else assigned to be zero. Last, the \\{nRightArgBase} is
+assigned to equal the \\{TermNbr} state variable.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.ProcessPredicateSymbol;
 begin
    nSubexpPos:=CurPos;
@@ -4087,7 +4549,10 @@ begin
    nRightArgBase:=TermNbr;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser is parsing a ``predicate formula'' which has arguments on
+the righthand side of the predicate symbol (\section\xref{CompleteRightSideOfThePredicativeFormula:parser.pas}).
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.ProcessRightSideOfPredicateSymbol;
 begin
    nRightSideOfPredPos:=CurPos;
@@ -4098,7 +4563,17 @@ begin
    nRightArgBase:=TermNbr;
 end;
 
-@* [s] Parsing formulas.
+@ The Parser has just finished a ``predicate formula''
+(\section\xref{CompletePredicativeFormula:parser.pas}), then this
+method is invoked to construct an AST for the formula. First we check
+if the format is valid. If the format for the formula is not found in
+the \\{gFormatsColl}, then we must raise a 153 error.
+Otherwise, we construct two lists (one for the left arguments, another
+for the right arguments), and use them to construct a
+new \\{PredicativeFormula} object. We update the \\{gLastFormula}
+state variable to point to the newly allocated formula object.
+
+@^Error, 153@>
 
 @<Extended subexpression implementation@>=
 procedure @? extSubexpObj.FinishPredicativeFormula;
@@ -4112,7 +4587,13 @@ begin
    gLastFormula:=new(PredicativeFormulaPtr,Init(nSubexpPos,nSymbolNr,lLeftArgs,lRightArgs));
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser tries to construct an AST when finishing up the
+right-hand side of a predicative formula
+(\section\xref{CompleteRightSideOfThePredicativeFormula:parser.pas}),
+it invokes this method after the \\{extSubexpObj.FinishPredicativeFormula}
+has been invoked.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.FinishRightSideOfPredicativeFormula;
 var lRightArgs: PList;
 lLeftArgsNbr,lFormatNr: integer;
@@ -4129,20 +4610,52 @@ begin
    nMultiPredicateList.Insert(gLastFormula);
 end;
 
-@ @<Extended subexpression implementation@>=
+@ When the Parser is parsing an atomic formula, when it has parsed a
+formula and encounters another predicate, it defaults to
+thinking that it is starting a ``multi-predicative formula''
+(\section\xref{CompleteMultiPredicativeFormula:parser.pas}), and it
+invokes this method. This initializes the \\{nMultiPredicateList} to
+an empty list of length 4, and the first entry points to the same
+formula pointed to by the \\{gLastFormula} state variable.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.StartMultiPredicativeFormula;
 begin
    nMultiPredicateList.Init(4);
    nMultiPredicateList.Insert(gLastFormula);
 end;
 
-@ @<Extended subexpression implementation@>=
+@ Finishing a ``multi-predicative formula'' allocates a
+new \\{MultiPredicativeFormula} object, and moves the contents of the
+caller's \\{nMultiPredicateList} to the newly minted
+formula. The \\{gLastFormula} state variable is updated to point to
+this newly allocated formula object.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.FinishMultiPredicativeFormula;
 begin
    gLastFormula:=new(MultiPredicativeFormulaPtr,Init(nSubexpPos,new(PList,MoveList(nMultiPredicateList))));
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser has just parsed ``\<Term> \texttt{is} \<Type>'', and now
+we need to store the accumulated data into a Formula AST. Of course,
+if the \\{gLastType} variable is not pointing to a type object, then
+we should raise an error (clearly something has gone wrong somewhere).
+
+If we have accumulated attributes while parsing, then we should update
+the \\{gLastType} to be a clustered type object (and we should move
+the attributes over).
+
+We should allocate a \\{QualifiedFormula} object, update
+the \\{gLastFormula} state variable to point to it. If the Parser has
+encountered ``\<Term> \texttt{is not} \<Type>'', then it will tell the
+caller to toggle the \\{nPostNegated} to be true --- and in that case,
+we should negate the \\{gLastFormula} state variable.
+
+We mutate the \\{TermNbr} state variable, decrementing it by one
+(since we consumed the top of the term stack).
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.FinishQualifyingFormula;
 var j: integer;
 begin
@@ -4160,7 +4673,13 @@ begin
    dec(TermNbr);
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser has just finished parsing ``\<Term> \texttt{is} \<Attribute>''
+or ``\<Term> \texttt{is not} \<Attribute>'', and so it invokes this
+method. We allocate a new \\{AttributiveFormula} object, and negate it
+if needed. We also decrement the \\{TermNbr} state variable (since we
+consumed one element of the term stack).
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.FinishAttributiveFormula;
 begin
    gLastFormula:=
@@ -4170,7 +4689,12 @@ begin
    dec(TermNbr);
 end;
 
-@ @<Extended subexpression implementation@>=
+@ While the Parser is working its way through a formula, and it is
+looking at an identifier and the next token is a square bracket
+``\texttt{[}'', then the Parser invokes this method to initialize the
+relevant fields to store accumulated data.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.StartPrivateFormula;
 begin
    nTermBase:=TermNbr;
@@ -4178,32 +4702,61 @@ begin
    nSpelling:=CurWord.Nr;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser has just encountered ``\texttt{]}'' and now we assemble
+the accumulated data into a formula. This allocates a
+new \\{PrivatePredicativeFormula}, moves the arguments encountered
+since starting the private predicate into a list
+(\section\xref{CreateArgs}) owned by the formula
+object. The \\{gLastFormula} is updated to point to the newly
+allocated formula object.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.FinishPrivateFormula;
 begin
    gLastFormula:=new(PrivatePredicativeFormulaPtr,Init(nSubexpPos,nSpelling,CreateArgs(nTermBase+1)));
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser has encountered the ``\texttt{contradiction}'' token, so
+it invokes this method, which allocates a \\{ContradictionFormula} and
+updates the \\{gLastFormula} state variable to point to it.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.ProcessContradiction;
 begin
    gLastFormula:=new(ContradictionFormulaPtr,Init(CurPos));
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser routinely allocates a formula object, then realizes later
+it should negate that formula object. This is handled by storing the
+formula object in the \\{gLastFormula} object, then this method
+allocates a new formula (which is the negation of
+the \\{gLastFormula}) and updates the \\{gLastFormula} to point to the
+newly allocated negated formula.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.ProcessNegative;
 begin
    gLastFormula:=new(NegativeFormulaPtr,Init(CurPos,gLastFormula));
 end;
 
-@ @<Extended subexpression implementation@>=
+@ When the Parser has encountered the ``\texttt{not}'' reserved
+keyword, it invokes the \\{ProcessNegation} method which just toggles
+the \\{nPostNegated} field of the caller, and assigns the \\{nNotPos}
+field to the Parser's current position.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.ProcessNegation;
 begin
    nPostNegated:=not nPostNegated;
    nNotPos:=CurPos;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ When the Parser is looking at a binary connective token
+(e.g., ``\texttt{implies}'', ``\texttt{or}'', etc.), this method is
+invoked to store the connective kind as well as the ``left-hand side'' to the
+binary connective in the \\{nFirstSententialOperand} field. 
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.ProcessBinaryConnective;
 begin
    nConnective:=CurWord.Kind;
@@ -4211,31 +4764,56 @@ begin
    nSubexpPos:=CurPos;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser has seen ``\<Formula> \texttt{or} \texttt{...} \texttt{or}''. 
+Then this method will be invoked to store that first formula parsed in
+the caller's \\{nFirstSententialOperand} field.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.ProcessFlexDisjunction;
 begin
    nFirstSententialOperand:=gLastFormula;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser has seen ``\<Formula> \texttt{\AM} \texttt{...} \texttt{\AM}''. 
+Then this method will be invoked to store that first formula parsed in
+the caller's \\{nFirstSententialOperand} field.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.ProcessFlexConjunction;
 begin
    nFirstSententialOperand:=gLastFormula;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser has parsed ``\texttt{for} \<Qualified-Variables> \texttt{st}'',
+and it is staring at the ``\texttt{st}'' token. Then it will invoke
+this method to mark the \\{nRestrPos}, setting it equal to the
+Parser's current position.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.StartRestriction;
 begin
    nRestrPos:=CurPos;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser has just parsed the formula appearing after
+``\texttt{st}'', so this method is invoked to store that formula in
+the caller's \\{nRestriction} field (for later use when constructing
+an AST).
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.FinishRestriction;
 begin
    nRestriction:=gLastFormula;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser has finished parsing a formula involving binary
+connectives, then it invokes this method to construct the formula AST.
+
+If somehow the connective is not ``\texttt{implies}'',
+``\texttt{iff}'', ``\texttt{or}'', or ``\texttt{\AM}'', then we should
+raise an error.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.FinishBinaryFormula;
 begin
    case nConnective of
@@ -4252,48 +4830,98 @@ begin
    endcases;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ We have parsed ``\<Formula> \texttt{or ... or} \<Formula>'', and the
+Parser invokes this method to construct an AST for the formula. This
+method allocates a new \\{FlexaryDisjunctive} formula object, and
+updates the \\{gLastFormula} state variable to point to it.
+
+There is a comment in Polish, ``polaczyc z flexConj'', which Google
+translates to ``connect to flexConj''.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.FinishFlexDisjunction; {polaczyc z flexConj}
 begin
    gLastFormula:=new(FlexaryDisjunctiveFormulaPtr,
                      Init(CurPos,nFirstSententialOperand,gLastFormula));
 end;
 
-@ @<Extended subexpression implementation@>=
+@ We have parsed ``\<Formula> \texttt{\AM\ ... \AM} \<Formula>'', and
+the Parser invokes this method to construct an AST for the
+formula. This allocates a new \\{FlexaryConjunctive} formula object,
+and updates the \\{gLastFormula} state variable to point to it.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.FinishFlexConjunction;
 begin
    gLastFormula:=new(FlexaryConjunctiveFormulaPtr,
                      Init(CurPos,nFirstSententialOperand,gLastFormula));
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser is looking at the ``\texttt{ex}'' token, then invokes
+this method to reset the caller's fields in preparation for
+accumulating data needed when constructing the formula's AST.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.StartExistential;
 begin
    nQualifiedSegments.Init(0);
    nSubexpPos:=CurPos;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser is looking at the ``\texttt{for}'' token, and it invokes
+this method to reset the relevant fields in the caller.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.StartUniversal;
 begin
    nQualifiedSegments.Init(0);
    nSubexpPos:=CurPos;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ After the Parser has invoked \\{StartUniversal}
+or \\{StartExistential}, it parses the quantified variables (which
+begins by invoking this method).
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.StartQualifiedSegment;
 begin
    nSegmentIdentColl.Init(2);
    nSegmentPos:=CurPos;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser has parsed a comma-separated list and is expecting either
+``\texttt{be}'' or ``\texttt{being}'', but before parsing for that
+copula the Parser invokes the \\{StartQualifyingType} method to update
+the \\{gLastType} state variable to point to \&{nil}.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.StartQualifyingType;
 begin
    gLastType:=nil;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser has just finished parsing quantified variables. There are
+two possible situations:
+\enumerate
+\item We have just parsed reserved variables, so the types are all
+known. Then the |gLastType = nil|.
+\item We have parsed an explicitly typed list of variables, so the
+|gLastType <> nil|.
+\endenumerate
+
+\smallbreak\noindent In the first case, we should allocate
+an \\{ImplicitlyQualifiedSegment} object and move all the segment's
+identifiers to this object. Then we clean up the
+caller's \\{nSegmentIdentColl} field (since it's an array of \&{nil}
+pointers). 
+
+In the second case, we can just move the identifiers when allocating a
+new \\{ExplicitlyQualifiedSegment} object.
+
+In both cases, the new allocated \\{QuantifiedSegment} object is
+appended to the caller's \\{nQualifiedSegments} field.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.FinishQualifiedSegment;
 var k: integer;
 begin
@@ -4315,17 +4943,47 @@ begin
    end;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ When the Parser is parsing quantified variables, specifically when
+it is parsing a comma-separated list of variables, it will invoke this
+method, then check if the next token is a comma (and if so
+iterate). This \\{ProcessVariable} method should accumulate
+a \\{Variable} object with the current token's identifier, then insert
+it into the caller's \\{nSegmentIdentColl} field.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.ProcessVariable;
 begin
    nSegmentIdentColl.Insert(new(VariablePtr,Init(CurPos,GetIdentifier)));
 end;
 
-@ @<Extended subexpression implementation@>=
+@ The Parser has just finished something like
+$$\hbox{\texttt{ex }} \<Qualified-Variables>\hbox{ \texttt{,} }\dots\hbox{ \texttt{,} }\<Qualified-Variables>\hbox{ \texttt{st} }\<Formula>$$
+Now we assemble it as
+$$\hbox{\texttt{ex }} \<Qualified-Variables>\hbox{ \texttt{st} }\bigl(\hbox{\texttt{ex }}\dots\hbox{ \texttt{st} }(\hbox{\texttt{ex} }\<Qualified-Variables>\hbox{ \texttt{st} }\<Formula>)\bigr)$$
+starting with the innermost existentially quantified formula, working
+our ways outwards.
+
+Importantly, assembling the AST reflects the quantified variables has
+the grammar
+
+\smallbreak
+{\obeylines\parindent=0pt\advance\leftskip3pc
+
+\<Qualified-Variables> = \<Implicitly-Qualified-Variables>
+
+\hskip3pc\pipe\ \<Explicitly-Qualified-Variables>
+
+\hskip3pc\pipe\ \<Explicitly-Qualified-Variables> \texttt{","} \<Implicitly-Qualified-Variables>
+\par}
+
+\smallbreak\noindent%
+
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.FinishExistential;
 var k:integer;
 begin
-   for k:=nQualifiedSegments.Count-1 downto 1 do
+   for k:=nQualifiedSegments.Count-1 downto 1 do {from inside outwards}
    begin
       gLastFormula:=new(ExistentialFormulaPtr,
                         Init(QualifiedSegmentPtr(nQualifiedSegments.Items^[k])^.nSegmPos,
@@ -4341,11 +4999,21 @@ begin
    nQualifiedSegments.Done;
 end;
 
-@ @<Extended subexpression implementation@>=
+@ Universally quantified formulas first transforms
+$$\hbox{\texttt{for }}\<Qualified-Variables>\hbox{ \texttt{st} }\<Formula>_{1} \hbox{ \texttt{holds} }\<Formula>_{2}$$
+into
+$$\hbox{\texttt{for }}\<Qualified-Variables>\hbox{ \texttt{holds} }\<Formula>_{1} \hbox{ \texttt{implies} }\<Formula>_{2}$$
+which is handled immediately.
+
+The remainder of the method iteratively constructs the universally
+quantified formulas by ``unrolling'' the qualified segments, just as
+we did for existentially quantified formulas.
+
+@<Extended subexpression implementation@>=
 procedure @? extSubexpObj.FinishUniversal;
 var k:integer;
 begin
-   if nRestriction <> nil then
+   if nRestriction <> nil then {transform \texttt{st} into \texttt{implies}}
       gLastFormula:=new(ConditionalFormulaPtr,Init(nRestrPos,nRestriction,gLastFormula));
    for k:=nQualifiedSegments.Count-1 downto 1 do
    begin
@@ -4363,6 +5031,9 @@ begin
 end;
 
 @* [S] Extended expression class.
+When an expression is needed, the \\{gExpPtr} state variable is used
+to build it out of subexpressions. The \\{gExpPtr} state variable is
+an instance of the \\{extExpression} class.
 
 @<Extended expression class declaration@>=
    extExpressionPtr = ^extExpressionObj; @/
@@ -4597,7 +5268,7 @@ const
    paForOrArrowExpected   = 406;
 
 @ @<Implementation of parser.pas@>=
-var gAddSymbolsSet: set of char = [];
+var gAddSymbolsSet: set of char = []; {not used anywhere}
 
 @ Syntax errors do three things:
 \enumerate
@@ -4840,6 +5511,7 @@ end;
 Fraenkel term's ``\texttt{where}'' clause) which consists of a
 comma-separated list of post-qualified segments.
 
+\label{ProcessPostqualification}
 
 @<Parse expressions (\texttt{parser.pas})@>=
 procedure @? TermSubexpression; forward; @t\2@>
@@ -4874,7 +5546,7 @@ ascription term (``is'' or ``being''), then process the type.
             TypeSubexpression; @+
          end
 @<Process post-qualified segment@>=
-         gSubexpPtr^.StartPostqualifyingSegment;
+         gSubexpPtr^.StartPostQualifyingSegment;
          ReadWord; @/
          process_postqualified_variables; @/
          gSubexpPtr^.StartPostqualificationSpecyfication;
@@ -4932,6 +5604,8 @@ end;
 functor or it is a variable. How do we tell the difference? A private
 functor starts with an identifier followed by a left parentheses.
 
+\label{GetClosedSubterm:identifier:parser.pas}
+
 @<Get closed subterm of identifier@>=
       Identifier:
          if AheadWord.Kind = sy_LeftParanthesis then {treat identifier as private functor}
@@ -4952,6 +5626,8 @@ functor starts with an identifier followed by a left parentheses.
 @ If the parser stumbles across the name of a structure when expecting
 a term, then the parser should treat it as constructing a new instance
 of the structure.
+
+\label{ClosedSubter:structure:parser.pas}
 
 @<Get closed subterm of structure@>=
       StructureSymbol:
@@ -5029,6 +5705,8 @@ $$\LB\langle\textit{term\/}\rangle\langle\hbox{\textit{post-qualified\ segment\/
 @ Mizar allows ``\texttt{the}'' to be used for selector functors,
 forgetful functors, choice operators, or simple Fraenkel terms.
 
+\label{GetClosedSubterm:the:parser.pas}
+
 @<Get closed subterm of choice operator@>=
       sy_The:
          begin
@@ -5068,6 +5746,8 @@ On the other hand, the choice operator acting on a structure type
 looks similar. We should distinguish these two by the presence of the
 keyword \texttt{"of"}.
 
+\label{GetClosedSubterm:forgetful-functor:parser.pas}
+
 @<Parse forgetful functor or choice of structure type@>=
                   if AheadWord.Kind = sy_Of then {forgetful functor}
                   begin
@@ -5087,6 +5767,8 @@ keyword \texttt{"of"}.
 @ Mizar allows ``\texttt{the set of}'' to start a simple Fraenkel
 expression. But we could also refer to ``\texttt{the set}'' as the set
 chosen by the axiom of choice.
+
+\label{ParseSimpleFraenkelExprOrTheSet:parser.pas}
 
 @<Parse simple Fraenkel expression or ``the set''@>=
                   if AheadWord.Kind = sy_Of then {simple Fraenkel expression}
@@ -5128,7 +5810,7 @@ end;
 
 @ Keep parsing ``infixed operators''. When the current token is an
 infixed operator, this will consume the arguments to its right, then
-iterate. It's also worth remembering that \\{gExprPtr}
+iterate. It's also worth remembering that \\{gExpPtr}
 (\section\xref{gSubexpPtr}) was a global variable declared back
 in \texttt{syntax.pas}, and the \\{CreateSubexpression}
 (\section\xref{extExpressionObj.CreateSubexpression}) mutates
@@ -5172,7 +5854,7 @@ begin
                begin
                   gExpPtr^.CreateSubexpression; { (\section\xref{extExpressionObj.CreateSubexpression}) }
                   GetClosedSubterm; { (\section\xref{GetClosedSubterm:parser.pas}) }
-                  gSubexpPtr^.FinishArgument; { (\section\xref{extSubexpObj.FinishArgList}) }
+                  gSubexpPtr^.FinishArgument; { (\section\xref{extSubexpObj.FinishArgument}) }
                   KillSubexpression; { (\section\xref{KillSubexpression}) }
                end;
          endcases; @/
@@ -5253,6 +5935,8 @@ the attribute)
 \item handling the attribute.
 \endenumerate
 
+\label{ProcessAttributes:parser.pas}
+
 @d ahead_is_attribute_argument ==
       (CurWord.Kind in (TermBegSys - [sy_LeftParanthesis,StructureSymbol])) or@|
       ((CurWord.Kind = sy_LeftParanthesis) and
@@ -5295,13 +5979,15 @@ structure type or a mode (or it's the ``\texttt{set}'' type).
 There is a comment in Polish, ``zawieszone na czas zmiany semantyki'',
 which is translated into English.
 
+\label{RadixTypeSubexpression:parser.pas}
+
 @<Parse expressions (\texttt{parser.pas})@>=
 procedure RadixTypeSubexpression;
 var lSymbol,lParenthCnt: integer;
 begin
    lParenthCnt:=0;
    @<Parse optional left-paren@>;
-   gSubexpPtr^.ProcessModeSymbol;
+   gSubexpPtr^.ProcessModeSymbol; {(\section\xref{extSubexpObj.ProcessModeSymbol})}
    case CurWord.Kind of
       sy_Set:
          begin ReadWord; {? if Occurs(syOf) then TypeSubexpression
@@ -5513,7 +6199,7 @@ begin
 end;
 @
 
-
+\label{CompleteRightSideOfThePredicativeFormula:parser.pas}
 @<Parse expressions (\texttt{parser.pas})@>=
 procedure @? ConditionalTail; forward; @t\2@>@#
 
@@ -5525,8 +6211,11 @@ begin
       GetArguments(PredMaxArgs.fList^[aPredSymbol]);
    gSubexpPtr^.FinishRightSideOfPredicativeFormula;
 end;
-@
 
+@ Recall a ``multi-predicative formula'' is something of the form
+$a\leq x\leq b$.
+
+\label{CompleteMultiPredicativeFormula:parser.pas}
 
 @<Parse expressions (\texttt{parser.pas})@>=
 procedure CompleteMultiPredicativeFormula;
@@ -5558,6 +6247,7 @@ begin
 end;
 @
 
+\label{CompletePredicativeFormula:parser.pas}
 
 @<Parse expressions (\texttt{parser.pas})@>=
 procedure CompletePredicativeFormula(aPredSymbol:integer);
@@ -5570,6 +6260,7 @@ begin
 end;
 @
 
+\label{CompleteAtomicFormula:parser.pas}
 
 @<Parse expressions (\texttt{parser.pas})@>=
 procedure CompleteAtomicFormula(var aParenthCnt:integer);
@@ -6657,7 +7348,7 @@ begin
 end;
 @
 
-
+\label{GetPredPattern:parser.pas}
 @<Parse patterns (\texttt{parser.pas})@>=
 procedure GetPredPattern;
 var lPredSymbol: integer;
@@ -7156,6 +7847,7 @@ begin
 end;
 @
 
+\label{ATTSubexpression}
 
 @<Parse definitions (\texttt{parser.pas})@>=
 procedure ATTSubexpression(var aExpKind: ExpKind);
