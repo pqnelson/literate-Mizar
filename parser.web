@@ -11816,8 +11816,8 @@ we treat record separators as indicating the line is ``too long''
 (i.e., more than 80 characters long). So we insert a 201 ``Too long source line'' error.
 But anything else is treated as an invalid identifier error.
 
-@^Error code, 200@>
-@^Error code, 201@>
+@^Error, 200@>
+@^Error, 201@>
 
 @<Whoops! ID turns out to be invalid, insert an error token, then continue@>=
       begin
@@ -11977,7 +11977,7 @@ When the numeral token is larger than $\\{MaxConstInt} = 2^{31}-1$
 (the largest 32-bit integer, \section\xref{scanner.pas}), then we
 should raise a ``Too large numeral'' 202 error token. If we wanted to
 support ``arbitrary precision'' numbers, then this should be modified.
-@^Error code, 202@>
+@^Error, 202@>
 
 We can either insert into the tokens buffer an error token (in two
 possible outcomes) or a numeral token (in the third possible outcome).
@@ -12018,7 +12018,7 @@ end
 @ If we have tokenised the phrase, but the token is not contained in
 the dictionary, then we should raise a 203 error.
 
-@^Error code, 203@>
+@^Error, 203@>
 
 @<Whoops! We found an unknown token, insert a 203 error token@>=
       lPos.Col:=fPhrasePos.Col+lCurrChar-1;
