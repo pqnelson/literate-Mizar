@@ -1,0 +1,19 @@
+# Ignore emacs backups, and TeX auxiliary files
+*~
+*.aux
+*.log
+*.out
+*.pdf
+*.toc
+# Ignore Noweb defs
+*.defs
+# Ignore the raw output of WEAVE
+CONTENTS.tex
+esmprocessor.tex
+galley.tex
+labels.tex
+labels2.tex
+# img directory
+*.mpx
+*.eps
+/img/*.[0-9]*
