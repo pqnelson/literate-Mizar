@@ -10,7 +10,7 @@ have to modify the Makefile.
 To build the PDF, simply do the following:
 
 ```
-~/Mizar-system/lit$ make
+~/literate-Mizar$ make
 ```
 
 This will run Metapost (and mptopdf) on the relevant files in the
@@ -46,13 +46,15 @@ There is a lot of code in Mizar, not all of it is used. Most of it is
 surprisingly well coded.
 
 There are some bugs and possible improvements, but nothing severe so
-far.
+far. Possible improvements are discussed in paragraph 17, bugs
+discussed in paragraph 18. Not all of the "bugs" are bugs (e.g., in a
+statement `if A and B` where `B` is always false, I listed it as a bug).
 
 # Progress
 
 So far I have transcribed and annotated about 18549 lines of code. These
-are in 1610 numbered "chunks" spanning 545 pages (with an additional
-161 pages of backmatter), for a total of 606 pages.
+are in 1662 numbered "chunks" spanning 553 pages (with an additional
+63 pages of backmatter), for a total of 616 pages.
 
 This is not even considering the `kernel` directory, which contains
 40244 lines of code in 54 files.

@@ -66,6 +66,10 @@ comes to parsing loci declarations in a definition
 block. The \texttt{syntax.txt} file is more restrictive than the
 parser, and should be updated to reflect the parser.
 \bug The \\{gSuchThat} global variable is never used anywhere (\section\xref{extItemObj.FinishFixedVariables})
+\bug In \\{ATTSubexpression} (\section\xref{ATTSubexpression}), in the
+|else| block when the conditional
+|if lAttrExp or (aExpKind = exAdjectiveCluster)| is executed,
+|aExpKind = exAdjectiveCluster| is never true (so there's no need for it).
 
 @* [F] Detour: Pragmas.
 This chapter is a ``detour'' because it is out of order for the
@@ -136,6 +140,8 @@ end;
 @ The ``\texttt{::\$P+}'' pragma instructs Mizar to start checking the
 proofs for correctness. The ``\texttt{::\$P-}'' pragma instructs Mizar
 to skip checking proofs.
+
+\label{SetParserPragma}
 
 @p
 procedure SetParserPragma(aPrg: string);
@@ -545,6 +551,8 @@ end;
 @ This will add a pragma item to the current block.
 The parser's \\{ProcessPragmas} (\section\xref{ProcessPragmas:parser})
 invokes this method.
+
+\label{extBlockObj.ProcessPragma}
 
 @<Extended block implementation@>=
 procedure @? extBlockObj.@!ProcessPragma;
@@ -1510,6 +1518,8 @@ end;
 caller's \\{nPropPos}, assigning to it the current position of the
 parser.
 
+\label{extItemObj.StartSentence}
+
 @<Extended item implementation@>=
 procedure @? extItemObj.StartSentence;
 begin
@@ -1909,6 +1919,8 @@ end;
 specification. The \\{FinishConstructionType} populates
 the \\{gSpecification} global variable with this type.
 
+\label{extItemObj.FinishConstructionType}
+
 @<Extended item implementation@>=
 procedure @? extItemObj.FinishConstructionType;
 begin
@@ -1984,6 +1996,8 @@ The loci parameters can only appear \emph{after} the mode symbol (and
 before the ``\texttt{of}'' reserved keyword). Starting a mode pattern
 should reset the relevant global variables.
 
+\label{extItemObj.StartModePattern}
+
 @<Extended item implementation@>=
 procedure @? extItemObj.StartModePattern;
 begin
@@ -1996,6 +2010,8 @@ end;
 @ Finishing a mode pattern should build a new \\{ModePatternObj}, and
 store it in the \\{gPattern} global variable. And if we are not
 panicking, we should add it to the \\{gFormatsColl} dictionary.
+
+\label{extItemObj.FinishModePattern}
 
 @<Extended item implementation@>=
 procedure @? extItemObj.FinishModePattern;
@@ -2159,11 +2175,13 @@ begin
    gParams:=new(PList,Init(0));
 end;
 
-@ The parser iteratively calls its \\{GetVisible} procedure
+@ The Parser iteratively calls its \\{GetVisible} (\section\xref{GetVisible:parser.pas}) procedure
 when \\{ReadVisible} arguments in a pattern. The \\{GetVisible}
 procedure in turn invokes this \\{ProcessVisible}, which increments
 the number of parameters, and pushes a new \\{Locus} object onto
 the \\{gParams} stack.
+
+\label{extItemObj.ProcessVisible}
 
 @<Extended item implementation@>=
 procedure @? extItemObj.ProcessVisible;
@@ -2712,7 +2730,9 @@ correctness has been satisfies, so the Parser moves happily
 along). But if $\\{gCorrectnessConditions}\neq\emptyset$ or axioms are
 not allowed, then a 73 error is raised.
 
-@^Error, 73@>
+@:Error, 073}{Error, 73@>
+
+\label{extItemObj.ProcessCorrectness}
 
 @<Extended item implementation@>=
 procedure @? extItemObj.ProcessCorrectness;
@@ -2727,6 +2747,8 @@ redefined. In such a situation, we need to add ``\texttt{coherence}''
 as a correctness condition. The \\{StartConstructionType} handles this
 task. 
 
+\label{extItemObj.StartConstructionType}
+
 @<Extended item implementation@>=
 procedure @? extItemObj.StartConstructionType;
 begin
@@ -2737,6 +2759,8 @@ end;
 @ This is used in the Parser's \\{ProcessLab} procedure. Really, all
 the work is being done here: the \\{nLabel} field of the caller is
 assigned to a newly allocated \\{Label} object.
+
+\label{extItemObj.ProcessLabel}
 
 @<Extended item implementation@>=
 procedure @? extItemObj.ProcessLabel;
@@ -2938,9 +2962,9 @@ mode). We should set the \\{gBlockPtr}'s \\{nLinked} field to false
 when we just added a straightforward justification (or an erroneous
 justification). 
 
-@d is_inference_error == not StillCorrect or@/
-       ((CurWord.Kind <> sy_Semicolon) and (CurWord.Kind <> sy_DotEquals)) or@/
-       ((nInference^.nInfSort = infStraightforwardJustification) and (byte(nLinked) > byte(nLinkAllowed))) or@/
+@d is_inference_error == not StillCorrect or@|
+       ((CurWord.Kind <> sy_Semicolon) and (CurWord.Kind <> sy_DotEquals)) or@|
+       ((nInference^.nInfSort = infStraightforwardJustification) and (byte(nLinked) > byte(nLinkAllowed))) or@|
        ((nInference^.nInfSort = infSchemeJustification) and (SchemeJustificationPtr(nInference)^.nSchemeIdNr = 0))
 
 @<Extended item implementation@>=
@@ -4474,7 +4498,7 @@ end;
 (recall the \WEB/ macro for this \section\xref{thesis-formula:macro-def}).
 Otherwise, raise a 65 error.
 
-@^Error, 65@>
+@:Error, 065}{Error, 65@>
 
 @<Extended subexpression implementation@>=
 procedure @? extSubexpObj.ProcessThesis;
@@ -4537,6 +4561,8 @@ current position, the \\{nSymbolNr} is updated either to the current
 token's ID number (if the current token is ``\texttt{=}'' or a
 predicate) or else assigned to be zero. Last, the \\{nRightArgBase} is
 assigned to equal the \\{TermNbr} state variable.
+
+\label{extSubexpObj.ProcessPredicateSymbol}
 
 @<Extended subexpression implementation@>=
 procedure @? extSubexpObj.ProcessPredicateSymbol;
@@ -5218,7 +5244,7 @@ const
    paRightParenthExp4    = 370;
    paRightParenthExp5    = 370;
    paRightParenthExp6    = 370;
-   paRightParenthExp7    = 370;
+   paRightParenthExp7    = 370; {forgot right paren in ``\texttt{from SCHEME(}''}
    paRightParenthExp8    = 370;
    paRightParenthExp9    = 370;
    paRightParenthExp10   = 370;
@@ -5401,6 +5427,8 @@ We have a few token kinds which indicate the start of a term:
 \item placeholder variables appearing in private functors and predicates,
 \item structure symbols.
 \endenumerate
+
+\label{TermBegSys}
 
 @<Parse expressions (\texttt{parser.pas})@>=
  {{\it Expressions}}
@@ -5937,10 +5965,11 @@ the attribute)
 
 \label{ProcessAttributes:parser.pas}
 
-@d ahead_is_attribute_argument ==
+@d kind_is_radix_type(#) == (# in [sy_Set,ModeSymbol,StructureSymbol])
+@d ahead_is_attribute_argument == @/
       (CurWord.Kind in (TermBegSys - [sy_LeftParanthesis,StructureSymbol])) or@|
       ((CurWord.Kind = sy_LeftParanthesis) and
-          not(AheadWord.Kind in [sy_Set,ModeSymbol,StructureSymbol])) or@|
+          not(kind_is_radix_type(AheadWord.Kind))) or@|
       ((CurWord.Kind =  StructureSymbol) and (AheadWord.Kind = sy_StructLeftBracket))
 
 @<Process attributes (\texttt{parser.pas})@>=
@@ -6135,7 +6164,9 @@ begin
 end;
 
 @* [s] Formulas.
-
+Quantified variables looks like
+$$\<Variable>\ \LB\hbox{ \texttt{","} }\<Variable>\RB\ [(\hbox{\texttt{"be"}}\pipe\hbox{\texttt{"being"}})\ \<Type>]$$
+The parsing routine follows the grammar fairly faithfully.
 
 @<Parse expressions (\texttt{parser.pas})@>=
 procedure QuantifiedVariables;
@@ -6143,30 +6174,45 @@ begin
    repeat
       gSubexpPtr^.StartQualifiedSegment;
       ReadWord;
-      repeat
-         gSubexpPtr^.ProcessVariable;
-         Accept(Identifier,paIdentExp2);
-      until not Occurs(sy_Comma);
+      @<Parse comma-separated variables for quantified variables@>;
       gSubexpPtr^.StartQualifyingType;
       if Occurs(sy_Be) or Occurs(sy_Being) then TypeSubexpression;
       gSubexpPtr^.FinishQualifiedSegment;
    until CurWord.Kind <> sy_Comma;
 end;
-@
 
+@ @<Parse comma-separated variables for quantified variables@>=
+      repeat
+         gSubexpPtr^.ProcessVariable;
+         Accept(Identifier,paIdentExp2);
+      until not Occurs(sy_Comma)
+
+@ The existential formula looks like
+$$\hbox{\texttt{ex} }\<Quantified-Variables>\hbox{ \texttt{st} }\<Formula>$$
+The parser implements it quite faithfully.
 
 @<Parse expressions (\texttt{parser.pas})@>=
 procedure ExistentialFormula;
 begin
    gSubexpPtr^.StartExistential;
-   QuantifiedVariables;
+   QuantifiedVariables;@/
    gSubexpPtr^.FinishQuantified;
    Accept(sy_St,paStExp);
-   FormulaSubexpression;
+   FormulaSubexpression;@/
    gSubexpPtr^.FinishExistential;
 end;
-@
 
+@ Universally quantified formulas are tricky because both
+$$\hbox{\texttt{for }}\<Quantified-Variables>\hbox{ \texttt{holds} }\<Formula>$$
+and
+$$\hbox{\texttt{for }}\<Quantified-Variables>\hbox{ \texttt{st} }\<Formula>\hbox{ \texttt{holds} }\<Formula>$$
+are acceptable. Furthermore, we may include multiple ``\texttt{for} \<Quantified-Variables>''
+(possibly with ``\texttt{st} \<Formula>'' restrictions)
+before arriving at the single ``\texttt{holds} \<Formula>''.
+The trick is to parse this as
+$$\hbox{\texttt{for }}\<Quantified-Variables>\ [\hbox{\texttt{st} }\<Formula>]\ [\hbox{\texttt{holds}}]\ \<Formula>$$
+so the recursive call to parse the final formula enables us to parse
+another quantified formula.
 
 @<Parse expressions (\texttt{parser.pas})@>=
 procedure UniversalFormula;
@@ -6185,19 +6231,28 @@ begin
       sy_Holds:
          begin
             gSubexpPtr^.ProcessHolds;
-            ReadWord
+            ReadWord @+
          end;
-      sy_For, sy_Ex: ;
+      sy_For, sy_Ex: ; {fallthrough}
    othercases
    begin
       gSubexpPtr^.InsertIncorrFormula;
-      MissingWord(paWrongScopeBeg)
+      MissingWord(paWrongScopeBeg) @+
    end;
-   endcases;
+   endcases;@#
    FormulaSubexpression;
    gSubexpPtr^.FinishUniversal;
 end;
-@
+
+@ The Parser's current token is either ``\texttt{=}'' or a predicate
+symbol. Then we should parse ``the right-hand side'' of the equation
+(or formula). The current token's Symbol number is passed as the
+argument to this procedure.
+
+It's worth recalling the definition of \\{TermBegSys}
+(\section\xref{TermBegSys}) which is all the token kinds for starting
+a term. If the next token is a term, then |GetArguments| is invoked to
+parse them.
 
 \label{CompleteRightSideOfThePredicativeFormula:parser.pas}
 @<Parse expressions (\texttt{parser.pas})@>=
@@ -6213,7 +6268,32 @@ begin
 end;
 
 @ Recall a ``multi-predicative formula'' is something of the form
-$a\leq x\leq b$.
+$a\leq x\leq b$. More generally, we could imagine the grammar for such
+a formula resembles:
+$$ \<Formula>\ \LB\ \<Multi-Predicate>\ \<Term-List>\ \RB$$
+The Parser's current token is \<Multi-Predicate>, and we want to keep
+parsing until the entire multi-predicative formula has been parsed.
+
+We should mention (because I have not seen it discussed anywhere)
+Mizar allows ``\texttt{does not}'' and ``\texttt{do not}'' in formulas
+(for example, ``\texttt{Y does not overlap X /\BS\ Z}''), but
+Mizar \textbf{does not} support ``\texttt{does}'' (or ``\texttt{do}'')
+without the ``\texttt{not}''. A 401 error would be raised.
+
+Grammatically, this is known as ``do-support'', and Mizar uses it for
+negating predicates. The verb following the ``do'' is a ``bare
+infinitive'' (which is why Mizar allows an ``infinitive'' for
+predicates). This makes sense when the predicate uses a ``finite
+verb''. For ``non-finite verb forms'', it is idiomatic English to just negate
+the verb (as in ``\emph{Not knowing} what that means, I just smile and nod''
+and ``It would be a crime \emph{not to learn} grammar'').
+
+@^Error, 401@>
+@^Infinitive@>
+@^Grammar, English@>
+@:do}{\texttt{do}@>
+@:does}{\texttt{does}@>
+@^Do-support@>
 
 \label{CompleteMultiPredicativeFormula:parser.pas}
 
@@ -6226,33 +6306,45 @@ begin
          sy_Equal, PredicateSymbol:
             CompleteRightSideOfThePredicativeFormula(CurWord.Nr);
          sy_Does,sy_Do:
-            begin
-               gSubexpPtr^.ProcessDoesNot;
-               ReadWord;
-               Accept(sy_Not,paNotExpected);
-               if CurWord.Kind in [PredicateSymbol,sy_Equal] then
-               begin
-                  CompleteRightSideOfThePredicativeFormula(CurWord.Nr);
-                  gSubexpPtr^.ProcessNegative;
-               end
-               else
-               begin
-                  gSubExpPtr^.InsertIncorrFormula;
-                  SynErr(CurPos,paInfinitiveExp)
-               end;
-            end;
+            @<Parse multi-predicate with ``\texttt{does}'' or ``\texttt{do}'' in copula@>;
       endcases;
    until not (CurWord.Kind in [sy_Equal,PredicateSymbol,sy_Does,sy_Do]);
    gSubexpPtr^.FinishMultiPredicativeFormula;
 end;
-@
+
+@ @<Parse multi-predicate with ``\texttt{does}'' or ``\texttt{do}'' in copula@>=
+            begin
+               @<Consume ``\texttt{does not}'' or ``\texttt{do not}'', raise error otherwise@>;
+               if CurWord.Kind in [PredicateSymbol,sy_Equal] then
+               begin
+                  CompleteRightSideOfThePredicativeFormula(CurWord.Nr);
+                  gSubexpPtr^.ProcessNegative; @+
+               end
+               else
+               begin
+                  gSubExpPtr^.InsertIncorrFormula;
+                  SynErr(CurPos,paInfinitiveExp) @+
+               end;
+            end
+
+@ @<Consume ``\texttt{does not}'' or ``\texttt{do not}'', raise error otherwise@>=
+               gSubexpPtr^.ProcessDoesNot;
+               ReadWord;
+               Accept(sy_Not,paNotExpected)
+
+@ The Parser is trying to parse a predicate and has just parsed a
+comma-separated list of terms. Now, the Parser's is
+either (1) looking at a predicate or equality, or (2) has matched
+``\texttt{does not}'' or ``\texttt{do not}'' and is now looking at a
+predicate or equality. In both cases, the Parser tries to complete the
+formula with the \\{CompletePredicativeFormula} procedure.
 
 \label{CompletePredicativeFormula:parser.pas}
 
 @<Parse expressions (\texttt{parser.pas})@>=
 procedure CompletePredicativeFormula(aPredSymbol:integer);
 begin
-   gSubexpPtr^.ProcessPredicateSymbol;
+   gSubexpPtr^.ProcessPredicateSymbol; {(\section\xref{extSubexpObj.ProcessPredicateSymbol})}
    ReadWord;
    if CurWord.Kind in TermBegSys then
       GetArguments(PredMaxArgs.fList^[aPredSymbol]);
@@ -6265,8 +6357,26 @@ end;
 @<Parse expressions (\texttt{parser.pas})@>=
 procedure CompleteAtomicFormula(var aParenthCnt:integer);
 var lPredSymbol: integer;
-label Predicate;
+label Predicate; {not actually used}
 begin
+   @<Parse left arguments in a formula@>;
+   case CurWord.Kind of
+      sy_Equal,PredicateSymbol:
+         @<Parse equation or (possibly infixed) predicate@>;
+      sy_Does,sy_Do:
+         @<Parse formula with ``\texttt{does not}'' or ``\texttt{do not}''@>;
+      sy_Is:
+         @<Parse formula with ``\texttt{is not}'' or ``\texttt{is not}''@>;
+   othercases
+   begin
+      gSubexpPtr^.ProcessAtomicFormula;
+      MissingWord(paWrongPredSymbol);
+      gSubexpPtr^.InsertIncorrBasic;
+   end;
+   endcases;
+end;
+
+@ @<Parse left arguments in a formula@>=
    repeat
       AppendFunc(aParenthCnt);
       if CurWord.Kind = sy_Comma then
@@ -6280,15 +6390,16 @@ begin
             if CurWord.Kind <> InfixOperatorSymbol then MissingWord(paFunctExp1);
          end;
       end;
-   until CurWord.Kind <> InfixOperatorSymbol;
-   case CurWord.Kind of
-      sy_Equal,PredicateSymbol:
+   until CurWord.Kind <> InfixOperatorSymbol
+
+@ @<Parse equation or (possibly infixed) predicate@>=
          begin
             CompletePredicativeFormula(CurWord.Nr);
             if CurWord.Kind in [sy_Equal,PredicateSymbol,sy_Does,sy_Do] then
                CompleteMultiPredicativeFormula
-         end;
-      sy_Does,sy_Do:
+         end
+
+@ @<Parse formula with ``\texttt{does not}'' or ``\texttt{do not}''@>=
          begin
             gSubexpPtr^.ProcessDoesNot;
             ReadWord;
@@ -6303,10 +6414,11 @@ begin
             else
             begin
                gSubExpPtr^.InsertIncorrFormula;
-               SynErr(CurPos,paInfinitiveExp)
+               SynErr(CurPos,paInfinitiveExp) @+
             end;
-         end;
-      sy_Is:
+         end
+
+@ @<Parse formula with ``\texttt{is not}'' or ``\texttt{is not}''@>=
          begin
             gSubexpPtr^.ProcessAtomicFormula;
             ReadWord;
@@ -6321,7 +6433,7 @@ begin
                if CurWord.Kind = sy_Not then
                begin
                   gSubexpPtr^.ProcessNegation;
-                  ReadWord;
+                  ReadWord; @+
                end;
                GetAdjectiveCluster;
                case CurWord.Kind of
@@ -6335,27 +6447,22 @@ begin
                othercases
                begin
                   gSubexpPtr^.CompleteAttributes;
-                  gSubexpPtr^.FinishAttributiveFormula;
+                  gSubexpPtr^.FinishAttributiveFormula; @+
                end;
                endcases;
             end
             else
             begin
                gSubExpPtr^.InsertIncorrFormula;
-               WrongWord(paTypeOrAttrExp);
+               WrongWord(paTypeOrAttrExp); @+
             end;
-         end;
-   othercases
-   begin
-      gSubexpPtr^.ProcessAtomicFormula;
-      MissingWord(paWrongPredSymbol);
-      gSubexpPtr^.InsertIncorrBasic;
-   end;
-   endcases;
-end;
+         end
 
 @ There is a comment in Polish, a single word (``Kolejnosc'') which
 translates into English as ``Order''.
+
+@d starts_with_term_token == Numeral,LeftCircumfixSymbol,sy_It,sy_LeftCurlyBracket,sy_LeftSquareBracket,
+      sy_The,sy_Dolar,StructureSymbol 
 
 @<Parse expressions (\texttt{parser.pas})@>=
 procedure ViableFormula;
@@ -6371,12 +6478,12 @@ begin
       sy_Contradiction:
          begin
             gSubexpPtr^.ProcessContradiction;
-            ReadWord;
+            ReadWord; @+
          end;
       sy_Thesis:
          begin
             gSubexpPtr^.ProcessThesis;
-            ReadWord;
+            ReadWord; @+
          end;
       sy_Not:
          begin
@@ -6388,6 +6495,32 @@ begin
          end;
       Identifier:
          if AheadWord.Kind = sy_LeftSquareBracket then
+         @<Parse private formula@>
+         else goto NotPrivate;
+      starts_with_term_token:@t\1@> @|@/
+         NotPrivate:
+            begin
+               gSubexpPtr^.StartAtomicFormula;
+               { ??? TermSubexpression }
+               GetClosedSubterm;
+               CompleteArgument(lParenthCnt);
+               CompleteAtomicFormula(lParenthCnt);
+            end@t\2@>;
+      InfixOperatorSymbol,PredicateSymbol,sy_Does,sy_Do,sy_Equal:
+         begin
+            gSubexpPtr^.StartAtomicFormula;
+            CompleteAtomicFormula(lParenthCnt);
+         end;
+   othercases
+   begin
+      gSubexpPtr^.InsertIncorrFormula;
+      WrongWord(paWrongFormulaBeg) @+
+   end;
+   endcases;
+   @<Close parentheses for formula@>;
+end;
+
+@ @<Parse private formula@>=
          begin
             gSubexpPtr^.StartPrivateFormula;
             ReadWord;
@@ -6397,28 +6530,8 @@ begin
             Accept(sy_RightSquareBracket,paRightSquareExp2);
             gSubexpPtr^.FinishPrivateFormula;
          end
-         else goto NotPrivate;
-      Numeral,LeftCircumfixSymbol,sy_It,sy_LeftCurlyBracket,sy_LeftSquareBracket,
-      sy_The,sy_Dolar,StructureSymbol:
-         NotPrivate:
-            begin
-               gSubexpPtr^.StartAtomicFormula;
-               { ??? TermSubexpression }
-               GetClosedSubterm;
-               CompleteArgument(lParenthCnt);
-               CompleteAtomicFormula(lParenthCnt);
-            end;
-      InfixOperatorSymbol,PredicateSymbol,sy_Does,sy_Do,sy_Equal:
-         begin
-            gSubexpPtr^.StartAtomicFormula;
-            CompleteAtomicFormula(lParenthCnt);
-         end;
-   othercases
-   begin
-      gSubexpPtr^.InsertIncorrFormula;
-      WrongWord(paWrongFormulaBeg)
-   end;
-   endcases;
+
+@ @<Close parentheses for formula@>=
    while lParenthCnt > 0 do
    begin
       ConditionalTail;
@@ -6426,10 +6539,22 @@ begin
       Accept(sy_RightParanthesis,paRightParenthExp4);
       dec(lParenthCnt);
       CloseParenth(lParenthCnt);
-   end;
-end;
-@
+   end
 
+@ \node{Precedence for logical connectives.}
+We will now ``hardcode'' the precedence for logical connectives into
+the Mizar Parser. Negations (``\texttt{not}'') binds tighter than
+conjunction (``\texttt{\AM}''), which binds tighter than disjunction
+(``\texttt{or}''), which binds tighter than implication
+(``\texttt{implies}'' and ``\texttt{iff}'').
+
+At this point, for the formula ``\texttt{A \AM\ B}'', the Parser has
+parsed a formula (``\texttt{A}''), and we want to parse possible
+conjunctions. The current token will be ``\texttt{\AM}''. If not, then
+the Parser does nothing: it's ``done''.
+
+We will parse conjunction as left associative --- so
+``\texttt{A \AM\ B \AM\ C}'' parses as ``\texttt{(A \AM\ B) \AM\ C}''.
 
 @<Parse expressions (\texttt{parser.pas})@>=
 procedure ConjunctiveTail;
@@ -6443,8 +6568,19 @@ begin
       gSubexpPtr^.FinishBinaryFormula;
    end;
 end;
-@
 
+@ Mizar parses flexary conjunctions (``$\Phi[0]$ \texttt{\AM\ \dots\ \AM}
+$\Phi[n]$'') as weaker than ``ordinary conjunction''.
+For example
+``$\Psi$ \texttt{\AM} $\Phi[0]$ \texttt{\AM\ \dots\ \AM} $\Phi[n]$''
+parses as 
+``($\Psi$ \texttt{\AM} $\Phi[0]$) \texttt{\AM\ \dots\ \AM} $\Phi[n]$''.
+
+If the user accidentally forgets the ampersand after the ellipses
+(``$\Phi[0]$ \texttt{\AM\ \dots} $\Phi[n]$''), a 402 error will be
+raised.
+
+@^Error, 402@>
 
 @<Parse expressions (\texttt{parser.pas})@>=
 procedure FlexConjunctiveTail;
@@ -6462,8 +6598,12 @@ begin
       gSubexpPtr^.FinishFlexConjunction;
    end;
 end;
-@
 
+@ Disjunction binds weaker than flexary conjunction (which binds
+weaker than ordinary conjunction).
+
+As for ordinary conjunction, Mizar parses multiple disjunctions as
+left associative. So ``\texttt{A or B or C}'' parses as ``\texttt{(A or B) or C}''.
 
 @<Parse expressions (\texttt{parser.pas})@>=
 procedure DisjunctiveTail;
@@ -6479,8 +6619,17 @@ begin
       gSubexpPtr^.FinishBinaryFormula;
    end;
 end;
-@
 
+@ Parsing a disjunction will have the Parser's current token be
+``\texttt{or}'' only if the next token is an ellipsis (``\texttt{...}''),
+which is precisely the signal for a flexary disjunction. When the
+current token is not an ``\texttt{or}'', then the Parser does nothing
+(its work is done).
+
+When the user forgets an ``\texttt{or}'' after ellipsis (e.g., writing
+``\texttt{A or ... C}''), a 401 error will be raised.
+
+@^Error, 401@>
 
 @<Parse expressions (\texttt{parser.pas})@>=
 procedure FlexDisjunctiveTail;
@@ -6497,8 +6646,24 @@ begin
    gSubexpPtr^.FinishFlexDisjunction;
 end;
 end;
-@
 
+@ Mizar parses ``\texttt{implies}'' and ``\texttt{iff}'' with lower
+precedence than ``\texttt{or}'', matching common Mathematical
+practice. Working Mathematicians read ``\texttt{A or B implies C}'' 
+as ``\texttt{(A or B) implies C}''. We impose this precedence with the
+|FlexDisjunctiveTail| parsing the remaining disjunctions before
+checking for ``\texttt{iff}'' or ``\texttt{implies}''.
+
+Mizar accepts one ``topmost'' implication connective. So
+``\texttt{A implies B implies C}'' would be illegal (a 336 error would
+be raised). You would have to insert parentheses to make this
+parseable by Mizar (i.e., ``\texttt{A implies (B implies C)}'').
+This makes sense for implication, but there is a
+compelling argument that ``\texttt{A iff B iff C}'' could be parsed as
+``\texttt{(A iff B) \AM\ (B iff C)}'' --- that latter
+formula \emph{could} be parsed properly by Mizar.
+
+@^Error, 336@>
 
 @<Parse expressions (\texttt{parser.pas})@>=
 procedure ConditionalTail;
@@ -6519,8 +6684,13 @@ begin
          end;
    endcases;
 end;
-@
 
+@ \node{Formula subexpressions.} When the Parser needs a formula as a
+subexpression for a larger expression --- like when it parses a
+Fraenkel term (an expression), the Parser will need to parse
+$$\LB\<Term>\ \<Qualifying-Segment>\hbox{ \texttt{:} }\<Formula-Subexpression>\RB$$
+This will also serve as the ``workhorse'' for parsing a formula
+expression. 
 
 @<Parse expressions (\texttt{parser.pas})@>=
 procedure FormulaSubexpression;
@@ -6531,6 +6701,25 @@ begin
 end;
 
 @* [S] Communication with items.
+When the Parser constructs the AST for a term, the workflow is as
+follows:
+\smallbreak
+\enumerate
+\item Allocate a new \\{extExpression} object, and update \\{gExprPtr}
+to point at it.
+\item Using the \\{gExprPtr} to allocate a new \\{extSubexp} object,
+and update the \\{gSubexpPtr} to point at it.
+\item The Parser will invoke methods for the \\{gSubexpPtr}'s
+reference to build the AST. The result will be stored in a state
+variable (like \\{gLastTerm} or \\{gLastType}).
+\item There will be residual objects allocated, stored in the fields
+of \\{gSubexpPtr} and \\{gExpPtr}. We need to clean those up, freeing
+them, by invoking \\{KillExpression} and \\{KillSubexpression}.
+\endenumerate
+\smallbreak\noindent%
+So each of these methods have the following template: allocate a new
+expression object, update the \\{gExpPtr} to point to it, parse
+something, then free the \\{gExpPtr} using the \\{KillExpression} procedure.
 
 @<Communicate with items (\texttt{parser.pas})@>=
 {{\it Communication with items}}
@@ -6540,19 +6729,15 @@ begin
    gItemPtr^.CreateExpression(exTerm);
    TermSubexpression;
    KillExpression;
-end;
-@
+end; @#
 
-@<Communicate with items (\texttt{parser.pas})@>=
 procedure TypeExpression;
 begin
    gItemPtr^.CreateExpression(exType);
    TypeSubexpression;
    KillExpression;
-end;
-@
+end; @#
 
-@<Communicate with items (\texttt{parser.pas})@>=
 procedure FormulaExpression;
 begin
    gItemPtr^.CreateExpression(exFormula);
@@ -6561,20 +6746,28 @@ begin
 end;
 
 @* [S] Miscellaneous.
+When the Parser is looking at a label, the \\{gItemPtr} will construct
+the label. The Parser still needs to move past the ``\<identifier>\texttt{:}''
+two tokens.
 
 @<Process miscellany (\texttt{parser.pas})@>=
 {{\it Miscellaneous}}
 
 procedure ProcessLab;
 begin
-   gItemPtr^.ProcessLabel;
+   gItemPtr^.ProcessLabel; {(\section\xref{extItemObj.ProcessLabel})}
    if (CurWord.Kind=Identifier) and (AheadWord.Kind=sy_Colon) then
    begin
       ReadWord;
-      ReadWord
+      ReadWord @+
    end;
 end;
-@
+
+@ Telling the \\{gItemPtr} state variable we are about to parse a
+sentence just invokes the \\{StartSentence}
+(\section\xref{extItemObj.StartSentence}) method, then the Parser
+parses the formula, and the \\{gItemPtr} ``finishes'' the sentence
+(which is an empty method).
 
 @<Process miscellany (\texttt{parser.pas})@>=
 procedure ProcessSentence;
@@ -6583,7 +6776,12 @@ begin
    FormulaExpression;
    gItemPtr^.FinishSentence;
 end;
-@
+
+@ When the Parser expected a sentence but something unexpected
+happened, specifically an unexpected statement has cross the Parser's
+path. When that statement has encountered an unjustified ``\texttt{per cases}''.
+We just create a new formula expression, and specifically an
+``incorrect formula''.
 
 @<Process miscellany (\texttt{parser.pas})@>=
 procedure InCorrSentence;
@@ -6596,7 +6794,10 @@ begin
    KillExpression;
    gItemPtr^.FinishSentence;
 end;
-@
+
+@ The Parser attempts to recover (or at least, report) an unexpected
+item when expecting a statement. Specifically, a ``\texttt{per cases}''
+appears when it should not.
 
 @<Process miscellany (\texttt{parser.pas})@>=
 procedure InCorrStatement;
@@ -6605,7 +6806,16 @@ begin
    gItemPtr^.StartRegularStatement;
    InCorrSentence;
 end;
-@
+
+@ The Parser is looking at either
+$$\hbox{\texttt{let} }\<Variables>\hbox{ \texttt{being} }\<Type>\hbox{ \texttt{such that} }\<Hypotheses>$$
+or
+$$\hbox{\texttt{assume that} }\<Hypotheses>$$
+Specifically, the Parser has arrived at the ``\<Hypotheses>'' bit and
+needs to parse it. The \<Hypotheses> generically looks like
+$$\<Hypotheses> = [\<label>]\ \<Formula>\ \LB\hbox{ \texttt{and} }\<Hypotheses>\ \RB$$
+That is to say, a bunch of (possibly labeled) formulas joined together
+by ``\texttt{and}'' keywords.
 
 @<Process miscellany (\texttt{parser.pas})@>=
 procedure ProcessHypotheses;
@@ -6616,7 +6826,9 @@ begin
       gItemPtr^.FinishHypothesis;
    until not Occurs(sy_And)
 end;
-@
+
+@ An assumption is either collective (using hypotheses) or singular (a
+single, possibly labeled, formula).
 
 @<Process miscellany (\texttt{parser.pas})@>=
 procedure Assumption;
@@ -6635,25 +6847,50 @@ begin
    end;
    gItemPtr^.FinishAssumption;
 end;
-@
+
+@ Existential elimination in Mizar looks like
+$$\hbox{\texttt{consider} }\<Fixed-variables>\hbox{ \texttt{such that} }\<Formula>$$
+The \<Fixed-variables> is just a comma-separated list of segments.
+
 \label{FixedVariables:parser.pas}
 @<Process miscellany (\texttt{parser.pas})@>=
 procedure FixedVariables;
 begin
    gItemPtr^.StartFixedVariables;
    repeat
+      @<Parse segment of fixed variables@>;
+   until not Occurs(sy_Comma);
+   gItemPtr^.FinishFixedVariables;
+end;
+
+@ And a ``fixed'' segment is just a comma-separated list of variables.
+This is either implicitly qualified (i.e., they are all reserved
+variables) or explicitly qualified (i.e., there is a
+``\texttt{being}'' or ``\texttt{be}'', followed by a type). A 300
+error will be raised if the comma-separated list of variables
+encounters something other than an identifier.
+
+@^Error, 300@>
+
+@<Parse segment of fixed variables@>=
       gItemPtr^.StartFixedSegment;
       repeat
          gItemPtr^.ProcessFixedVariable;
          Accept(Identifier,paIdentExp4);
       until not Occurs(sy_Comma);
-      gItemPtr^.ProcessBeing;
+      gItemPtr^.ProcessBeing; {parse the type qualification}
       if Occurs(sy_Be) or Occurs(sy_Being) then TypeExpression;
-      gItemPtr^.FinishFixedSegment;
-   until not Occurs(sy_Comma);
-   gItemPtr^.FinishFixedVariables;
-end;
-@
+      gItemPtr^.FinishFixedSegment
+
+@ The Parser is trying to parse a ``\texttt{consider}'' statement or a
+``\texttt{given}'' statement. The Parser will try to parse
+$$\<Fixed-Variables>\hbox{ \texttt{such that} }\<Formula>\ \LB\hbox{ \texttt{and} }\<Formula>\ \RB$$
+If the user forgot the ``\texttt{such}'' keyword, a 403 error will be
+raised. If the user forgot the ``\texttt{that}'' keyword, a 350 error
+will be raised.
+
+@^Error, 350@>
+@^Error, 403@>
 
 @<Process miscellany (\texttt{parser.pas})@>=
 procedure ProcessChoice;
@@ -6669,7 +6906,16 @@ begin
    until not Occurs(sy_And);
    gItemPtr^.FinishChoice;
 end;
-@
+
+@ The Parser is looking at the ``\texttt{let}'' token. There are two
+possible statements
+$$\hbox{\texttt{let }}\<Fixed-variables>\hbox{\texttt{;}}$$
+or possibly with assumptions
+$$\hbox{\texttt{let }}\<Fixed-variables>\hbox{ \texttt{such that} }\<Hypotheses>\hbox{\texttt{;}}$$
+If the user forgot ``\texttt{that}'' but included a ``\texttt{such}''
+after the fixed-variables, a 350 error is raised.
+
+@^Error, 350@>
 
 @<Process miscellany (\texttt{parser.pas})@>=
 procedure Generalization;
@@ -6684,7 +6930,11 @@ begin
       gItemPtr^.FinishAssumption;
    end;
 end;
-@
+
+@ The Parser is looking at the ``\texttt{given}'' token
+currently. This is the same as ``\texttt{assume ex}
+$\vec{x}$ \texttt{st} $\Phi[\vec{x}]$\texttt{; then consider}
+$\vec{x}$ \texttt{such that} $\Phi[\vec{x}]$\texttt{;}''. 
 
 @<Process miscellany (\texttt{parser.pas})@>=
 procedure ExistentialAssumption;
@@ -6693,7 +6943,9 @@ begin
    ReadWord;
    ProcessChoice;
 end;
-@
+
+@ The Parser is looking at either ``\texttt{canceled;}'' or ``\texttt{canceled}
+\<number>\texttt{;}''. 
 
 @<Process miscellany (\texttt{parser.pas})@>=
 procedure Canceled;
@@ -6705,7 +6957,11 @@ begin
 end;
 
 @* [S] Simple justifications.
+The Parser is looking at ``\texttt{by}'' and now needs to parse the
+list of references. If the user tries to use something other than a
+label's identifier as a reference, then a 308 error will be raised.
 
+@^Error, 308@>
 
 @<Parse simple justifications (\texttt{parser.pas})@>=
 {{\it Simple Justifications}}
@@ -6715,8 +6971,37 @@ begin
    gItemPtr^.StartReferences;
    repeat
       ReadWord;
+      @<Parse single reference@>;
+   until CurWord.Kind <> sy_Comma;
+   gItemPtr^.FinishReferences;
+end;
+
+@ @<Parse single reference@>=
       case CurWord.Kind of
          MMLIdentifier:
+            @<Parse library references@>;
+         Identifier:
+            begin
+               gItemPtr^.ProcessPrivateReference;
+               ReadWord @+
+            end;
+      othercases WrongWord(paWrongReferenceBeg);
+      endcases
+
+@ Mizar supports multiple references from the same article to
+``piggieback'' off the same article ``anchor''. For example,
+``\texttt{GROUP\_1:13,def 3,17}'' refers to theorems 13 and 17 and
+definition 3 from the MML Article \texttt{GROUP\_1}.
+
+If the user forgot to include the theorem or definition number ---
+so they just wrote ``\<Article>'' instead of ``\<Article>\texttt{:}\<Number>''
+or ``\<Article>\texttt{:def }\<Number>'' --- then Mizar flags this
+with a 384 error.
+
+@d no_longer_referencing_article == (CurWord.Kind <> sy_Comma) or@|
+                     (AheadWord.Kind = Identifier) or (AheadWord.Kind = MMLIdentifier)
+
+@<Parse library references@>=
             begin
                gItemPtr^.StartLibraryReferences;
                ReadWord;
@@ -6731,23 +7016,23 @@ begin
                      end;
                      gItemPtr^.ProcessTheoremNumber;
                      Accept(Numeral,paNumExp);
-                  until (CurWord.Kind <> sy_Comma)
-                     or (AheadWord.Kind = Identifier) or (AheadWord.Kind = MMLIdentifier)
+                  until no_longer_referencing_article
                else MissingWord(paColonExp4);
                gItemPtr^.FinishTheLibraryReferences;
-            end;
-         Identifier:
-            begin
-               gItemPtr^.ProcessPrivateReference;
-               ReadWord
-            end;
-      othercases WrongWord(paWrongReferenceBeg);
-      endcases;
-   until CurWord.Kind <> sy_Comma;
-   gItemPtr^.FinishReferences;
-end;
-@
+            end
 
+@ The Parser is currently looking at ``\texttt{from}'', which means a
+reference to a scheme identifier will be given next (possibly followed
+with a comma-separated list of references in parentheses).
+
+If the user
+tries to give something else (instead of an identifier of a scheme),
+then a 308 error will be raised. Also, if the user forgot the closing
+parentheses around the references for the scheme (e.g., ``\texttt{from MyScheme(A1,A2}''),
+then 370 error will be raised.
+
+@^Error, 308@>
+@^Error, 370@>
 
 @<Parse simple justifications (\texttt{parser.pas})@>=
 procedure GetSchemeReference;
@@ -6756,6 +7041,32 @@ begin
    ReadWord;
    case CurWord.Kind of
       MMLIdentifier:
+         @<Parse reference to scheme from MML@>;
+      Identifier:
+         begin
+            gItemPtr^.ProcessSchemeReference;
+            ReadWord @+
+         end;
+   othercases WrongWord(paWrongReferenceBeg);
+   endcases;
+   if CurWord.Kind = sy_LeftParanthesis then
+   begin
+      GetReferences;
+      Accept(sy_RightParanthesis,paRightParenthExp7)
+   end;
+   gItemPtr^.FinishSchemeReference;
+end;
+
+@ Mizar expects scheme references to the MML to be of the form
+``\texttt{from} \<Article>\texttt{:sch }\<Number>''. If the user
+forgot the ``\texttt{sch}'' (after the colon), a 313 error will be
+raised. If the user supplies something other than a \emph{number} for
+the scheme, a 307 error will be raised.
+
+@^Error, 307@>
+@^Error, 313@>
+
+@<Parse reference to scheme from MML@>=
          begin
             gItemPtr^.StartSchemeLibraryReference;
             ReadWord;
@@ -6774,22 +7085,12 @@ begin
             end
             else MissingWord(paColonExp4);
             gItemPtr^.FinishSchLibraryReferences;
-         end;
-      Identifier:
-         begin
-            gItemPtr^.ProcessSchemeReference;
-            ReadWord
-         end;
-   othercases WrongWord(paWrongReferenceBeg);
-   endcases;
-   if CurWord.Kind = sy_LeftParanthesis then
-   begin
-      GetReferences;
-      Accept(sy_RightParanthesis,paRightParenthExp7)
-   end;
-   gItemPtr^.FinishSchemeReference;
-end;
-@
+         end
+
+@ The Parser expects a simple justification --- i.e., either a
+``\texttt{by}'' followed by some references, or ``\texttt{from}''
+followed by a scheme reference. For some ``obvious'' inferences, no
+justification may be needed.
 
 @<Parse simple justifications (\texttt{parser.pas})@>=
 procedure SimpleJustification;
@@ -6805,7 +7106,17 @@ begin
 end;
 
 @* [S] Statements and Reasonings.
+Pragmas have been enabled which tells Mizar to skip the proof. The
+Parser simply stores a counter (initialized to 1), and increments it
+every time a ``\texttt{proof}'' token has been encountered, but
+decrements it every time an ``\texttt{end}'' token has been encountered.
+When the counter has reached zero, the proof has ended, and the Parser
+can stop skipping things.
 
+There are, of course, other blocks which use ``\texttt{end}'' to
+terminate it. For example, definitions. But if the Parser should
+encounter such tokens, then things have gone so horribly awry, the
+Parser should just quit here and now.
 
 @<Parse statements and reasoning (\texttt{parser.pas})@>=
 {{\it Statements   \AM\   Reasonings}}
@@ -6835,42 +7146,57 @@ begin
    gBlockPtr^.FinishAtSignProof;
 end;
 
-@ Parsing either a ``\texttt{by}'' justification or a nested
-``\texttt{proof}'' block.
+@ Parsing either a ``\texttt{by}'' justification (or a
+``\texttt{from}'' justification) or a nested
+``\texttt{proof}'' block. If the Parser is looking at neither
+situation, the \\{SimpleJustification} procedure will raise errors.
 
 \label{Justification:parser.pas}
+
+@d parse_proof == 
+         if ProofPragma then Reasoning
+         else IgnoreProof
 
 @<Parse statements and reasoning (\texttt{parser.pas})@>=
 procedure Justification;
 begin
    gItemPtr^.StartJustification;
    case CurWord.Kind of
-      sy_Proof:
-         if ProofPragma then Reasoning
-         else IgnoreProof;
+      sy_Proof: parse_proof;
    othercases SimpleJustification;
    endcases;
    gItemPtr^.FinishJustification;
 end;
-@
 
+@ For private predicates (``\texttt{defpred}'') and private functors
+(``\texttt{deffunc}''), there will be a list of comma-separated types
+for the arguments of the private definition.
 
+@d parse_comma_separated_types ==
+      repeat
+         TypeExpression;
+         gItemPtr^.FinishLocusType
+      until not Occurs(sy_Comma)
 @<Parse statements and reasoning (\texttt{parser.pas})@>=
 procedure ReadTypeList;
 begin
    case CurWord.Kind of
       sy_RightSquareBracket,sy_RightParanthesis:;
-   othercases
-      repeat
-         TypeExpression;
-         gItemPtr^.FinishLocusType
-      until not Occurs(sy_Comma);
+   othercases parse_comma_separated_types;
    endcases;
 end;
-@
+
+@ A \define{Private Item} is a statement (``item'') which introduces a
+new constant local (``private'') to the block or article.
+
+@d other_regular_statements == 
+      Identifier,sy_Now,sy_For,sy_Ex,sy_Not,sy_Thesis,sy_LeftSquareBracket,
+      sy_Contradiction,PredicateSymbol,sy_Does,sy_Do,sy_Equal,InfixOperatorSymbol,
+      Numeral,LeftCircumfixSymbol,sy_LeftParanthesis,sy_It,sy_Dolar,
+      StructureSymbol,sy_The,sy_LeftCurlyBracket,sy_Proof
 
 @<Parse statements and reasoning (\texttt{parser.pas})@>=
-procedure @? RegularStatement; forward; @t\2@>@#
+procedure @? RegularStatement; forward@t\2@>; {(\section\xref{RegularStatement:parser.pas})} 
 
 procedure PrivateItem;
 begin
@@ -6878,6 +7204,34 @@ begin
    if CurWord.Kind = sy_Then then ReadWord;
    case CurWord.Kind of
       sy_Deffunc:
+         @<Parse a ``\texttt{deffunc}''@>;
+      sy_Defpred:
+         @<Parse a ``\texttt{defpred}''@>;
+      sy_Set:
+         @<Parse a ``\texttt{set}'' constant definition@>;
+      sy_Reconsider:
+         @<Parse a ``\texttt{reconsider}'' statement@>;
+      sy_Consider:
+         begin
+            gBlockPtr^.CreateItem(itChoice);
+            ReadWord;
+            ProcessChoice;
+            SimpleJustification;
+         end;
+      other_regular_statements:
+         begin
+            gBlockPtr^.CreateItem(itRegularStatement);
+            RegularStatement; @+
+         end;
+   othercases
+   begin
+      gBlockPtr^.CreateItem(itIncorrItem);
+      WrongWord(paWrongItemBeg); @+
+   end;
+   endcases;
+end;
+
+@ @<Parse a ``\texttt{deffunc}''@>=
          begin
             gBlockPtr^.CreateItem(itPrivFuncDefinition);
             ReadWord;
@@ -6890,8 +7244,9 @@ begin
             Accept(sy_Equal,paEqualityExp1);
             TermExpression;
             gItemPtr^.FinishPrivateFuncDefinienition;
-         end;
-      sy_Defpred:
+         end
+
+@ @<Parse a ``\texttt{defpred}''@>=
          begin
             gBlockPtr^.CreateItem(itPrivPredDefinition);
             ReadWord;
@@ -6904,8 +7259,9 @@ begin
             Accept(sy_Means,paMeansExp);
             FormulaExpression;
             gItemPtr^.FinishPrivatePredDefinienition;
-         end;
-      sy_Set:
+         end
+
+@ @<Parse a ``\texttt{set}'' constant definition@>=
          begin
             gBlockPtr^.CreateItem(itConstantDefinition);
             ReadWord;
@@ -6916,8 +7272,9 @@ begin
                TermExpression;
                gItemPtr^.FinishPrivateConstant;
             until not Occurs(sy_Comma);
-         end;
-      sy_Reconsider:
+         end
+
+@ @<Parse a ``\texttt{reconsider}'' statement@>=
          begin
             gBlockPtr^.CreateItem(itReconsider);
             ReadWord;
@@ -6939,47 +7296,29 @@ begin
             TypeExpression;
             gItemPtr^.FinishReconsidering;  
             SimpleJustification;
-         end;
-      sy_Consider:
-         begin
-            gBlockPtr^.CreateItem(itChoice);
-            ReadWord;
-            ProcessChoice;
-            SimpleJustification;
-         end;
-      Identifier,sy_Now,sy_For,sy_Ex,sy_Not,sy_Thesis,sy_LeftSquareBracket,
-      sy_Contradiction,PredicateSymbol,sy_Does,sy_Do,sy_Equal,InfixOperatorSymbol,
-      Numeral,LeftCircumfixSymbol,sy_LeftParanthesis,sy_It,sy_Dolar,
-      StructureSymbol,sy_The,sy_LeftCurlyBracket,sy_Proof:
-         begin
-            gBlockPtr^.CreateItem(itRegularStatement);
-            RegularStatement;
-         end;
-   othercases
-   begin
-      gBlockPtr^.CreateItem(itIncorrItem);
-      WrongWord(paWrongItemBeg); @+
-   end;
-   endcases;
-end;
+         end
 
-@
+@ The \\{SetParserPragma} toggles the state variables for skipping
+proofs, and storing the pragma in the AST is handled by
+the \\{gBlockPtr}'s method call.
 
 \label{ProcessPragmas:parser}
-
 
 @<Parse statements and reasoning (\texttt{parser.pas})@>=
 procedure ProcessPragmas;
 begin
    while CurWord.Kind = Pragma do
    begin
-      SetParserPragma(CurWord.Spelling);
-      gBlockPtr^.ProcessPragma;
+      SetParserPragma(CurWord.Spelling); {(\section\xref{SetParserPragma})}
+      gBlockPtr^.ProcessPragma; {(\section\xref{extBlockObj.ProcessPragma})}
       ReadTokenProc;
    end;
 end;
-@
 
+@ \node{Reasoning items.} The ``linear reasoning'' portion of the
+parser corresponds to what ``Mizar in a Nutshell'' refers to as a
+sequence of ``Reasoning Items''. Basically, everything exception
+``\texttt{per cases}''.
 
 @<Parse statements and reasoning (\texttt{parser.pas})@>=
 procedure LinearReasoning;
@@ -6988,20 +7327,52 @@ begin
    begin
       StillCorrect:=true;
       ProcessPragmas;
+      @<Parse statement of linear reasoning@>; @/
+      Semicolon;
+   end;
+end;
+
+@ Most statements are delegated to their own dedicated function.
+
+@<Parse statement of linear reasoning@>=
       case CurWord.Kind of
          sy_Let:
             begin
                gBlockPtr^.CreateItem(itGeneralization);
-               Generalization;
+               Generalization; @+
             end;
          sy_Given: ExistentialAssumption;
          sy_Assume:
             begin
                gBlockPtr^.CreateItem(itAssumption);
                ReadWord;
-               Assumption;
+               Assumption; @+
             end;
          sy_Take:
+            @<Parse ``\texttt{take}'' statement for linear reasoning@>;
+         sy_Hereby:
+            begin
+               gBlockPtr^.CreateItem(itConclusion);
+               Reasoning; @+
+            end;
+@t\4@>    @<Parse ``\texttt{thus}'' and ``\texttt{hence}'' for linear reasoning@>;
+         sy_Per: exit;
+         sy_Case,sy_Suppose: exit;
+         sy_Reserve,sy_Scheme,sy_Theorem,sy_Definition,sy_Begin,sy_Notation,
+         sy_Registration,EOT: exit;
+         sy_Then:
+            @<Parse ``\texttt{then}'' for linear reasoning@>;
+      othercases
+         PrivateItem;
+      endcases
+
+@ \node{Take statements.}
+We recall the syntax for a ``\texttt{take}'' statement:
+$$\hbox{\texttt{take} }(\<Term>\ \pipe\ \<Variable> = \<Term>)\ \LB\hbox{\texttt{","} }(\<Term>\ \pipe\ \<Variable> = \<Term>)\RB$$
+That is, a comma-separated list of either (1) terms, or (2) a variable
+equal to a term.
+
+@<Parse ``\texttt{take}'' statement for linear reasoning@>=
             begin
                gBlockPtr^.CreateItem(itExemplification);
                ReadWord;
@@ -7021,12 +7392,16 @@ begin
                      gItemPtr^.FinishExemplifyingTerm;
                   end;
                until not Occurs(sy_Comma);
-            end;
-         sy_Hereby:
-            begin
-               gBlockPtr^.CreateItem(itConclusion);
-               Reasoning;
-            end;
+            end
+
+@ \node{Thus statements.} Both ``\texttt{thus}'' and
+``\texttt{hence}'' (which is syntactic sugar for ``\texttt{then
+thus}'') are parsed similarly. So it bears studying them in parallel.
+The ``heavy lifting'' is handled by the \\{RegularStatement} for
+parsing the formula. But the \\{gBlockPtr} state variable ``primes the pump''
+by creating a ``conclusion'' statement.
+
+@<Parse ``\texttt{thus}'' and ``\texttt{hence}'' for linear reasoning@>=
          sy_Hence:
             begin
                gBlockPtr^.ProcessLink;
@@ -7041,35 +7416,54 @@ begin
                if CurWord.Kind = sy_Then then ReadWord;
                gBlockPtr^.CreateItem(itConclusion);
                RegularStatement;
-            end;
-         sy_Per: exit;
-         sy_Case,sy_Suppose: exit;
-         sy_Reserve,sy_Scheme,sy_Theorem,sy_Definition,sy_Begin,sy_Notation,
-         sy_Registration,EOT: exit;
-         sy_Then:
+            end
+
+@ \node{Parsing `then' linked statements.}
+
+@<Parse ``\texttt{then}'' for linear reasoning@>=
             begin
                if AheadWord.Kind = sy_Per then
                begin
                   gBlockPtr^.ProcessLink;
                   ReadWord;
-                  exit;
+                  exit; @+
                end
                else
                   PrivateItem;
-            end;
-      othercases
-         PrivateItem;
-      endcases;
-      Semicolon;
-   end;
-end;
-@
+            end
+
+
+@ \node{Non-block Reasoning.} The Parser has just encountered a
+``\texttt{per cases}'' statement. Now it must parse
+``\texttt{suppose}'' items.
 
 
 @<Parse statements and reasoning (\texttt{parser.pas})@>=
 procedure NonBlockReasoning;
 var CasePos: Position; lCaseKind:TokenKind;
+   @<Process ``\texttt{case}'' (local procedure)@>;
 
+begin
+   case CurWord.Kind of
+      sy_Per,sy_Case,sy_Suppose:
+         begin
+            gBlockPtr^.CreateItem(itPerCases);
+            @<Consume ``\texttt{per cases}'', raise an error if they're missing@>;
+            if (CurWord.Kind <> sy_Case) and (CurWord.Kind <> sy_Suppose) then
+            @<Try to synchronize after failing to find initial `\texttt{case}' or `\texttt{suppose}'@>;
+            repeat
+               @<Parse ``\texttt{suppose}'' or ``\texttt{case}'' block@>;
+            until (Curword.Kind = sy_End);
+         end;
+   endcases;
+end;
+
+@ Each ``\texttt{case}'' or ``\texttt{suppose}'' block consists of
+zero or more linear reasoning items, followed possibly by an optional
+``non-block reasoning'' proof (i.e., another nested ``\texttt{per cases}''
+proof by cases).
+
+@<Process ``\texttt{case}'' (local procedure)@>=
    procedure ProcessCase;
    begin
       Assumption;
@@ -7080,19 +7474,39 @@ var CasePos: Position; lCaseKind:TokenKind;
       KillBlock;
       AcceptEnd(CasePos);
       Semicolon;
-   end;
+   end
 
-begin
-   case CurWord.Kind of
-      sy_Per,sy_Case,sy_Suppose:
-         begin
-            gBlockPtr^.CreateItem(itPerCases);
+@ The Parser looks for ``\texttt{per cases}'' tokens, and some simple
+justification for the statement. If ``\texttt{per}'' is missing, a 231
+error is raised. If the ``\texttt{cases}'' is missing, a 351 error is raised.
+When this code chunk is done, the Parser is looking at either a
+``\texttt{suppose}'' token or a ``\texttt{case}'' token.
+
+@^Error, 231@>
+@^Error, 351@>
+
+@<Consume ``\texttt{per cases}'', raise an error if they're missing@>=
             Accept(sy_Per,paPerExp);
             Accept(sy_Cases,paCasesExp);
             SimpleJustification; 
             Semicolon;
-            lCaseKind:=CurWord.Kind;
-            if (CurWord.Kind <> sy_Case) and (CurWord.Kind <> sy_Suppose) then
+            lCaseKind:=CurWord.Kind
+
+@ The Parser is expecting ``\texttt{suppose}'' or ``\texttt{case}''
+after the ``\texttt{per cases}'' statement. But if the Parser fails to
+find either of these tokens, it \emph{should} enter panic mode.
+
+Like a person falling off a cliff reaches out for something to grab,
+the Parser in panic mode seeks something to ``grab on to'' so the
+Parser can ``soldier on''. The technical term for this situation is
+that the Parser is trying to ``synchronize'' (usually people just talk
+about ``synchronization'').
+
+Mizar raises a 232 error.
+
+@^Error, 232@>
+
+@<Try to synchronize after failing to find initial `\texttt{case}' or `\texttt{suppose}'@>=
             begin
                MissingWord(paSupposeOrCaseExp);
                lCaseKind:=sy_Suppose;
@@ -7102,44 +7516,65 @@ begin
                StillCorrect:=true;
                CasePos:=CurPos;
                ProcessCase;
-            end;
-            repeat
+            end
+
+@ @<Parse ``\texttt{suppose}'' or ``\texttt{case}'' block@>=
                while (CurWord.Kind = sy_Case) or (CurWord.Kind = sy_Suppose) do
-               begin
-                  gBlockPtr^.CreateItem(itCaseBlock);
-                  if lCaseKind = sy_Case then gBlockPtr^.CreateBlock(blCase)
-                  else gBlockPtr^.CreateBlock(blSuppose);
-                  CasePos:=CurPos;
-                  StillCorrect:=true;
-                  if lCaseKind = sy_Case then gBlockPtr^.CreateItem(itCaseHead)
-                  else gBlockPtr^.CreateItem(itSupposeHead);
-                  if CurWord.Kind <> lCaseKind then ErrImm(58);
-                  ReadWord;
-                  ProcessCase;
-               end;
+               @<Parse contents of ``\texttt{suppose}'' block@>;
                case Curword.Kind of
                   sy_Reserve,sy_Scheme,sy_Theorem,sy_Definition,sy_Begin,sy_Notation,
                   sy_Registration,EOT: exit;
                   sy_End: ;
                othercases
+               @<Synchronize after missing `\texttt{suppose}' or `\texttt{case}' token@>;
+               endcases
+
+@ Parsing the contents of a ``\texttt{suppose}'' or ``\texttt{case}''
+block requires creating a new block (for the, you know, block) and
+creating a new item for the ``\texttt{suppose} \<Formula>'' or
+``\texttt{case} \<Formula>'' statement.
+
+If the user tries to ``mix and match'' the different kind of
+suppositions (i.e., ``\texttt{case}'' and ``\texttt{suppose}''), then
+a 58 error should be raised.
+
+@:Error, 058}{Error, 58@>
+
+@d create_supposition_block ==
+                  if lCaseKind = sy_Case then gBlockPtr^.CreateBlock(blCase)
+                  else gBlockPtr^.CreateBlock(blSuppose)
+@d create_supposition_head ==
+                  if lCaseKind = sy_Case then gBlockPtr^.CreateItem(itCaseHead)
+                  else gBlockPtr^.CreateItem(itSupposeHead)
+@<Parse contents of ``\texttt{suppose}'' block@>=
+               begin
+                  gBlockPtr^.CreateItem(itCaseBlock);
+                  create_supposition_block;
+                  CasePos:=CurPos;
+                  StillCorrect:=true;
+                  create_supposition_head;
+                  if CurWord.Kind <> lCaseKind then ErrImm(58); 
+                  ReadWord;
+                  ProcessCase;
+               end
+
+@ @<Synchronize after missing `\texttt{suppose}' or `\texttt{case}' token@>=
                begin
                   MissingWord(paSupposeOrCaseExp);
                   gBlockPtr^.CreateItem(itCaseBlock);
-                  if lCaseKind = sy_Case then gBlockPtr^.CreateBlock(blCase)
-                  else gBlockPtr^.CreateBlock(blSuppose);
-                  if lCaseKind = sy_Case then gBlockPtr^.CreateItem(itCaseHead)
-                  else gBlockPtr^.CreateItem(itSupposeHead);
+                  create_supposition_block;
+                  create_supposition_head;
                   StillCorrect:=true;
                   CasePos:=CurPos;
                   ProcessCase;
-               end;
-               endcases;
-            until (Curword.Kind = sy_End);
-         end;
-   endcases;
-end;
-@
+               end
 
+@ \node{Reasoning.} The Parser is looking at ``\texttt{proof}'',
+``\texttt{hereby}'', or ``\texttt{now}''. The syntax for Mizar says
+that we should expect linear reasoning statements, followed by
+non-block reasoning (i.e., at most
+one ``\texttt{per cases}'' statement, and then ``\texttt{suppose}'' or
+``\texttt{case}'' blocks).
 
 @<Parse statements and reasoning (\texttt{parser.pas})@>=
 procedure Reasoning;
@@ -7174,7 +7609,14 @@ begin
    AcceptEnd(ReasPos);
 end;
 
-@
+@ \node{Regular statements.} A regular statement is one of the
+following:
+\enumerate
+\item ``\texttt{now}'' followed by reasoning;
+\item A sentence (i.e., possibly labeled formula) followed by a
+  ``\texttt{proof}'' block;
+\item Iterative equalities.
+\endenumerate
 
 \label{RegularStatement:parser.pas}
 
@@ -7190,11 +7632,7 @@ begin
       ProcessSentence;
       case CurWord.Kind of
          sy_Proof:
-            begin
-               gItemPtr^.StartJustification;
-               if ProofPragma then Reasoning else IgnoreProof;
-               gItemPtr^.FinishJustification;
-            end;
+            @<Parse ``\texttt{proof}'' block@>;
       othercases
       begin
          gItemPtr^.StartJustification;
@@ -7202,6 +7640,21 @@ begin
          gItemPtr^.FinishJustification;
          gItemPtr^.FinishCompactStatement;
          while CurWord.Kind = sy_DotEquals do
+         @<Parse iterative equations@>;
+      end;
+      endcases;
+   end;
+   endcases;
+end;
+
+@ @<Parse ``\texttt{proof}'' block@>=
+            begin
+               gItemPtr^.StartJustification;
+               if ProofPragma then Reasoning else IgnoreProof;
+               gItemPtr^.FinishJustification;
+            end
+
+@ @<Parse iterative equations@>=
          begin
             gItemPtr^.StartIterativeStep;
             ReadWord;
@@ -7211,15 +7664,22 @@ begin
             SimpleJustification;
             gItemPtr^.FinishJustification;
             gItemPtr^.FinishIterativeStep;
-         end;
-      end;
-      endcases;
-   end;
-   endcases;
-end;
+         end
 
 @* [S] Patterns.
+Visible arguments (compared to ``hidden arguments'') appear to the
+left or right of a functor or predicate (or to the left of an
+attribute, or to the right of a mode or
+structure). The \\{gVisibleNbr} state variable is initialized to zero
+when the Parser starts parsing visible arguments, and the Parser
+increments it for each visible argument in the pattern.
 
+If a non-identifier appears in a pattern, Mizar raises a 300 error. So
+you cannot be clever and try to trick Mizar into thinking ``\texttt{0 + x}''
+is a pattern.
+
+@^Error, 300@>
+\label{GetVisible:parser.pas}
 
 @<Parse patterns (\texttt{parser.pas})@>=
 {{\it Patterns}}
@@ -7228,12 +7688,13 @@ var gVisibleNbr: integer;
 
 procedure GetVisible;
 begin
-   gItemPtr^.ProcessVisible;
+   gItemPtr^.ProcessVisible; {(\section\xref{extItemObj.ProcessVisible})}
    inc(gVisibleNbr);
    Accept(Identifier,paIdentExp3);
 end;
-@
 
+@ We will need to Parse a comma-separated list of identifiers when
+determining a pattern.
 
 @<Parse patterns (\texttt{parser.pas})@>=
 procedure ReadVisible;
@@ -7245,21 +7706,43 @@ begin
    until not Occurs(sy_Comma);
    gItemPtr^.FinishVisible; 
 end;
-@
 
+@ There are two cases to consider when determining the pattern for a
+mode: either the Parser is looking at ``\texttt{set}'' as a type,
+or---the more interesting case---the Parser is looking at an
+identifier which appears in a vocabulary file as a mode symbol. 
 
 @<Parse patterns (\texttt{parser.pas})@>=
 procedure GetModePattern;
 var lModesymbol:integer;
 begin
-   gItemPtr^.StartModePattern;
+   gItemPtr^.StartModePattern; {(\section\xref{extItemObj.StartModePattern})}
    case CurWord.Kind of
-      sy_Set: 
+      sy_Set:
+         @<Parse pattern for ``\texttt{set}'' as a mode@>;
+      ModeSymbol:
+         @<Parse pattern for a mode symbols@>
+   othercases WrongWord(paWrongModePatternBeg);
+   endcases; @/
+   gItemPtr^.FinishModePattern; {(\section\xref{extItemObj.FinishModePattern})}
+end;
+
+@ @<Parse pattern for ``\texttt{set}'' as a mode@>=
          begin
             if AheadWord.Kind = sy_Of then WrongWord(paWrongModePatternSet)
             else ReadWord;
-         end;
-      ModeSymbol:
+         end
+
+@ The ``\<Kind>\\{MaxArgs}'' entry is initialized to |$FF| before
+|ReadVisible| is invoked, which is \PASCAL/ for $\H{FF}=255$. So if
+the \\{ModeMaxArgs} entry for the mode symbol is (1) less than the
+number of arguments parsed, or (2) uninitialized; then we should
+update its entry with the \\{gVisibleNbr} state variable's current value.
+
+@d get_index_compare_to_default(#) == [#] = $FF
+@d entry_is_unitialized(#) == #.fList^get_index_compare_to_default
+
+@<Parse pattern for a mode symbols@>=
          begin
             lModeSymbol:=CurWord.Nr;
             gVisibleNbr:=0;
@@ -7267,15 +7750,13 @@ begin
             gItemPtr^.ProcessModePattern;
             if Occurs(sy_Of) then ReadVisible;
             if (ModeMaxArgs.fList^[lModeSymbol] < gVisibleNbr) or
-                  (ModeMaxArgs.fList^[lModeSymbol] = $FF) then
+                  (entry_is_uninitialized(ModeMaxArgs)(lModeSymbol)) then
                ModeMaxArgs.fList^[lModeSymbol] := gVisibleNbr;
          end
-   othercases WrongWord(paWrongModePatternBeg);
-   endcases;
-   gItemPtr^.FinishModePattern;
-end;
-@
 
+@ Parsing the visible arguments for a functor relies on this helper function.
+
+@^Error, 370@>
 
 @<Parse patterns (\texttt{parser.pas})@>=
 procedure ReadParams;
@@ -7283,18 +7764,25 @@ begin
    if Occurs(sy_LeftParanthesis) then
    begin
       ReadVisible;
-      Accept(sy_RightParanthesis,paRightParenthExp5)
+      Accept(sy_RightParanthesis,paRightParenthExp5) @+
    end
    else if CurWord.Kind = Identifier then
    begin
       gItemPtr^.StartVisible;
       GetVisible;
-      gItemPtr^.FinishVisible;
+      gItemPtr^.FinishVisible; @+
    end;
 end;
-@
+
+@ Attribute patterns allows for arguments \emph{only on the right} of
+the attribute symbol, i.e., something like
+$$\hbox{\texttt{attr} } \underbrace{\<Identifier>\hbox{ \texttt{is} }\<Arguments>\ \<Attribute-Name>}_{{\rm pattern}}\hbox{ \texttt{means}}\dots$$
 
 \label{GetAttrPattern:parser.pas}
+
+
+@^Error, 306@>
+@^Error, 370@>
 
 @<Parse patterns (\texttt{parser.pas})@>=
 procedure GetAttrPattern;
@@ -7307,13 +7795,18 @@ begin
    if Occurs(sy_LeftParanthesis) then
    begin
       ReadVisible;
-      Accept(sy_RightParanthesis,paRightParenthExp11)
+      Accept(sy_RightParanthesis,paRightParenthExp11) @+
    end
    else if CurWord.Kind = Identifier then ReadVisible;
    gItemPtr^.FinishAttributePattern;
    Accept(AttributeSymbol,paAttrExp2);
 end;
-@
+
+@ Functor patterns generically look like:
+$$\hbox{\texttt{func} }\underbrace{\<Arguments>\ \<Identifier>\ \<Arguments>}_{{\rm pattern}}\hbox{ \texttt{->}}\dots$$
+or
+$$\hbox{\texttt{func} }\underbrace{\<Left-Bracket>\ \<Arguments>\ \<Right-Bracket>}_{{\rm pattern}}\hbox{ \texttt{->}}\dots$$
+
 \label{GetFuncPattern:parser.pas}
 
 @<Parse patterns (\texttt{parser.pas})@>=
@@ -7322,14 +7815,27 @@ begin
    gItemPtr^.StartFunctorPattern;
    case CurWord.Kind of
       Identifier,InfixOperatorSymbol,sy_LeftParanthesis:
+         @<Parse infix functor pattern@>;
+      LeftCircumfixSymbol,sy_LeftSquareBracket,sy_LeftCurlyBracket:
+         @<Parse bracket functor pattern@>;
+   othercases
+   begin
+      WrongWord(paWrongFunctorPatternBeg);
+      gItemPtr^.FinishFunctorPattern; @+
+   end;
+   endcases;
+end;
+
+@ @<Parse infix functor pattern@>=
          begin
             ReadParams;
             gItemPtr^.ProcessFunctorSymbol; { (\section\xref{extItemObj.ProcessFunctorSymbol}) }
             Accept(InfixOperatorSymbol,paFunctExp2);
             ReadParams;
             gItemPtr^.FinishFunctorPattern;
-         end;
-      LeftCircumfixSymbol,sy_LeftSquareBracket,sy_LeftCurlyBracket:
+         end
+
+@ @<Parse bracket functor pattern@>=
          begin
             ReadWord;
             ReadVisible;
@@ -7338,15 +7844,9 @@ begin
                sy_RightSquareBracket,sy_RightCurlyBracket,sy_RightParanthesis: ReadWord;
             othercases Accept(RightCircumfixSymbol,paRightBraExp2);
             endcases;
-         end;
-   othercases
-   begin
-      WrongWord(paWrongFunctorPatternBeg);
-      gItemPtr^.FinishFunctorPattern;
-   end;
-   endcases;
-end;
-@
+         end
+
+@ Predicate patterns resemble infix functor patterns.
 
 \label{GetPredPattern:parser.pas}
 @<Parse patterns (\texttt{parser.pas})@>=
@@ -7358,6 +7858,13 @@ begin
    gItemPtr^.ProcessPredicateSymbol;
    case CurWord.Kind of
       sy_Equal,PredicateSymbol:
+         @<Parse predicate pattern@>;
+   othercases WrongWord(paWrongPredPattern);
+   endcases;
+   gItemPtr^.FinishPredicatePattern;
+end;
+
+@ @<Parse predicate pattern@>=
          begin
             lPredSymbol:=CurWord.Nr;
             if CurWord.Kind =sy_Equal then lPredSymbol:=EqualitySym;
@@ -7365,15 +7872,13 @@ begin
             ReadWord;
             if CurWord.Kind = Identifier then ReadVisible;
             if (PredMaxArgs.fList^[lPredSymbol] < gVisibleNbr) or
-                  (PredMaxArgs.fList^[lPredSymbol] = $FF) then
+                  (entry_is_uninitialized(PredMaxArgs)(lPredSymbol)) then
                PredMaxArgs.fList^[lPredSymbol] := gVisibleNbr;
-         end;
-   othercases WrongWord(paWrongPredPattern);
-   endcases;
-   gItemPtr^.FinishPredicatePattern;
-end;
-@
+         end
 
+@ The ``specification'' (appearing in a non-expandable mode and
+functor definitions) refers to the ``\texttt{->} \<Type>'' portion
+which gives the type for the functor or mode.
 
 @<Parse patterns (\texttt{parser.pas})@>=
 procedure Specification;
@@ -7384,7 +7889,10 @@ begin
    gItemPtr^.FinishSpecification;
 end;
 
-@
+@ Parsing a structure pattern is a bit misleading. Unlike the previous
+procedures, this will actually parse the entirety of a structure
+definition:
+$$\hbox{\texttt{struct }}\<Identifier>\hbox{ \texttt{(} }\<Types>\hbox{ \texttt{)}}\hbox{ \texttt{(\#} } \<Fields>\hbox{ \texttt{\#)}}$$
 
 @<Parse patterns (\texttt{parser.pas})@>=
 procedure GetStructPatterns;
@@ -7392,6 +7900,14 @@ var lStructureSymbol: integer;
 begin
    gBlockPtr^.CreateItem(itDefStruct);
    ReadWord;
+   @<Parse ancestors of structure, if there are any@>;
+   @<Parse ``\texttt{over}'' and any structure arguments, if any@>;
+   gItemPtr^.StartFields; @/
+   @<Update max arguments for structure symbol, if needed@>;
+   @<Parse the fields of the structure definition@>;
+end;
+
+@ @<Parse ancestors of structure, if there are any@>=
    if CurWord.Kind = sy_LeftParanthesis then
    begin
       repeat
@@ -7401,48 +7917,64 @@ begin
          gItemPtr^.FinishPrefix;
       until CurWord.Kind <> sy_Comma;
       Accept(sy_RightParanthesis,paRightParenthExp6);
-   end;
+   end
+
+@ @<Parse ``\texttt{over}'' and any structure arguments, if any@>=
    gItemPtr^.ProcessStructureSymbol;
    lStructureSymbol := $FF;
    if CurWord.Kind = StructureSymbol then lStructureSymbol:=CurWord.Nr;
    Accept(StructureSymbol,paStructExp1);
-   if Occurs(sy_Over) then ReadVisible;
-   gItemPtr^.StartFields;
+   if Occurs(sy_Over) then ReadVisible
+
+@ @<Update max arguments for structure symbol, if needed@>=
    if lStructureSymbol <> $FF then
       if (StructModeMaxArgs.fList^[lStructureSymbol] < gVisibleNbr) or
-            (StructModeMaxArgs.fList^[lStructureSymbol] = $FF) then
-         StructModeMaxArgs.fList^[lStructureSymbol] := gVisibleNbr;
+            (entry_is_uninitialized(StructModeMaxArgs)(lStructureSymbol)) then
+         StructModeMaxArgs.fList^[lStructureSymbol] := gVisibleNbr
+
+@ @<Parse the fields of the structure definition@>=
    Accept(sy_StructLeftBracket,paLeftDoubleExp3);
    repeat
+      @<Parse field for the structure definition@>;
+   until not Occurs(sy_Comma);
+   gItemPtr^.FinishFields;
+   Accept(sy_StructRightBracket,paRightDoubleExp2)
+
+@ @<Parse field for the structure definition@>=
       gItemPtr^.StartAggrPattSegment;
       repeat
          gItemPtr^.ProcessField;
          Accept(SelectorSymbol,paSelectExp1);
       until not Occurs(sy_Comma);
       Specification;
-      gItemPtr^.FinishAggrPattSegment;
-   until not Occurs(sy_Comma);
-   gItemPtr^.FinishFields;
-   Accept(sy_StructRightBracket,paRightDoubleExp2);
-end;
+      gItemPtr^.FinishAggrPattSegment
 
 @* [S] Definitions.
-
+Non-expandable modes, i.e., modes of the form
+$$\hbox{\texttt{mode} }\<Identifier>\hbox{ \texttt{of} }\<Arguments>\hbox{ \texttt{->} }\<Type>\hbox{ \texttt{means} }\<Formula>$$
 
 @<Parse definitions (\texttt{parser.pas})@>=
 {{\it Definitions}}
 
 procedure ConstructionType;
 begin
-   gItemPtr^.StartConstructionType;
+   gItemPtr^.StartConstructionType; {(\section\xref{extItemObj.StartConstructionType})}
    if CurWord.Kind = sy_Arrow then
    begin
       ReadWord;
-      TypeExpression
+      TypeExpression @+
    end;
-   gItemPtr^.FinishConstructionType;
+   gItemPtr^.FinishConstructionType; {(\section\xref{extItemObj.FinishConstructionType})}
 end;
-@
+
+@ Parsing correctness conditions amounts to looping through every
+``\<Correctness> \<Justification>\texttt{;}'' statement, with a
+fallback ``\texttt{correctness} \<Justification>\texttt{;}''
+correctness condition.
+
+There is a comment, ``o jaki tu item chodzi? definitional-item?'',
+which Google translates from Polish as, ``What item are we talking
+about here? Definitional-item?'' I have swapped this into the code snippet.
 
 \label{Correctness:parser.pas}
 
@@ -7457,8 +7989,8 @@ begin
       Justification; 
       Semicolon;
    end;
-   gItemPtr^.ProcessCorrectness;  {o jaki tu item chodzi? definitional-item?}
-   if CurWord.Kind = sy_Correctness then
+   gItemPtr^.ProcessCorrectness; {(\section\xref{extItemObj.ProcessCorrectness}) What item are we talking about here? Definitional-item?}
+   if CurWord.Kind = sy_Correctness then {``\texttt{correctness}'' catchall}
    begin
       StillCorrect:=true;
       gBlockPtr^.CreateItem(itCorrectness);
@@ -7479,31 +8011,17 @@ begin
    lDefiniensExpected:=true;
    case CurWord.Kind of
       sy_Mode:
-         begin
-            gBlockPtr^.CreateItem(itDefMode);
-            ReadWord;
-            GetModePattern;
-            case CurWord.Kind of
-               sy_Is:
-                  begin
-                     gItemPtr^.StartExpansion;
-                     ReadWord;
-                     TypeExpression;
-                     lDefiniensExpected:=false;
-                  end;
-            othercases ConstructionType;
-            endcases;
-         end;
+         @<Parse mode definition@>;
       sy_Attr:
          begin
             gBlockPtr^.CreateItem(itDefAttr);
             ReadWord;
-            GetAttrPattern;
+            GetAttrPattern; @+
          end;
       sy_Struct:
          begin
             GetStructPatterns;
-            lDefiniensExpected:=false;
+            lDefiniensExpected:=false; @+
          end;
       sy_Func:
          begin
@@ -7521,8 +8039,46 @@ begin
          end;
    endcases;
    if lDefiniensExpected then
+      @<Parse definiens@>;
+   Semicolon;
+   Correctness;
+   while (CurWord.Kind = sy_Property) do
+   begin
+      gBlockPtr^.CreateItem(itProperty);
+      StillCorrect:=true;
+      ReadWord;
+      Justification;
+      Semicolon;
+   end;
+   gBlockPtr^.FinishDefinition;
+end;
+
+@ @<Parse mode definition@>=
+         begin
+            gBlockPtr^.CreateItem(itDefMode);
+            ReadWord;
+            GetModePattern;
+            case CurWord.Kind of
+               sy_Is:
+                  begin
+                     gItemPtr^.StartExpansion;
+                     ReadWord;
+                     TypeExpression;
+                     lDefiniensExpected:=false;
+                  end;
+            othercases ConstructionType;
+            endcases;
+         end
+
+@ @<Parse definiens@>=
       case CurWord.Kind of
          sy_Means:
+            @<Parse ``\texttt{means}'' definiens@>;
+         sy_Equals:
+            @<Parse ``\texttt{equals}'' definiens@>;
+      endcases
+
+@ @<Parse ``\texttt{means}'' definiens@>=
             begin
                gItemPtr^.ProcessMeans;
                ReadWord;
@@ -7536,6 +8092,12 @@ begin
                gItemPtr^.StartDefiniens;
                FormulaExpression;
                if CurWord.Kind = sy_If then
+               @<Parse ``means'' definition-by-cases@>@;
+               else gItemPtr^.FinishOtherwise;
+               gItemPtr^.FinishDefiniens;
+            end
+
+@ @<Parse ``means'' definition-by-cases@>=
                begin
                   gItemPtr^.StartGuard;
                   ReadWord;
@@ -7554,16 +8116,14 @@ begin
                      gItemPtr^.StartOtherwise;
                      ReadWord;
                      FormulaExpression;
-                     gItemPtr^.FinishOtherwise;
+                     gItemPtr^.FinishOtherwise; @+
                   end;
                end
-               else gItemPtr^.FinishOtherwise;
-               gItemPtr^.FinishDefiniens;
-            end;
-         sy_Equals:
+
+@ @<Parse ``\texttt{equals}'' definiens@>=
             if lDefKind <> sy_Func then
             begin
-               WrongWord(paUnexpEquals);
+               WrongWord(paUnexpEquals); @+
             end
             else
             begin
@@ -7579,6 +8139,12 @@ begin
                gItemPtr^.StartEquals;
                TermExpression;
                if CurWord.Kind = sy_If then
+               @<Parse ``equals'' definition-by-cases@>
+               else gItemPtr^.FinishOtherwise;
+               gItemPtr^.FinishDefiniens;
+            end
+
+@ @<Parse ``equals'' definition-by-cases@>=
                begin
                   gItemPtr^.StartGuard;
                   ReadWord;
@@ -7600,24 +8166,25 @@ begin
                      gItemPtr^.FinishOtherwise;
                   end;
                end
-               else gItemPtr^.FinishOtherwise;
-               gItemPtr^.FinishDefiniens;
-            end;
-      endcases;
-   Semicolon;
-   Correctness;
-   while (CurWord.Kind = sy_Property) do
-   begin
-      gBlockPtr^.CreateItem(itProperty);
-      StillCorrect:=true;
-      ReadWord;
-      Justification;
-      Semicolon;
-   end;
-   gBlockPtr^.FinishDefinition;
-end;
-@
 
+@ When introducing a ``\texttt{synonym}'' or ``\texttt{antonym}'', the
+Parser needs to determine \emph{what kind of thing} is being
+introduced as a synonym or antonym.
+
+\Ithink{This could probably be turned into an \&{case} statement, but
+I am just transcribing the code as faithfully as possible.}
+
+@d is_attr_pattern == (CurWord.Kind = Identifier) and (AheadWord.Kind = sy_Is)
+@d is_infix_pattern == (CurWord.Kind in [LeftCircumfixSymbol,sy_LeftCurlyBracket,
+                             sy_LeftSquareBracket,sy_LeftParanthesis,
+                             InfixOperatorSymbol]) or
+              ((CurWord.Kind = Identifier) and (AheadWord.Kind = InfixOperatorSymbol))
+@d is_predicate_pattern == (CurWord.Kind = PredicateSymbol) or@|
+              (CurWord.Kind =sy_Equal) or@|
+              ((CurWord.Kind = Identifier) and
+              (AheadWord.Kind in [sy_Comma,PredicateSymbol,sy_Equal]))
+@d is_selector_pattern == (CurWord.Kind = sy_The) and (AheadWord.Kind = SelectorSymbol)
+@d is_forgetful_functor_pattern == (CurWord.Kind = sy_The) and (AheadWord.Kind = StructureSymbol)
 
 @<Parse definitions (\texttt{parser.pas})@>=
 function CurrPatternKind: TokenKind;
@@ -7625,25 +8192,22 @@ begin
    if CurWord.Kind = ModeSymbol then
       CurrPatternKind:=ModeSymbol
    else if CurWord.Kind = StructureSymbol then
-      CurrPatternKind:=StructureSymbol
-   else if (CurWord.Kind = Identifier) and (AheadWord.Kind = sy_Is) then
-      CurrPatternKind:=AttributeSymbol
-   else if (CurWord.Kind in [LeftCircumfixSymbol,sy_LeftCurlyBracket,
-                             sy_LeftSquareBracket,sy_LeftParanthesis,
-                             InfixOperatorSymbol]) or
-              (CurWord.Kind = Identifier) and (AheadWord.Kind = InfixOperatorSymbol) then
-      CurrPatternKind:=InfixOperatorSymbol
-   else if (CurWord.Kind = PredicateSymbol) or (CurWord.Kind =sy_Equal) or
-              (CurWord.Kind = Identifier) and
-              (AheadWord.Kind in [sy_Comma,PredicateSymbol,sy_Equal]) then
-      CurrPatternKind:=PredicateSymbol
-   else if (CurWord.Kind = sy_The) and (AheadWord.Kind = SelectorSymbol) then
-      CurrPatternKind:=SelectorSymbol
-   else if (CurWord.Kind = sy_The) and (AheadWord.Kind = StructureSymbol) then
-      CurrPatternKind:=ForgetfulFunctor
-   else CurrPatternKind:=sy_Error;
+      CurrPatternKind:=StructureSymbol @t\2@>
+   else if is_attr_pattern then
+      CurrPatternKind:=AttributeSymbol @t\2@>
+   else if is_infix_pattern then
+      CurrPatternKind:=InfixOperatorSymbol @t\2@>
+   else if is_predicate_pattern then
+      CurrPatternKind:=PredicateSymbol @t\2@>
+   else if is_selector_pattern then
+      CurrPatternKind:=SelectorSymbol @t\2@>
+   else if is_forgetful_functor_pattern then
+      CurrPatternKind:=ForgetfulFunctor @t\2@>
+   else CurrPatternKind:=sy_Error@t\1\1\1\1\1\1@>;
 end;
-@
+
+@ The Parser is looking at the ``\texttt{synonym}'' token when this
+procedure is invoked.
 
 
 @<Parse definitions (\texttt{parser.pas})@>=
@@ -7687,12 +8251,15 @@ begin
    othercases
    begin
       gBlockPtr^.CreateItem(itIncorrItem);
-      ErrImm(paWrongPattBeg1);
+      ErrImm(paWrongPattBeg1); @+
    end;
    endcases;
 end;
-@
 
+@ Antonyms only make sense for attributes and predicates. A 314 error is
+raised for any other kind of antonym.
+
+@^Error, 314@>
 
 @<Parse definitions (\texttt{parser.pas})@>=
 procedure Antonym;
@@ -7719,10 +8286,11 @@ begin
    othercases
    begin
       gBlockPtr^.CreateItem(itIncorrItem);
-      ErrImm(paWrongPattBeg2);
+      ErrImm(paWrongPattBeg2); @+
    end;
    endcases;
 end;
+
 @
 
 
@@ -7746,19 +8314,20 @@ begin
             begin
                ReadWord;
                InCorrStatement;
-               SimpleJustification;
+               SimpleJustification; @+
             end;
          end;
    othercases
    begin
       ErrImm(paUnexpItemBeg);
       StillCorrect:=true;
-      PrivateItem;
+      PrivateItem; @+
    end;
    endcases;
 end;
-@
 
+@ The Parser is currently looking at the ``\texttt{definition}''
+token, so it will construct a definition block AST.
 
 @<Parse definitions (\texttt{parser.pas})@>=
 procedure DefinitionalBlock;
@@ -7769,12 +8338,17 @@ begin
    DefPos:=CurPos;
    ReadWord;
    while CurWord.Kind <> sy_End do
+   @<Parse item in definition block@>;
+   KillBlock;
+   AcceptEnd(DefPos);
+end;
+
+@ @<Parse item in definition block@>=
    begin
       StillCorrect:=true;
       gBlockPtr^.ProcessRedefine;
       if Occurs(sy_Redefine) then
-         if not (CurWord.Kind in [sy_Mode,sy_Attr,sy_Func,sy_Pred]) then
-            Error(PrevPos,paUnexpRedef);
+         @<Check we are redefining a mode, attribute, functor, or predicate@>;
       case CurWord.Kind of
          sy_Mode,sy_Attr,sy_Struct,sy_Func,sy_Pred:
             Definition;
@@ -7783,31 +8357,39 @@ begin
          Pragma: ProcessPragmas;
       othercases
       begin
+         @<Parse loci, assumptions, unexpected items in a definition block@>;@/
+         Semicolon;
+      end;
+      endcases;
+   end
+
+@ @<Check we are redefining a mode, attribute, functor, or predicate@>=
+         if not (CurWord.Kind in [sy_Mode,sy_Attr,sy_Func,sy_Pred]) then
+            Error(PrevPos,paUnexpRedef)
+
+@ @<Parse loci, assumptions, unexpected items in a definition block@>=
          case CurWord.Kind of
             sy_Let:
                begin
                   gBlockPtr^.CreateItem(itLociDeclaration);
-                  Generalization;
+                  Generalization; @+
                end;
             sy_Given: ExistentialAssumption;
             sy_Assume:
                begin
                   gBlockPtr^.CreateItem(itAssumption);
                   ReadWord;
-                  Assumption;
+                  Assumption; @+
                end;
             sy_Canceled: Canceled;
             sy_Case,sy_Suppose,sy_Per,sy_Hereby: UnexpectedItem;
          othercases PrivateItem;
-         endcases;
-         Semicolon;
-      end;
-      endcases;
-   end;
-   KillBlock;
-   AcceptEnd(DefPos);
-end;
-@
+         endcases
+
+@ The Parser's current token is ``\texttt{notation}''.
+Notation blocks are very similar in structure to definition
+blocks. Unsurprisingly, the Parser's code has a similar structure as
+parsing a definition block.
 
 
 @<Parse definitions (\texttt{parser.pas})@>=
@@ -7819,6 +8401,12 @@ begin
    DefPos:=CurPos;
    ReadWord;
    while CurWord.Kind <> sy_End do
+   @<Parse item for notation block@>;
+   KillBlock;
+   AcceptEnd(DefPos);
+end;
+
+@ @<Parse item for notation block@>=
    begin
       StillCorrect:=true;
       case CurWord.Kind of
@@ -7826,6 +8414,11 @@ begin
          sy_Registration,sy_Notation: break;
          Pragma: ProcessPragmas;
       othercases
+      @<Parse semicolon-separated items in a notation block@>;
+      endcases;
+   end
+
+@ @<Parse semicolon-separated items in a notation block@>=
       begin
          case CurWord.Kind of
             sy_Synonym: Synonym;
@@ -7834,20 +8427,22 @@ begin
                begin
                   gBlockPtr^.CreateItem(itLociDeclaration);
                   ReadWord;
-                  FixedVariables;
+                  FixedVariables; @+
                end;
          othercases UnexpectedItem;
-         endcases;
+         endcases; @/
          Semicolon;
-      end;
-      endcases;
-   end;
-   KillBlock;
-   AcceptEnd(DefPos);
-end;
+      end
 @
 
 \label{ATTSubexpression}
+
+@d ahead_is_type == (AheadWord.Kind in [sy_Set,ModeSymbol,StructureSymbol])
+@d is_attr_token == (CurWord.Kind in [AttributeSymbol,sy_Non]) or@|
+            (CurWord.Kind in (TermBegSys - [sy_LeftParanthesis,StructureSymbol])) or@|
+            ((CurWord.Kind = sy_LeftParanthesis) and
+                not(ahead_is_type)) or@|
+            (CurWord.Kind =  StructureSymbol) and (AheadWord.Kind = sy_StructLeftBracket)
 
 @<Parse definitions (\texttt{parser.pas})@>=
 procedure ATTSubexpression(var aExpKind: ExpKind);
@@ -7855,17 +8450,33 @@ var lAttrExp: boolean;
 begin
    aExpKind:=exNull;
    gSubexpPtr^.StartAttributes;
-   while (CurWord.Kind in [AttributeSymbol,sy_Non]) or
-            (CurWord.Kind in (TermBegSys - [sy_LeftParanthesis,StructureSymbol])) or
-            ((CurWord.Kind = sy_LeftParanthesis) and
-                not(AheadWord.Kind in [sy_Set,ModeSymbol,StructureSymbol])) or
-            (CurWord.Kind =  StructureSymbol) and (AheadWord.Kind = sy_StructLeftBracket)
-   do
+   while is_attr_token do
    begin
       gSubexpPtr^.ProcessNon;
       lAttrExp:=CurWord.Kind = sy_Non;
       if CurWord.Kind = sy_Non then ReadWord;
-      if (CurWord.Kind in (TermBegSys - [StructureSymbol])) or
+      @<Parse arguments for attribute expression@>;
+      if CurWord.Kind = AttributeSymbol then
+      begin
+         aExpKind:=exAdjectiveCluster;
+         gSubexpPtr^.ProcessAttribute;
+         ReadWord; @+
+      end
+      else
+      begin
+         if lAttrExp or (aExpKind = exAdjectiveCluster) then {|aExpKind = exAdjectiveCluster| is never true}
+         begin
+            gSubexpPtr^.ProcessAttribute;
+            SynErr(CurPos,paAttrExp3); @+
+         end;
+         break;
+      end;
+   end;
+   gSubexpPtr^.CompleteAttributes;
+end;
+
+@ @<Parse arguments for attribute expression@>=
+      if (CurWord.Kind in (TermBegSys - [StructureSymbol])) or@|
             (CurWord.Kind =  StructureSymbol) and (AheadWord.Kind = sy_StructLeftBracket)
       then
       begin
@@ -7873,26 +8484,9 @@ begin
          gSubexpPtr^.StartAttributeArguments;
          ProcessArguments;
          gSubexpPtr^.FinishAttributeArguments;
-      end;
-      if CurWord.Kind = AttributeSymbol then
-      begin
-         aExpKind:=exAdjectiveCluster;
-         gSubexpPtr^.ProcessAttribute;
-         ReadWord;
       end
-      else
-      begin
-         if lAttrExp or (aExpKind = exAdjectiveCluster) then
-         begin
-            gSubexpPtr^.ProcessAttribute;
-            SynErr(CurPos,paAttrExp3);
-         end;
-         break;
-      end;
-   end;
-   gSubexpPtr^.CompleteAttributes;
-end;
-@
+
+@ \node{Registration clusters.}
 
 \label{RegisterCluster:parser.pas}
 @<Parse definitions (\texttt{parser.pas})@>=
@@ -7915,6 +8509,34 @@ begin
    KillExpression;
    case lExpKind of
       exTerm:
+         @<Parse functor registration cluster@>;
+      exNull,exAdjectiveCluster:
+         case CurWord.Kind of
+            sy_Arrow:
+               @<Parse conditional registration cluster@>;
+            sy_For:
+               @<Parse existential registration cluster@>;
+         othercases
+         begin
+            SynErr(CurPos,paForOrArrowExpected);
+            gItemPtr^.FinishConsequent;
+            gItemPtr^.CreateExpression(exType);
+            gExpPtr^.CreateSubexpression;
+            gSubexpPtr^.StartType;
+            gSubexpPtr^.InsertIncorrType;
+            gSubexpPtr^.CompleteType;
+            gSubexpPtr^.CompleteClusterType;
+            KillSubexpression;
+            KillExpression;
+            gItemPtr^.FinishClusterType;
+         end;
+         endcases;
+   endcases;
+   Semicolon;
+   Correctness;
+end;
+
+@ @<Parse functor registration cluster@>=
          begin
             gItemPtr^.FinishClusterTerm;
             Accept(sy_Arrow,paArrowExp2);
@@ -7924,7 +8546,7 @@ begin
             ATTSubexpression(lExpKind);
             if lExpKind <> exAdjectiveCluster then
             begin
-               ErrImm(paAdjClusterExp)
+               ErrImm(paAdjClusterExp) @+
             end;
             gSubexpPtr^.CompleteAdjectiveCluster;
             KillSubexpression;
@@ -7946,10 +8568,9 @@ begin
                KillExpression;
             end;
             gItemPtr^.FinishClusterType;
-         end;
-      exNull,exAdjectiveCluster:
-         case CurWord.Kind of
-            sy_Arrow:
+         end
+
+@ @<Parse conditional registration cluster@>=
                begin
                   gItemPtr^.FinishAntecedent;
                   ReadWord;
@@ -7959,7 +8580,7 @@ begin
                   ATTSubexpression(lExpKind);
                   if lExpKind <> exAdjectiveCluster then
                   begin
-                     ErrImm(paAdjClusterExp);
+                     ErrImm(paAdjClusterExp); @+
                   end;
                   gSubexpPtr^.CompleteAdjectiveCluster;
                   KillSubexpression;
@@ -7978,8 +8599,9 @@ begin
                   KillSubexpression;
                   KillExpression;
                   gItemPtr^.FinishClusterType;
-               end;
-            sy_For:
+               end
+
+@ @<Parse existential registration cluster@>=
                begin
                   gItemPtr^.FinishConsequent;
                   ReadWord;
@@ -7995,28 +8617,9 @@ begin
                   KillSubexpression;
                   KillExpression;
                   gItemPtr^.FinishClusterType;
-               end;
-         othercases
-         begin
-            SynErr(CurPos,paForOrArrowExpected);
-            gItemPtr^.FinishConsequent;
-            gItemPtr^.CreateExpression(exType);
-            gExpPtr^.CreateSubexpression;
-            gSubexpPtr^.StartType;
-            gSubexpPtr^.InsertIncorrType;
-            gSubexpPtr^.CompleteType;
-            gSubexpPtr^.CompleteClusterType;
-            KillSubexpression;
-            KillExpression;
-            gItemPtr^.FinishClusterType;
-         end;
-         endcases;
-   endcases;
-   Semicolon;
-   Correctness;
-end;
-@
+               end
 
+@ \node{Reduction registration.}
 
 @<Parse definitions (\texttt{parser.pas})@>=
 procedure Reduction;
@@ -8035,8 +8638,8 @@ begin
    Semicolon;
    Correctness;
 end;
-@
 
+@ \node{Identification registration.}
 
 @<Parse definitions (\texttt{parser.pas})@>=
 procedure Identification;
@@ -8065,8 +8668,8 @@ begin
    Semicolon;
    Correctness;
 end;
-@
 
+@ \node{Property registration.}
 
 @<Parse definitions (\texttt{parser.pas})@>=
 procedure RegisterProperty;
@@ -8084,9 +8687,9 @@ begin
          end;
    othercases
    begin
-      SynErr(CurPos,paStillNotImplemented);
+      SynErr(CurPos,paStillNotImplemented); @+
    end;
-   endcases;
+   endcases; @/
    Semicolon;
 end;
 @
@@ -8118,12 +8721,12 @@ begin
                begin
                   gBlockPtr^.CreateItem(itLociDeclaration);
                   ReadWord;
-                  FixedVariables;
+                  FixedVariables; @+
                end;
             sy_Canceled: Canceled;
             sy_Case,sy_Suppose,sy_Per,sy_Hereby: UnexpectedItem;
          othercases PrivateItem;
-         endcases;
+         endcases; @/
          Semicolon;
       end;
       endcases;
@@ -8131,7 +8734,8 @@ begin
    KillBlock;
    AcceptEnd(DefPos);
 end;
-@
+
+@ \node{Reservation.}
 
 \label{Reservation:parser.pas}
 
@@ -8154,7 +8758,8 @@ begin
    until not Occurs(sy_Comma);
    gItemPtr^.FinishReservation;
 end;
-@
+
+@ \node{Theorem.}
 
 
 @<Parse definitions (\texttt{parser.pas})@>=
@@ -8169,7 +8774,8 @@ begin
    Justification;
    gItemPtr^.FinishTheorem;
 end;
-@
+
+@ \node{Axiom.}
 
 @<Parse definitions (\texttt{parser.pas})@>=
 procedure Axiom;
@@ -8200,6 +8806,19 @@ begin
    gItemPtr^.ProcessSchemeName;
    SchemePos:=PrevPos;
    if CurWord.Kind = Identifier then ReadWord;
+   @<Parse scheme parameters@>;
+   Accept(sy_RightCurlyBracket,paRightCurledExp3);
+   gItemPtr^.FinishSchemeHeading;
+   Accept(sy_Colon,paColonExp3);
+   FormulaExpression; {Scheme-conclusion}
+   gItemPtr^.FinishSchemeThesis;
+   @<Parse scheme premises@>;
+   gItemPtr^.FinishSchemeDeclaration;
+   @<Parse justification for scheme@>;
+   KillBlock;
+end;
+
+@ @<Parse scheme parameters@>=
    Accept(sy_LeftCurlyBracket,paLeftCurledExp);
    repeat
       gItemPtr^.StartSchemeSegment;
@@ -8232,12 +8851,9 @@ begin
       end;
       endcases;
       gItemPtr^.FinishSchemeSegment;
-   until not Occurs(sy_Comma);
-   Accept(sy_RightCurlyBracket,paRightCurledExp3);
-   gItemPtr^.FinishSchemeHeading;
-   Accept(sy_Colon,paColonExp3);
-   FormulaExpression;
-   gItemPtr^.FinishSchemeThesis;
+   until not Occurs(sy_Comma)
+
+@ @<Parse scheme premises@>=
    if CurWord.Kind = sy_Provided then
       repeat
          gItemPtr^.StartSchemePremise;
@@ -8245,8 +8861,9 @@ begin
          ProcessLab;
          ProcessSentence;
          gItemPtr^.FinishSchemePremise;
-      until CurWord.Kind <> sy_And;
-   gItemPtr^.FinishSchemeDeclaration;
+      until CurWord.Kind <> sy_And
+
+@ @<Parse justification for scheme@>=
    if CurWord.Kind = sy_Proof then
    begin
       KillItem; {only |KillItem| which is run outside of |Semicolon| procedure}
@@ -8291,9 +8908,7 @@ begin
          AcceptEnd(SchemePos);
          gBlockPtr^.FinishSchemeDemonstration;
       end;
-   end;
-   KillBlock;
-end;
+   end
 
 @* [S] Main parse procedure.
 The main \\{Parse} method essentially skips ahead to the first

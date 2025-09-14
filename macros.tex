@@ -175,110 +175,7 @@
 \def\node#1{\textbf{#1\enspace}\ignorespaces}
 
 
-%%%
-%%% LOGOS
-%%%
-\font\eightbf=cmbx8
-\font\ninerm=cmr9
-\let\mc=\ninerm % medium caps
-\font\eightrm=cmr8
-\let\sc=\eightrm % for smallish caps (NOT a caps-and-small-caps font)
-
-\def\acro#1{{\mc #1\spacefactor1000}} % from tugboat
-
-\def\CAUTION/{C{\sc AUTION}}
-\def\ASCII/{{\mc ASCII\spacefactor1000}}
-\def\UML/{{\mc UML\spacefactor1000}}
-\def\WSM/{{\mc WSM\spacefactor1000}}
-
-% Operating systems
-\def\BeOS/{{\mc B}e\acro{OS}}
-\def\BSD/{{\mc BSD\spacefactor1000}}
-\def\GNU/{\acro{GNU}}
-\def\macOS/{mac\acro{OS}} % tugboat.cmn
-\def\MacOSX/{Mac\,\acro{OS\,X}} % tugboat.cmn
-\def\SOLARIS/{S{\sc OLARIS\spacefactor1000}}
-\def\UNIX/{{\mc U\kern-.05emNIX\spacefactor1000}}
-\def\VAX{V\kern-.12em A\kern-.1em X\spacefactor1000} % tugboat.cmn
-
-% Programming languages
-\def\CEE/{{\mc C\spacefactor1000}} % cwebmac, the C programming language
-\def\FORTRAN/{{\mc FORTRAN\spacefactor1000}}% taocpmac, ditto for the older guy
-\def\ALGOL/{{\mc ALGOL\spacefactor1000}} % taocpmac
-\def\COBOL/{{\mc COBOL\spacefactor1000}} % taocpmac
-\def\MIX{{\tt MIX\spacefactor1000}} % taocpmac
-\def\MMIX{{\tt MMIX\spacefactor1000}} % taocpmac
-\def\PASCAL/{{\mc PASCAL\spacefactor1000}}
-\def\TEX/{\TeX}
-\def\CPLUSPLUS/{{\mc C\PP\spacefactor1000}} % cwebmac
-\def\Cee{\CEE/} % for backward compatibility
-\def\Cpp{\CPLUSPLUS/} % for backward compatibility
-\newbox\PPbox % cwebmac, symbol for ++
-\setbox\PPbox=\hbox{\kern.5pt\raise1pt\hbox{\sevenrm+\kern-1pt+}\kern.5pt} % cwebmac
-\def\PP{\copy\PPbox} % cwebmac
-% https://tex.stackexchange.com/q/44528/14751
-% Also of note: https://tex.stackexchange.com/q/132846/14751
-\def\CEESHARP/{{\mc C\#\spacefactor1000}}%{${\mc C}^{\sharp}$\spacefactor1000}
-\def\CSHARP/{\CEESHARP/}
-
-% From tugboat.sty
-\def\ASCII/{\acro{ASCII}}%{\mc ASCII\spacefactor1000}}
-\def\PDF/{\acro{PDF}}
-\def\SQL/{{\mc SQL\spacefactor1000}}
-\def\TANGLE/{{\tt TANGLE\spacefactor1000}}
-\def\WEB/{{\tt WEB\spacefactor1000}}
-\def\WEAVE/{{\tt WEAVE\spacefactor1000}}
-\def\XML/{{\mc XML\spacefactor1000}}
-\def\XSLT/{{\mc XSLT\spacefactor1000}}
-
-%%% Miscellaneous macros
-% \boxit from TeXbook exercise 21.3
-% \setbox4=\vbox{\hsize 23pc\noindent\strut blah blah blah\strut}
-% $$ \boxit{\box4} $$
-%% \def\boxit#1{\leavevmode\hbox to0pt{\vbox to0pt{\hrule\hbox{\vrule\kern3pt%
-%%   \vbox{\kern3pt#1\kern3pt}\kern3pt\vrule}\hrule}}}
-\def\boxblock#1{\hbox{\vbox{\hrule\hbox{\vrule\kern3pt%
-  \vbox{\kern3pt#1\kern3pt}\kern3pt\vrule}\hrule}}}
-  
-\def\boxit#1#2#3#4{\leavevmode
-  \hbox{\vrule
-    \vtop to#4{
-      \vbox to#3{\hrule\kern#1%
-        \hbox{\kern#1#2\kern#1}
-      }%
-      %\kern#1
-      \hrule
-    }%
-  \vrule}%
-}
-
-%%%
-%%% Mathematical notation
-%%%
-
-% notation
-\def\abs#1{|#1|} % since |foo| means something else in WEB
-\def\lcm{\mathop{\rm lcm}\nolimits}
-\def\sgn{\mathop{\rm sgn}\nolimits}
-\long\def\frac#1#2{{\begingroup #1\endgroup\over#2}}
-\def\dom{\mathop{\rm dom}\nolimits}
-\def\pto{\rightharpoonup} % partial function
-
-% Logic
-\def\implies{\;\Longrightarrow\;}
-\def\iff{\;\Longleftrightarrow\;}
-
-% Set theory
-\let\propersubset\subset
-\let\subset\subseteq
-
-\def\CC{{\bf C}}
-\def\NN{{\bf N}}
-\def\QQ{{\bf Q}}
-\def\ZZ{{\bf Z}}
-
-\def\magnitude#1{\Vert #1\Vert}
-\def\card#1{|#1|}
+\input{notation}
 
 %%%
 %%% List macros
@@ -402,14 +299,14 @@
 %%%
 \font\tenssbx=cmssbx10
 \font\twelvess=cmss12
-\font\titlefont=cmssbx10 scaled\magstep2
+\font\chaptertitlefont=cmssbx10 scaled\magstep2
 
 % Borrowed from Knuth's "Art of Computer Programming"
 \def\beginchapter#1: #2.{%
   %\vfill\eject
   \leftline{\twelvess #1} %\spaceskip=10pt \def\\{\kern1pt}
   \vskip 4pc
-  \rightline{\titlefont #2}
+  \rightline{\chaptertitlefont #2}
   \vskip 2pc plus 1 pc minus 1 pc}
 
 \def\beginsection#1: #2.{%
