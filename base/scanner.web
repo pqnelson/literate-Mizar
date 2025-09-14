@@ -1,0 +1,1202 @@
+
+@* [F] Scanner.
+The \texttt{scanner.pas} file contains the \\{MTokeniser} and
+the \\{MScanner}. 
+
+It is worth noting: if we want to extend Mizar to support Unicode,
+then we would want to hack this file accordingly. Or create
+a \texttt{utf8scanner} module, whichever. This scanner class is built
+specifically to work with \ASCII/ characters, specifically accepting
+printable characters and the space (``{\tt\SP}'') characters as valid
+input.
+
+\label{scanner.pas}
+
+@<scanner.pas@>=
+@<GNU License@>
+
+unit scanner;
+
+interface;
+
+uses errhan,mobjects;
+
+const
+   MaxLineLength  = 80; @/
+   MaxConstInt = 2147483647; {$= 2^{31}-1$, maximal signed 32-bit integer} @#
+
+@t\4@> @<Type declarations for scanner@>@; @#
+
+implementation @|@#
+
+uses
+   mizenv,librenv,mconsole,xml_dict,xml_inout; @#
+
+@t\4@> @<Implementation for scanner.pas@>  @t\2@> @#
+
+end.
+
+@ Note that a \\{LexemRec} is really a standardized token. I was
+always raised to believe that a ``lexeme'' refers to the literal text
+underlying a token.
+
+\label{LexemRec}
+
+@<Type declarations for scanner@>=
+type
+   ASCIIArr = array[chr(0)..chr(255)] of byte; @#
+
+   LexemRec = record Kind: char; Nr: integer; end; @#
+
+   @<Token object class@>; @#
+
+   @<Tokens collection class@>; @#
+
+   @<MToken object class@>; @#
+
+   @<MTokeniser class@>; @#
+
+   @<MScanner object class@>;
+
+@ The ``default allowed'' characters are the 10 decimal digits, the 26
+uppercase Latin letters, the 26 lowercase Latin letters, and the
+underscore (``\_'') character.
+
+@<Implementation for scanner.pas@>=
+var DefaultAllowed:AsciiArr = @/
+       (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, @/
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,2,2,2,2,2,2,2,2,0,0,0,0,0,0, @/
+        0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1, {'\_' allowed in identifiers by default!}
+        0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0, @/
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, @/
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, @/
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, @/
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+
+@ \node{Tokens object.} A token contains a lexeme, but it extends
+an \\{MStr} object.
+
+\label{TokenObj}
+
+@<Token object class@>=
+   TokenPtr = ^TokenObj; @/
+   TokenObj = object(MStrObj)  @t\1@> @/
+      fLexem: LexemRec; @/
+      constructor Init(aKind:char; aNr:integer@+;@+ const aSpelling: string); @t\2\2\2@>
+   end
+
+@ The constructor for a token requires its kind (functor, mode,
+predicate, etc.), and its internal ``number'', as well as its raw
+lexeme \\{aSpelling}.
+
+@<Implementation for scanner.pas@>=
+constructor TokenObj.Init(aKind:char; aNr:integer@+;@+ const aSpelling: string);
+begin
+   fLexem.Kind:=aKind;
+   fLexem.Nr:=aNr;
+   fStr:=aSpelling;
+end;
+
+@* [S] Collections of tokens.
+We can populate a token collection from a dictionary file, or we can
+start with an empty collection. We can save our collection to a
+file. We can also insert (or ``collect'') a new token into the
+collection.
+
+@<Tokens collection class@>=
+   TokensCollection = object(MSortedStrList) @t\1@> @/
+      fFirstChar: array [chr(30)..chr(255)] of integer; @/
+      constructor InitTokens; @t\2@>
+      constructor LoadDct(const aDctFileName:string); @t\2@>
+      procedure SaveDct(const aDctFileName:string); @t\2@>
+      procedure SaveXDct(const aDctFileName:string);  @t\2@>
+      function CollectToken(const aLexem:LexemRec;@+ const aSpelling:string): boolean; @t\2\2\2@>
+   end
+
+@ \node{Construct empty token collection.}
+
+\label{TokensCollection.InitTokens}
+
+@<Implementation for scanner.pas@>=
+constructor TokensCollection.InitTokens;
+begin
+   Init(100);
+end;
+
+@ \node{Insert.} If the collection already contains the token
+described by \\{aLexem}, then we just free up the memory allocated for
+the token (avoid duplicates). Otherwise, we insert the token.
+
+@<Implementation for scanner.pas@>=
+function TokensCollection.CollectToken(const aLexem:LexemRec;@+ const aSpelling:string): boolean;
+var k:integer; lToken:TokenPtr;
+begin
+   lToken:=new(TokenPtr,Init(aLexem.Kind,aLexem.Nr,aSpelling));
+   if Search(lToken,k)
+   then {already contains token?}
+   begin
+      CollectToken:=false;
+      dispose(lToken,Done)
+   end
+   else
+   begin
+      CollectToken:=true;
+      Insert(lToken)
+   end
+end;
+
+@ \node{Load a dictionary.} We open the dictionary ``\texttt{.dct}''
+file (expects the file name to be lacking that extension), and construct
+an empty token collection. Then we iterate through the dictionary,
+reading each line, forming a new token, then inserting it into the
+collection.
+
+The ``\texttt{.dct}'' file contains all the identifiers from articles
+referenced in the \texttt{environ} part of an article, and it will
+always have the first 148 lines be for reserved keywords. The format
+for a ``\texttt{.dct}'' file consists of lines of the form
+
+\centerline{$\langle\textit{kind\/}\rangle\langle\textit{number\/}\rangle$\SP$\langle\textit{name\/}\rangle$}
+
+\noindent The ``kind'' is a single byte, the \emph{number} is an integer
+assigned for the identifier, and \textit{name} is the lexeme (string
+literal) for the identifier. This also has an \XML/ file for this same
+information, the ``\texttt{.dcx}'' file.
+
+@:dct file}{\texttt{.dct} file@>
+@:dcx file}{\texttt{.dcx} file@>
+
+\label{TokensCollection.LoadDct}
+
+@<Implementation for scanner.pas@>=
+constructor TokensCollection.LoadDct(const aDctFileName:string);
+var Dct: text;
+lKind,lDummy:AnsiChar; lNr: integer; lString: string;
+i: integer; c:char;
+begin
+   assign(Dct,aDctFileName+'.dct');
+   reset(Dct);
+   InitTokens;
+   @<Load all tokens from the dictionary@>;
+   close(Dct);
+   @<Index first character appearances among definitions@>;
+end;
+
+@ We just iterate through the dictionary, constructing a new token for
+each line we read.
+
+@<Load all tokens from the dictionary@>=
+   while not seekEof(Dct) do
+   begin
+      readln(Dct,lKind,lNr,lDummy,lString);
+      Insert(new(TokenPtr,Init(char(lKind),lNr,lString)));
+   end
+
+@ We index the first appearance of each leading character in a token.
+
+@<Index first character appearances among definitions@>=
+   for c:=chr(30) to chr(255) do
+      fFirstChar[c]:=-1;
+   for i:=0 to Count-1 do
+   begin
+      c:=TokenPtr(Items^[fIndex^[i]])^.fStr[1];
+      if fFirstChar[c] = -1 then
+         fFirstChar[c]:=i;
+   end
+
+@ We save a token collection to a ``\texttt{.dct}'' file. This appears
+to just produce the concatenation of the definition kind, the
+identifier number, then a whitespace separating it from the
+lexeme. \textbf{Caution:} this is \emph{not} an \XML/ format! For
+that, see \\{SaveDctX}.
+
+@:dct file}{\texttt{.dct} file@>
+
+@<Implementation for scanner.pas@>=
+procedure TokensCollection.SaveDct(const aDctFileName:string);
+var i: integer; DctFile: text;
+begin
+   assign(DctFile,aDctFileName+'.dct'); rewrite(DctFile);
+   for i:=0 to Count-1 do
+      with TokenPtr(Items^[i])^, fLexem do
+         writeln(DctFile,AnsiChar(Kind),Nr,' ',fStr);
+      close(DctFile);
+end;
+
+@ \node{Save dictionary to XML file.} The RNC (compact Relax NG Schema):
+Local dictionary for an article. The symbol kinds still use
+very internal notation.
+
+{\obeylines\tt
+   elSymbols =
+   attribute atAid \LB xsd:string\RB?,
+   element elSymbols \LB
+   \quad   element elSymbol \LB
+   \qquad   attribute atKind \LB xsd:string\RB,
+   \qquad   attribute atNr \LB xsd:integer\RB,
+   \qquad   attribute atName \LB xsd:integer\RB
+   \quad   \RB*
+   \RB
+}
+
+\noindent %
+This creates the \texttt{.dct} file for an article.
+
+@:dct file}{\texttt{.dct} file@>
+
+@<Implementation for scanner.pas@>=
+procedure TokensCollection.SaveXDct(const aDctFileName:string);
+var
+   lEnvFile: XMLOutStreamObj; i: integer;
+begin
+   lEnvFile.OpenFile(aDctFileName);
+   with lEnvFile do
+   begin
+      Out_XElStart(XMLElemName[elSymbols]);
+      Out_XAttr(XMLAttrName[atAid], ArticleID);
+      Out_XQuotedAttr(XMLAttrName[atMizfiles], MizFiles); @/
+      Out_XAttrEnd; {print \texttt{elSymbols} start-tag}
+      for i:=0 to Count-1 do {print children \texttt{elSymbol} elements}
+         with TokenPtr(Items^[i])^, fLexem do
+      begin
+         Out_XElStart(XMLElemName[elSymbol]);
+         Out_XQuotedAttr(XMLAttrName[atKind], Kind);
+         Out_XIntAttr(XMLAttrName[atNr], Nr);
+         Out_XQuotedAttr(XMLAttrName[atName], fStr);
+         Out_XElEnd0;
+      end;
+         Out_XElEnd(XMLElemName[elSymbols]); {print \texttt{elSymbols} end-tag}
+   end;
+   lEnvFile.Done;
+end;
+
+@* [S] Mizar token objects.
+This appears to be tokens for a specific file. An MToken extends a
+Token (\section\xref{TokenObj}).
+
+\label{MTokenObj}
+
+@<MToken object class@>=
+   MTokenPtr = ^MTokenObj; @/
+   MTokenObj = object(TokenObj) @t\1@> @/
+      fPos: Position; @/
+      constructor Init(aKind:char; aNr:integer@+;@+@+ const aSpelling: string;@+ const aPos: Position); @t\2\2\2@>
+   end
+
+@ \node{Constructor.} Construct a token. This might be a tad
+confusing, at least for me, because the lexeme is stored in
+the \\{fStr} field, whereas the standardized token is stored in
+the \\{fLexem} field.
+
+We do not need to invoke the constructor for any ancestor class,
+because we just construct everything here. This seems like a bug
+waiting to happen\dots
+
+\label{MTokenObj.Init}
+
+% NOTE: the spacing for the function arguments cannot fit on one line
+
+@<Implementation for scanner.pas@>=
+constructor MTokenObj.Init(aKind:char; aNr:integer;
+                           const aSpelling: string@t\1@>;
+                           const aPos: Position@t\2@>);
+begin
+   fLexem.Kind:=aKind;
+   fLexem.Nr:=aNr;
+   fStr:=aSpelling;
+   fPos:=aPos;
+end;
+
+@ \node{Token Kind constants.}
+There are four kinds of tokens we want to distinguish:
+all valid tokens are either (1) numerals, or (2) identifiers. Then we
+also have (3) error tokens. But last, we have (4) end of text tokens.
+
+These are for identifying everything which is neither an identifier
+defined in the vocabulary files, nor a reserved keyword.
+
+\label{scanner.pas:implementation:const}
+
+@<Implementation for scanner.pas@>=
+const
+   Numeral = 'N';
+   Identifier = 'I';
+   ErrorSymbol = '?';
+   EOT = '!';
+
+@* [S] Tokeniser.
+The first step in lexical analysis is to transform a character stream
+into a token stream. The Tokeniser extends the MToken object
+(\section\xref{MTokenObj}), which in turn extends the Token object
+(\section\xref{TokenObj}).
+
+In particular, we should take a moment to observe the new
+fields. The \\{fPhrase} field is a segment of the input stream which
+is expected to start at a non-whitespace character.
+
+The \\{SliceIt} function populates the \\{TokensBuf} and
+the \\{fIdents} fields from the \\{fPhrase} field.
+I cannot find where \\{fTokens} is populated.
+
+Note that the MTokeniser is not, itself, used anywhere \emph{directly}. It's extended
+in the \\{MScannObj} class, which is used
+in \texttt{base/mscanner.pas} (and in \texttt{kernel/envhan.pas}).
+
+The contract for \\{GetPhrase} ensures the \\{fPhrase} will be
+populated with a string ending with a space (``{\tt\SP}'') character
+or it will be the empty string.
+Any class extending \\{MTokeniser} must respect this contract.
+
+\label{MTokeniser:class}
+
+@<MTokeniser class@>=
+   MTokeniser = object(MTokenObj)  @t\1@> @/
+
+      fPhrase: string; @/
+      fPhrasePos: Position; @/
+
+      fTokensBuf: MCollection; @/
+
+      fTokens,fIdents: TokensCollection; @/
+
+      constructor Init; @t\2@>
+      destructor Done; virtual;  @t\2@>
+
+      procedure SliceIt; virtual;  @t\2@>
+      procedure GetToken; virtual;  @t\2@>
+
+      procedure GetPhrase;  virtual;  @t\2@>
+      function EndOfText: boolean; virtual;  @t\2@>
+
+      function IsIdentifierLetter(ch: char): boolean; virtual;  @t\2@>
+      function IsIdentifierFirstLetter(ch: char): boolean; virtual; @t\2@>
+
+      function Spelling(const aToken: LexemRec): string; virtual; @t\2\2\2@>
+   end
+
+@ Spelling boils down to three cases (c.f., types of tokens \section\xref{scanner.pas:implementation:const}): numerals, identifiers, and
+everything else. Numerals spell out the base-10 decimal expansion.
+
+The other two cases boil down to finding the first matching token in
+the caller's collection of tokens with the same lexeme supplied as an
+argument, provided certain `consistency' checks hold (the lexeme and
+token have the same \\{Kind}).
+
+@<Implementation for scanner.pas@>=
+function MTokeniser.Spelling(const aToken: LexemRec): string;
+var i: integer; s: string;
+begin
+   Spelling:='';
+   if aToken.Kind = Numeral then
+   begin
+      Str(aToken.Nr,s);
+      Spelling:=s; @+
+   end else
+      if aToken.Kind = Identifier then
+      @<Spell an identifier for the MTokeniser@>
+      else
+      @<Spell an error or EOF for the MTokeniser@>;
+end;
+
+@ Spelling an identifier just needs to match the lexeme's number with
+the token's number. This finds the first
+matching token in the underlying collection, then terminates the function.
+
+@<Spell an identifier for the MTokeniser@>=
+      begin
+         for i:=0 to fIdents.Count-1 do
+            with TokenPtr(fIdents.Items^[i])^ do
+               if fLexem.Nr = aToken.Nr then
+               begin Spelling:=fStr; exit end;
+      end
+
+@ Spelling anything else for the tokeniser needs the kind and number
+of the lexeme to match those of the token. Again, this finds the first
+matching token in the underlying collection, then terminates the function.
+
+@<Spell an error or EOF for the MTokeniser@>=
+      begin
+         for i:=0 to fTokens.Count-1 do
+            with TokenPtr(fTokens.Items^[i])^ do
+               if (fLexem.Kind = aToken.Kind) and (fLexem.Nr = aToken.Nr) then
+               begin Spelling:=fStr; exit end;
+      end
+
+@ \node{Constructor.} Initialising a tokeniser starts with a blank
+phrase and kind, with most fields set to zero.
+
+@<Implementation for scanner.pas@>=
+constructor MTokeniser.Init;
+begin
+   fPos.Line:=0;
+   fLexem.Kind:=' ';
+   fPhrase:='  ';
+   fPhrasePos.Line:=0;
+   fPhrasePos.Col:=0;
+   fTokensBuf.Init(80,8);
+   fTokens.Init(0);
+   fIdents.Init(100);
+end;
+
+@ \node{Destructor.} This chains to free up several fields, just
+invoking their destructors.
+
+@<Implementation for scanner.pas@>=
+destructor MTokeniser.Done;
+begin
+   fPhrase:='';
+   fTokensBuf.Done;
+   fTokens.Done;
+   fIdents.Done;
+end;
+
+@ \node{Aside on ASCII separators.}
+Note: \\{chr}(30) is the record separator in \ASCII/, and \\{chr}(31) is
+the unit separator. Within a group (or table), the records are
+separated with the ``RS'' (\\{chr}(30)). As far as unit separators,
+Lammer Bies explains
+(\href{https://www.lammertbies.nl/comm/info/ascii-characters}{{\tt lammertbies.nl/comm/info/ascii-characters}}):
+\medbreak
+
+{\narrower\narrower %advance\leftskip by3pc
+The smallest data items to be stored in a database are called units in
+the \ASCII/ definition. We would call them field now. The unit separator
+separates these fields in a serial data storage environment. Most
+current database implementations require that fields of most types
+have a fixed length. Enough space in the record is allocated to store
+the largest possible member of each field, even if this is not
+necessary in most cases. This costs a large amount of space in many
+situations. The US control code allows all fields to have a variable
+length. If data storage space is limited---as in the sixties---this is
+a good way to preserve valuable space. On the other hand is serial
+storage far less efficient than the table driven RAM and disk
+implementations of modern times. I can't imagine a situation where
+modern \SQL/ databases are run with the data stored on paper tape or
+magnetic reels\dots\par}
+
+\medbreak\noindent%
+We will introduce macros for the record separator and the unit
+separator, because Mizar's front-end uses them specifically for the
+following purposes:
+
+(1) lines longer than 80 characters will contain a |record_separator|
+character (\section\xref{replace-long-line-endings-with-record-separator});
+
+(2) all other invalid characters are replaced with the
+|unit_separator| character (c.f., \section\xref{replace-every-invalid-char-with-unit-char}).
+
+
+@d record_separator == chr(30)
+@d unit_separator == chr(31)
+
+@ \node{Example of zeroeth step (``getting a phrase'') in tokenising.}
+The \\{GetPhrase} function is left as an abstract method of the
+tokeniser, so it is worth discussing ``What it is supposed to do''
+before getting to the tokenisation of strings.
+
+Suppose we have the following snippet of Mizar:
+
+\medbreak
+\centerline{\vbox{\offinterlineskip
+\hrule\tt
+\halign{\vrule# & \strut\quad #\quad\hfil &\vrule#\cr
+&begin &\cr
+&  &\cr
+&theorem &\cr
+&\quad  for x being object &\cr
+&\quad  holds x= x; &\cr}
+ \hrule}}
+
+\medbreak\noindent%
+This is ``sliced up'' into the following ``phrases'' (drawn in boxes) which
+are clustered by lines:
+
+\medbreak
+{\obeylines\tt\def\SP{\raise0.25pt\hbox{{\tt\char`\ }}}
+
+\setbox2=\hbox to 2.75pc{begin\SP}%
+\boxit{1pt}{\box2}{7.5pt}{10pt}
+
+\vskip2pt
+\setbox0=\hbox to3.5pc{theorem\SP}%
+%\boxit{1.5pt}{\box0}{9.5pt}{11pt}
+\boxit{1.5pt}{\box0}{9.75pt}{11pt}
+
+\setbox0=\hbox to2pc{for\SP}
+\setbox1=\hbox to1pc{\vphantom{b}x\SP}
+\setbox2=\hbox to2.75pc{being\SP}
+\setbox3=\hbox to3.25pc{object\SP}
+\quad\boxit{1pt}{\box0}{8.75pt}{10pt}\ \boxit{1pt}{\box1}{8.75pt}{10pt}\ \raise1pt\hbox{\boxit{1pt}{\box2}{7.3333pt}{10pt}}\ \raise1pt\hbox{\boxit{1pt}{\box3}{7.5pt}{10pt}}
+
+\setbox0=\hbox to2.8333pc{holds\SP}
+\setbox1=\hbox to1.5pc{\vphantom{b}x=\SP}
+\setbox3=\hbox to1.5pc{\vphantom{b}x;\SP}
+\quad\boxit{1pt}{\box0}{8.75pt}{10pt}\ \boxit{1pt}{\box1}{8.75pt}{10pt}\ \boxit{1pt}{\box3}{8.3333pt}{10pt}
+
+\par}
+\medbreak\noindent%
+Observe that the ``phrases'' are demarcated by whitespaces
+(``{\tt\SP}'') or linebreaks. This is the coarse ``first pass'' before
+we carve a ``phrase'' up into a token. A phrase contains at least one
+token, possibly multiple tokens (e.g., the phrase ``{\tt x=\SP}''
+contains the two tokens ``{\tt x}'' and ``{\tt =}'').
+
+What is the contract for a ``phrase''?
+A phrase is \emph{guaranteed} to either be equal to ``\SP'', or it contains at
+least one token and it is \emph{guaranteed} to end with a space
+``\SP'' character (\ASCII/ code \H{32}).
+Further, there are no other possible ``\SP'' characters in a
+phrase \emph{except} at the very end. A phrase is never an empty string.
+
+The task is then to \emph{slice up} each phrase into tokens.
+
+
+@ \node{Tokenise a phrase.} When a ``phrase'' has been loaded into the
+tokeniser (which is an abstract method implemented by its descendent
+classes), we tokenise it --- ``slice it up'' into tokens, thereby
+populating the \\{fTokensBuf} tokens buffer. This is invoked as
+needed by the \\{GetToken} method (\section\xref{MTokeniser.GetToken}).
+
+This function is superficially complex, but upon closer scrutiny it is
+fairly straightforward.
+
+Also note, despite being marked as ``virtual'', this is not overridden
+anywhere in the Mizar program.
+
+The contract ensures, barring catastrophe, the \\{fLexem}, \\{fStr},
+and \\{fPos} be populated. \textbf{Importantly:} The \\{fLexem}'s
+token type is one of the 
+four kinds given in the constant section
+(\section\xref{scanner.pas:implementation:const}): \texttt{Numeral}, \texttt{Identifier}, \texttt{ErrorSymbol},
+or \texttt{EOT}. What about the ``reserved keywords'' of Mizar? They
+are already present in the ``\texttt{.dct}'' file, which is loaded
+into the \\{fTokens} dictionary. So they will be discovered in step (\section\xref{MTokeniser.SliceIt.reserved-words})
+in this procedure.
+
+\label{MTokeniser.SliceIt}
+
+
+@<Variables for slicing a phrase@>=
+   lCurrChar: integer; {index in \\{fPhrase} for current position}
+   EndOfSymbol: integer;
+   EndOfIdent: integer; {index in \\{fPhrase} for end of identifier}
+   FoundToken : TokenPtr; {most recently found token temporary variable}
+   lPos:Position; {position for debugging purposes}
+
+@ @<Implementation for scanner.pas@>=
+procedure MTokeniser.SliceIt;
+var
+   @<Variables for slicing...@>@;
+begin
+   MizAssert(2333,fTokensBuf.Count=0); {Requires: token buffer is empty}
+   lCurrChar:=1;
+   lPos:=fPhrasePos; @/
+   @<Slice pragmas@>;
+   while fPhrase[lCurrChar]<>' ' do
+   begin
+      @<Determine the ID@>; @/
+      @<Try to find a dictionary symbol@>;
+      if EndOfSymbol < EndOfIdent then
+         @<Check identifier is not a number@>;
+      if FoundToken <> nil then
+         with FoundToken^ do
+      begin
+         lPos.Col:=fPhrasePos.Col+EndOfSymbol-1;
+         fTokensBuf.Insert(new(MTokenPtr,Init(fLexem.Kind,fLexem.Nr,fStr,lPos)));
+         lCurrChar:=EndOfSymbol+1;
+         continue;
+      end; @/
+@t\4@>      {else |FoundToken = nil|}
+      @<Whoops! We found an unknown token, insert a 203 error token@>;
+   end;
+end;
+
+@ We begin by slicing pragmas. This will insert the pragma into the
+tokens buffer.
+
+Note that the ``\texttt{\$EOF}'' pragma indicates that we should treat
+the file as ending here. So we comply with the request, inserting
+the \\{EOT} (end of text) token as the next token to be offered
+to the user.
+
+@^\texttt{::\$EOF}@>
+@^Pragma@>
+@:Pragma, EOF}{Pragma, \texttt{::\$EOF}@>
+
+@<Slice pragmas@>=
+   if (lPos.Col = 1) and (Pos('::$',fPhrase) = 1) then
+   begin
+      fTokensBuf.Insert(new(MTokenPtr,Init(' ',0,
+                                           copy(fPhrase,3,length(fPhrase)-3),lPos)));
+      if copy(fPhrase,1,6)='::$EOF' then
+         fTokensBuf.Insert(new(MTokenPtr,Init(EOT,0,fPhrase,lPos)));
+      exit
+   end
+
+@ We take the longest possible substring consisting of identifier
+characters as a possible identifier. The phrase is guaranteed to
+contain at least one token, maybe more, so we just keep going until we
+have exhausted the phrase or found a non-identifier character.
+
+Note that all invalid characters are transformed into the ``unit
+character'' (c.f., \section\xref{replace-every-invalid-char-with-unit-char}).
+We should treat any occurrence of them as an error.
+
+At the end of this stage of our tokenising journey, for valid tokens, we should
+have \\{EndOfIdent} and \\{IdentLength} both initialized here.
+
+@<Variables for slicing...@>=
+   IdentLength: integer;
+
+@ @<Determine the ID@>=
+ @t\4@>     {1. attempt to determine the ID}
+      EndOfIdent:=lCurrChar;
+      if IsIdentifierFirstLetter(fPhrase[EndOfIdent]) then
+         while (EndOfIdent< length(fPhrase)) and
+                  IsIdentifierLetter(fPhrase[EndOfIdent]) do inc(EndOfIdent);
+      IdentLength:=EndOfIdent-lCurrChar;
+      if fPhrase[EndOfIdent] <= unit_separator then
+      @<Whoops! ID turns out to be invalid, insert an error token, then continue@>;
+      dec(EndOfIdent)
+
+@ Recall (\section\xref{replace-long-line-endings-with-record-separator}),
+we treat record separators as indicating the line is ``too long''
+(i.e., more than 80 characters long). So we insert a 201 ``Too long source line'' error.
+But anything else is treated as an invalid identifier error.
+
+@^Error, 200@>
+@^Error, 201@>
+
+@<Whoops! ID turns out to be invalid, insert an error token, then continue@>=
+      begin
+         lPos.Col:=fPhrasePos.Col+EndOfIdent-1;
+         if fPhrase[EndOfIdent] = record_separator then
+            fTokensBuf.Insert(new(MTokenPtr,Init(ErrorSymbol,200,'',lPos)))
+         else
+            fTokensBuf.Insert(new(MTokenPtr,Init(ErrorSymbol,201,'',lPos)));
+         lCurrChar:=EndOfIdent+1;
+         continue;
+      end
+
+@ We look at the current phrase and try to match against tokens found
+in the underlying dictionary. When we find a match, we check if there
+are \emph{multiple} matches and return the last one (this reflects
+Mizar's ``the last version of the notation is preferred''). We
+implement this matching scheme using an infinite loop.
+Note that this uses a ``\&{repeat}\dots\&{until} \\{false}'' loop, which
+is identical to ``\&{while} \\{true} \&{do} \&{begin} \dots \&{end}'' loop.
+(I am tempted to introduce a macro just to have this loop ``\&{repeat}\dots\&{until} \\{end\_of\_time}''\dots)
+@^Nelson, Alexander M: great sense of humour@>
+
+Recall (\section\xref{MSortedList:declarations}), sorted lists have a
+field \\{fIndex} which is an array of indices (which are sorted while
+leaving the underlying array \\{Items} of data untouched).
+
+Also, \\{lToken}, \\{lIndex} are used only in this code
+chunk. Here \\{lToken} is translated to an index of the underlying
+dictionary, so for clarity we introduce a macro to refer to the token directly.
+And \\{lIndex} is used as ``the current character'' index to compare
+the phrase to the token (indexed by \\{lToken}) as a match or not.
+
+At the end of this chunk, if successful, then |FoundToken| will be set
+to a valid token pointer. Further, |EndOfPhrase| will be initialized.
+
+A possible bug: what happens if we look through the entire phrase? We
+can't ``look any farther'' down the phrase, so shouldn't we throw an
+error? Or lazily read more characters? Or\dots something?
+
+Never fear: this will never happen with Mizar's grammar. The
+``reserved words'' are \emph{always} separated from the other stuff by
+at least one whitespace.
+
+Also we note the list of symbols is sorted lexicographically.
+% {The index of the beginning of the list of symbols starting with a given letter. The symbols are sorted lexicographically.}
+
+This appears to match the phrase with the longest possible matching
+entry in the list of symbols (it is ``maximal munch'').
+
+@d the_item(#) == Items^[fIndex^[#]]
+@d the_token(#) == TokenPtr(the_item(#))^
+
+@<Variables for slicing...@>=
+   EndOfPhrase: integer; {index in \\{fPhrase} for candidate token}
+   lIndex: integer; {index for \\{fIndex} entry}
+   lToken: integer; {index for entries in dictionary starting with the
+   first character of the current token}
+
+@ Reserved keywords and defined terms are loaded into the \\{fTokens}
+dictionary.
+
+\label{MTokeniser.SliceIt.reserved-words}
+@^Tokenise, reserved keywords@>
+ 
+@<Try to find a dictionary symbol@>=
+      EndOfPhrase:=lCurrChar; FoundToken:=nil;
+      EndOfSymbol:=EndOfPhrase-1; {initialized for comparison}
+      lToken:=fTokens.fFirstChar[fPhrase[EndOfPhrase]];
+      inc(EndOfPhrase);
+      if (lToken >= 0) then
+         with fTokens do
+      begin
+         lIndex:=2;
+         repeat {infinite loop}
+            @<If we matched a dictionary entry, then initialize \\{FoundToken}@>;
+            if fPhrase[EndOfPhrase] = ' ' then break; {we are done!}
+            if (lIndex<=length(the_token(lToken).fStr)) and @|
+                  (the_token(lToken).fStr[lIndex] = fPhrase[EndOfPhrase])
+            then
+            begin
+               inc(lIndex);
+               inc(EndOfPhrase) @+
+            end {iterate, look at next character}
+            else if (lToken < Count-1) then {try looking for the last matching item}
+            begin
+               if (copy(the_token(lToken).fStr,1,lIndex-1)=@|
+                      copy(the_token(lToken+1).fStr,1,lIndex-1))
+               then inc(lToken) {iterate}
+               else break; {we are done!}
+            end
+ @t\2@>           else break@t\1@>; {we are done!}
+         until false;
+      end
+
+@ If we have \\{lIndex} (the index of the current phrase) be longer
+than the lexeme of the current dictionary entry's lexeme, then we
+should populate \\{FoundItem}.
+
+@<If we matched a dictionary entry, then initialize \\{FoundToken}@>=
+if lIndex>length(the_token(lToken).fStr) then {we matched the token}
+begin
+   FoundToken:=the_item(lToken);
+   EndOfSymbol:=EndOfPhrase-1;
+end
+
+@ When the identifier is not a number, we insert an ``identifier''
+token into the tokens buffer.
+
+
+
+@<Variables for slicing...@>=
+   lFailed: integer; {index of first non-digit character}
+   I: integer; {index ranging over the raw lexeme string}
+   lSpelling: string; {raw lexeme as a string}
+
+@ @<Check identifier is not a number@>=
+      begin
+         lSpelling:=copy(fPhrase,lCurrChar,IdentLength);
+         lPos.Col:=fPhrasePos.Col+EndOfIdent-1;
+         if (ord(fPhrase[lCurrChar])>ord('0')) and
+               (ord(fPhrase[lCurrChar])<=ord('9')) then
+         begin
+            lFailed:=0; {location of non-digit character}
+            for I:=1 to IdentLength-1 do
+               if (ord(fPhrase[lCurrChar+I])<ord('0')) or
+                     (ord(fPhrase[lCurrChar+I])>ord('9')) then
+               begin
+                  lFailed:=I+1;
+                  break;
+               end;
+            if lFailed=0 then {if all characters are digits}
+            @<Whoops! Identifier turned out to be a number!@>;
+         end;
+         @<Add token to tokens buffer and iterate@>;
+      end
+
+@ We add an \\{Identifier} token to the tokens buffer.
+
+@<Variables for slicing...@>=
+   lIdent: TokenPtr;
+
+@ @<Add token to tokens buffer and iterate@>=
+         lIdent:=new(TokenPtr,Init(Identifier,fIdents.Count+1,lSpelling));
+         if fIdents.Search(lIdent,I)
+         then dispose(lIdent,Done)
+         else fIdents.Insert(lIdent);
+         fTokensBuf.Insert(new(MTokenPtr,
+                               Init(Identifier,TokenPtr(fIdents.Items^[I])^.fLexem.Nr,lSpelling,lPos)));@/
+         lCurrChar:=EndOfIdent+1;
+         continue
+
+@ If we goofed and all the characters turned out to be digits (i.e.,
+the identifier \emph{was} a numeral after all), we should clean things
+up here. Observe we will end up \\{continue}-ing along the loop.
+
+When the numeral token is larger than $\\{MaxConstInt} = 2^{31}-1$
+(the largest 32-bit integer, \section\xref{scanner.pas}), then we
+should raise a ``Too large numeral'' 202 error token. If we wanted to
+support ``arbitrary precision'' numbers, then this should be modified.
+@^Error, 202@>
+
+We can either insert into the tokens buffer an error token (in two
+possible outcomes) or a numeral token (in the third possible outcome).
+
+
+@<Variables for slicing...@>=
+   lNumber: longint;
+   J: integer;
+
+@ @<Whoops! Identifier turned out to be a number!@>=
+begin
+   if IdentLength > length(IntToStr(MaxConstInt)) then {insert error token}
+   begin
+      fTokensBuf.Insert(new(MTokenPtr,Init(ErrorSymbol,202,lSpelling,lPos)));
+      lCurrChar:=EndOfIdent+1;
+      continue;
+   end;
+   lNumber:=0;
+   J:=1;
+   for I:=IdentLength-1 downto 0 do
+   begin
+      lNumber:=lNumber+(ord(fPhrase[lCurrChar+I])-ord('0'))*J;
+      J:=J*10;
+   end;
+   if lNumber > MaxConstInt then {insert error token}
+   begin
+      fTokensBuf.Insert(new(MTokenPtr,Init(ErrorSymbol,202,lSpelling,lPos)));
+      lCurrChar:=EndOfIdent+1;
+      continue;
+   end;
+   {insert numeral token}
+   fTokensBuf.Insert(new(MTokenPtr,Init(Numeral,lNumber,lSpelling,lPos)));
+   lCurrChar:=EndOfIdent+1;
+   continue;
+end
+
+
+@ If we have tokenised the phrase, but the token is not contained in
+the dictionary, then we should raise a 203 error.
+
+@^Error, 203@>
+
+@<Whoops! We found an unknown token, insert a 203 error token@>=
+      lPos.Col:=fPhrasePos.Col+lCurrChar-1;
+      fTokensBuf.Insert(new(MTokenPtr,Init(ErrorSymbol,203,fPhrase[lCurrChar],lPos)));
+      inc(lCurrChar)
+
+@ We have purely abstract methods which will invoke \\{Abstract1} (\section\xref{Abstract1}),
+which raises a runtime error.
+
+\label{MTokeniser.IsIdentifierLetter}
+
+@<Implementation for scanner.pas@>=
+procedure MTokeniser.GetPhrase;
+begin Abstract1; end; @#
+
+function MTokeniser.EndOfText: boolean;
+begin Abstract1; EndOfText:= false; end; @#
+
+function MTokeniser.IsIdentifierLetter(ch: char): boolean;
+begin Abstract1; IsIdentifierLetter:= false; end;
+
+@ \node{Get a token.} Getting a token from the tokeniser will check if
+we've exhausted the input stream (which tests if the kind
+of \\{fLexem} is \\{EOT}), and exit if we have.
+
+Otherwise, it looks to see if we've got tokens left in the buffer. If
+so, just pop one and exit.
+
+But when the token buffer is empty, we invoke the abstract
+method \\{GetPhrase} to read some of the input stream. If it turns out
+there's nothing left to read, then update the tokeniser to be in the
+``end of text'' state.
+
+When we have some of the input stream read into the \\{fPhrase} field,
+we tokenise it using the \\{SliceIt} function. Then we pop a token
+from the buffer of tokens.
+
+This will populate \\{fLexem}, \\{fStr}, and \\{fPos} with the new
+token, lexeme, and position\dots but that's only
+because \\{GetPhrase} (\section\xref{MScannObj.GetPhrase}) and \\{SliceIt} (\section\xref{MTokeniser.SliceIt}) do the actual work.
+
+\label{MTokeniser.GetToken}
+
+@<Implementation for scanner.pas@>=
+procedure MTokeniser.GetToken;
+begin
+   if fLexem.Kind = EOT then exit;
+   if fTokensBuf.Count > 0 then
+   begin
+      @<Pop a token from the underlying tokens stack@>;
+      exit;
+   end;
+   GetPhrase;
+   if EndOfText then
+   begin
+      fLexem.Kind:=EOT;
+      fStr:='';
+      fPos:=fPhrasePos;
+      inc(fPos.Col); @/
+      exit;
+   end;
+   SliceIt;
+   @<Pop a token from the underlying tokens stack@>;
+end;
+
+@ Popping a token will update the lexeme, str, and position fields to
+be populated from the first item in the tokens buffer. Then it will
+free that item from the tokens buffer, shifting everything down by one.
+
+@<Pop a token from the underlying tokens stack@>=
+      fLexem:=MTokenPtr(fTokensBuf.Items^[0])^.fLexem;
+      fStr:=MTokenPtr(fTokensBuf.Items^[0])^.fStr;
+      fPos:=MTokenPtr(fTokensBuf.Items^[0])^.fPos;
+      fTokensBuf.AtFree(0)
+
+@ Testing if the given character is an identifier character or not
+requires invoking the abstract method \\{IsIdentifierLetter}
+(\section\xref{MTokeniser.IsIdentifierLetter}). 
+
+@<Implementation for scanner.pas@>=
+function MTokeniser.IsIdentifierFirstLetter(ch: char): boolean;
+begin
+   IsIdentifierFirstLetter:=IsIdentifierLetter(ch);
+end;
+
+@* [S] Scanner Object.
+This extends the Tokeniser class (\section\xref{MTokeniser:class}).
+It is the only class extending the Tokeniser class.
+
+@<MScanner object class@>=
+MScannPtr = ^MScannObj; @/
+   MScannObj = object(MTokeniser)  @t\1@>@/
+      Allowed: ASCIIArr; @/
+      fSourceBuff: pointer; @/
+      fSourceBuffSize: word; @/
+      fSourceFile: text; @/
+      fCurrentLine: string; @/
+
+      constructor InitScanning(const aFileName,aDctFileName:string); @t\2@>
+      destructor Done; virtual; @t\2@>
+
+      procedure GetPhrase; virtual; @t\2@>
+      procedure ProcessComment(fLine, fStart: integer; cmt: string); virtual; @t\2@>
+      function EndOfText: boolean; virtual; @t\2@>
+
+      function IsIdentifierLetter(ch: char): boolean; virtual; @t\2\2\2@>
+   end
+
+@ \node{Get a phrase.}
+We search through the lines for the ``first phrase'' (i.e., first
+non-whitespace character, which indicates the start of something
+interesting). Comments are thrown away as are Mizar pragmas.
+
+This will update \\{fCurrentLine} as needed, setting it to the next
+line in the input stream buffer. It will assign a \emph{copy} of the
+phrase to the field \\{fPhrase}, as well as update the \\{fPhrasePos}.
+
+There is a comment in Polish, ``uzyskanie pierwszego znaczacego
+znaku'', which Google translates as: ``obtaining the first significant sign''.
+This seemed like a natural ``chunk'' of code to study in isolation.
+
+The contract for \\{GetPhrase} ensures the \\{fPhrase} will be
+populated with a string ending with a space (``{\tt\SP}'') character,
+or it will be the empty string (when the end of text has been encountered).
+
+\label{MScannObj.GetPhrase}
+
+@<Implementation for scanner.pas@>=
+procedure MScannObj.GetPhrase;
+const
+   Prohibited: ASCIIArr = @<Characters prohibited by \\{MScanner}@>;
+var i,k: integer;
+begin
+   fPhrasePos.Col:=fPhrasePos.Col+length(fPhrase)-1; @/
+   @<Find the first significant `sign'@>;
+   for i:=fPhrasePos.Col to length(fCurrentLine) do
+      if fCurrentLine[i] =  ' ' then break;
+   fPhrase:=Copy(fCurrentLine,fPhrasePos.Col,i-fPhrasePos.Col+1);
+end;
+
+@ The prohibited \ASCII/ characters are
+everything \emph{NOT} among the follow characters:
+\def\lskip{\hskip6pc}\medbreak
+{\tt\obeyspaces\obeylines%
+\lskip \SP\ {!} " \#\ \$\ \%\ \AM\ ' ( ) * + , - {.} /  : ; < = > ? \AT!
+\lskip [ \BS\ ]\ \shiftSix\ \_\ `\  \LB\ \pipe\ \RB\ \TL\ 0 1 2 3 4 5 6 7 8~9
+\lskip A B C D E F G H I J K L M N O P Q R S T U V W X Y Z
+\lskip a b c d e f g h i j k l m n o p q r s t u v w x y z \par}
+\medbreak\noindent%
+The reader will observe these are all the ``graphic'' \ASCII/
+characters, plus the space (``{\tt\SP}'') character.
+
+@<Characters prohibited by \\{MScanner}@>=
+      (1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,@/
+       0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,@/
+       0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,@/
+       0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,@/
+       1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,@/
+       1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,@/
+       1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,@/
+       1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1)
+
+@ Note that the \\{fCurrentLine} will end with a whitespace, when we
+have not consumed the entire underlying input stream.
+
+@<Find the first significant `sign'@>=
+   while fCurrentLine[fPhrasePos.Col] = ' ' do
+   begin
+      if fPhrasePos.Col >= length(fCurrentLine) then
+      @<Populate the current line@>;
+      inc(fPhrasePos.Col);
+   end
+
+@ Now, populating the current line requires a bit of work. We ensure
+the end of the current line will end with a space character (``{\tt\SP}''),
+which will guarantee the loop iteratively consumes all empty lines in
+the file.
+
+Once we arrive at a non-space character, we will break the
+loop containing this chunk of code.
+If we have exhausted the underlying input stream, then we will
+have \\{EndOfText} be true. Should that occur, we exit the function.
+
+@<Populate the current line@>=
+begin
+   if EndOfText then exit;
+   inc(fPos.Line);
+   inc(fPhrasePos.Line);
+   readln(fSourceFile,fCurrentLine);
+   @<Scan for pragmas, and exit if we found one@>;
+   @<Skip comments@>;
+   @<Trim whitespace from the right of the current line@>;
+   @<Replace every invalid character in current line with the unit character@>;
+   fCurrentLine:=fCurrentLine+' ';
+   if not LongLines then
+      if length(fCurrentLine) > MaxLineLength then
+      @<Replace end of long line with record separator@>; @/
+ @t\4@>        {Assert: we have \\{fCurrentLine} end in ``\texttt{\SP}''}
+   fPhrasePos.Col:=0;
+   fPos.Col:=0; 
+end
+
+
+@ When we have excessively long lines, and we have not enabled ``long
+line mode'', then we just delete everything after $\\{MaxLineLength}+1$
+and set $\\{MaxLineLength}-1$ to the record separator (which is
+rejected by the Mizar lexer) and the last character in the line to the
+space character.
+
+\label{replace-long-line-endings-with-record-separator}
+
+@<Replace end of long line with record separator@>=
+begin
+   delete(fCurrentLine,MaxLineLength+1,length(fCurrentLine));
+   fCurrentLine[MaxLineLength-1]:=record_separator; @/
+   fCurrentLine[MaxLineLength]:=' ';
+end
+
+@ In particular, if we every encounter an ``invalid'' character, then
+we just replace it with the ``unit separator'' character.
+
+\label{replace-every-invalid-char-with-unit-char}
+
+@<Replace every invalid character in current line with the unit character@>=
+for k:=1 to length(fCurrentLine)-1 do
+   if Prohibited[fCurrentLine[k]]>0 then fCurrentLine[k]:=unit_separator
+
+@ We will trim whitespace from the right of the current line at least
+twice. 
+
+@<Trim whitespace from the right of the current line@>=
+k:=length(fCurrentLine);
+while (k > 0) and (fCurrentLine[k] = ' ') do dec(k);
+delete(fCurrentLine,k+1,length(fCurrentLine))
+
+@ Pragmas in Mizar are special comments which start a line with
+``\texttt{::\$}''. They are useful for naming theorems
+(``\texttt{::\$N} $\langle$\textit{name\/}$\rangle$''), or toggling
+certain phases of the Mizar checker. This will process the comment
+(\section\xref{MScannObj.ProcessComment}).
+
+Since pragmas are important, we treat it as a token (and not a comment
+to be thrown away).
+
+Note: if you try to invoke a pragma, but do not place it at the start
+of a line, then Mizar will treat it like a comment.
+
+@<Scan for pragmas, and exit if we found one@>=
+k:=Pos('::$',fCurrentLine); {Preprocessing directive}
+if (k = 1) then
+begin
+   ProcessComment(fPhrasePos.Line, 1, copy(fCurrentLine, 1, length(fCurrentLine)));
+   @<Trim whitespace from the right of the current line@>;
+   fCurrentLine:=fCurrentLine+' ';
+   fPhrase:=Copy(fCurrentLine,1,length(fCurrentLine));
+   fPhrasePos.Col:=1;
+   fPos.Col:=0;
+   exit
+end
+
+@ Scanning a comment will effectively replace the start of the comment
+(``\texttt{::}'') up to and including the end of the line, with a
+single space. This will process the comment
+(\section\xref{MScannObj.ProcessComment}). 
+
+@<Skip comments@>=
+k:=Pos('::',fCurrentLine); {Comment}
+if (k <> 0) then
+begin
+   ProcessComment(fPhrasePos.Line, k, copy(fCurrentLine, k, length(fCurrentLine)));
+   delete(fCurrentLine,k+1,length(fCurrentLine));
+   fCurrentLine[k]:=' ';
+end
+
+@ ``Processing a comment'' really means skipping the comment.
+
+\label{MScannObj.ProcessComment}
+
+@<Implementation for scanner.pas@>=
+procedure MScannObj.ProcessComment(fLine, fStart: integer; cmt: string);
+begin end;
+
+@ Testing if the scanner has exhausted the input stream amounts to
+checking the current line has been completely read \emph{and} the
+current source file has arrived at an \\texttt{eof} state.
+
+@<Implementation for scanner.pas@>=
+function MScannObj.EndOfText: boolean;
+begin
+   EndOfText := (fPhrasePos.Col >= length(fCurrentLine)) and eof(fSourceFile);
+end;
+
+@ Testing if a character is an identifier letter amounts to testing if
+it is allowed (i.e., not disallowed).
+
+@<Implementation for scanner.pas@>=
+function MScannObj.IsIdentifierLetter(ch: char): boolean;
+begin
+   IsIdentifierLetter:=Allowed[ch]<>0;
+end;
+
+@ \node{Constructor.} The only way to construct a scanner. This
+expects an article to be read in \\{aFileName} and a dictionary to
+be loaded (\\{aDctFileName}, loaded with \section\xref{TokensCollection.LoadDct}). The buffer size for
+reading \\{aFileName} is initially @"4000.
+
+@<Implementation for scanner.pas@>=
+constructor MScannObj.InitScanning(const aFileName,aDctFileName:string);
+begin
+   inherited Init;
+   Allowed:=DefaultAllowed;
+   fTokens.LoadDct(aDctFileName);
+   assign(fSourceFile,aFileName);
+   fSourceBuffSize:=@"4000;
+   getmem(fSourceBuff,fSourceBuffSize);
+   settextbuf(fSourceFile,fSourceBuff^,@"4000);
+   reset(fSourceFile);
+   fCurrentLine:=' ';
+   GetToken;
+end;
+
+@ \node{Destructor.} We must remember to close the source file, free
+the buffer, close the lights, and lock the doors.
+
+@<Implementation for scanner.pas@>=
+destructor MScannObj.Done;
+begin
+   close(fSourceFile);
+   FreeMem(fSourceBuff,fSourceBuffSize);
+   fCurrentLine:='';
+   inherited Done;
+end;
+

@@ -1,0 +1,404 @@
+\input macros
+\setchapno{-1}
+\def\title{Mizar Parser}
+
+@* [C] Introduction.
+We are trying to understand Mizar. So I am transcribing the source
+code into a literate program, following the order of
+compilation. Perhaps this ``goes against the spirit'' of literate
+programming, but it makes the most sense to understand what is going
+on for programmers. 
+
+We will begin with the \texttt{esmprocessor.pas} file, and all the
+dependencies needed to compile it. For clarity (or at least ease of
+reference) each ``section'' appearing in the table of contents
+corresponds to a different file.
+
+This discusses Mizar's source code as of Git commit \texttt{9e814a9568cfb44253d677e5209c360390fe6437}
+(dated 2023 October 11).
+
+@ \node{Files are chapters.}
+We will organize the text by compiler dependencies. It makes sense to
+treat each file as a separate ``chapter''. With the exception of this
+introductory chapter (``chapter 0''), all future chapters are called
+``File $n$''.
+
+Just as Knuth's \emph{\TeX: The Program} (Addison--Wesley, 1986) was
+organized into modules which are presented ``bottom-up'', each module
+is discussed and programmed ``top-down'', we shall try to do
+likewise. File $n+1$ can only depend on code appearing in Files $1$
+through File $n$.
+
+There are natural ways to ``cluster'' the discussion in each File,
+which motivates the ``section'' and ``subsections''. Each section
+(\emph{but not subsections!\/}) starts on a new page, written in sans
+serif bold prefixed with explicit an ``Section''. Subsections are
+written in sans serif bold prefixed with an explicit ``Subsection'',
+with vertical whitespace separting it. This chapter has 
+two sections (one discussing the flow of Mizar, and the other
+enumerating observations and ``to do'' items).
+
+@ Each chapter is written using numbered paragraphs, since we are
+using Donald Knuth's \WEB/ to write a literate program. References
+will be made to the paragraphs. Index entries give the paragraph
+numbers associated with each entry. And even though I just used the
+term ``paragraph number'', they really group several paragraphs into a
+unit of writing.
+
+Numbers are paragraphed \emph{independently} of chapter, section,
+subsection. This is a quirk of \WEB/. This was how Mathematicians
+wrote texts back in Euler's day. We will refer to a paragraph by
+writing (\section$n$) to refer to paragraph $n$. Again, this was the
+conventions used by Euler.
+
+Each paragraph consists of three parts: the ``text part'' (informal
+prose written in English), the ``macros part'' (which introduces
+macros written in the \WEB/ language), and the ``code part'' (which
+contains a pretty-printed snippet of \PASCAL/ code). A paragraph may
+omit any of these parts. Thus far, all our numbered paragraphs have
+consisted of ``text parts'' only. The ``code part'' can have a name in
+angled brackets. If the name is missing, then it continues the
+previous chunk of code from the previous numbered paragraph.
+
+@ The Mizar program is released under the GNU license. So let us place
+this license in one place early on.
+
+@<GNU License@>=
+{
+   This file is part of the Mizar system.
+   Copyright (c) Association of Mizar Users.
+   License terms: GNU General Public License Version 3 or any later version.
+}
+
+@ \node{Aside: Typography of ``Modern'' Pascal.}%
+We will be following the typographical style as found in Niklaus
+Wirth's@^Wirth, Niklaus@> \textit{Algorithms + Data Structures = Programs}
+(Prentice--Hall, 1975) and Donald Knuth's@^Knuth, Donald E.@> \textit{\TeX: The Program}
+(Addison--Wesley, 1986). But there are a few typographical situations
+which requires thinking hard about, since ``classical'' \PASCAL/ does
+not have \emph{object} or inheritence (or \emph{unit} modules).
+
+First, we need to know that ``modern \PASCAL/'' differs from
+the \PASCAL/ Knuth worked with, in several ways. Mizar uses ``units''
+which are modules. We will need to format them for \WEAVE/. Note
+that \section42 of \WEAVE/ introduces the ``ilk'' of various syntactic
+classes (array-like, case-like, for-like, etc.) and \section64 of \WEAVE/
+explicitly initializes all the reserved words for \PASCAL/.
+
+The reserved words which \WEAVE/ highlights and/or pretty prints:
+\texttt{and}, \texttt{array}, \texttt{begin}, \texttt{case}, \texttt{const}, \texttt{div}, \texttt{do}, \texttt{downto}, \texttt{else}, \texttt{end}, \texttt{file}, \texttt{for}, \texttt{function}, \texttt{goto}, \texttt{if}, \texttt{in}, \texttt{label}, \texttt{mod}, \texttt{nil}, \texttt{not}, \texttt{of}, \texttt{or}, \texttt{packed}, \texttt{procedure}, \texttt{program}, \texttt{record}, \texttt{repeat}, \texttt{set}, \texttt{then}, \texttt{to}, \texttt{type}, \texttt{until}, \texttt{var}, \texttt{while}, \texttt{with}, \texttt{xclause}.
+These are then grouped into 20 ``ilk'' classes (see \section42 of \WEAVE/).
+
+Documentation and tutorials frequently compare \textbf{unit} to |program|, so
+we should probably typeset it as such. The big question is whether the
+\texttt{interface}, \texttt{implementation}, and \texttt{uses}
+keywords are |var|-like or |const|-like. I ultimately decided for the latter.
+
+We will treat |implementation| typographically \emph{as if} it were a
+|const| because the |end| will not be indented properly otherwise.
+
+@f unit==program
+@f interface==const
+@f implementation==const
+@f uses==const
+
+@ Objects appear in Free \PASCAL/, and they behave like records.
+There are also |constructor| and |destructor| functions.
+
+@f object==record
+@f constructor==function
+@f destructor==function
+
+@ \node{Primitive functions.}
+We have several primitive functions which should be formatted
+especially. For example, |shr| is an infix operator like |mod| or
+|div|. It corresponds to bitwise shifting right.
+
+@f shr==div
+
+@ \node{Cases.}
+Following Knuth's ``\TeX: The Program'' (\section4), we will use |endcases| to
+pair with |case|. The ``default case'' will be |othercases| (because
+|else| gets too confusing).
+
+@d othercases == others: {default for cases not listed explicitly}
+@d endcases == @+end {follows the default case in an extended |case| statement}
+@f othercases == else
+@f endcases == end
+
+@ \node{Debugging.} There are conditional compiler directives for
+debugging purposes. Importantly, these \emph{must} be printed to the
+source code when we invoke \TANGLE/.
+
+@d mdebug == @{@&$IFDEF MDEBUG@}
+@d end_mdebug == @{@&$ENDIF@}
+@f mdebug == begin
+@f end_mdebug == end
+
+@ Actually, it may be useful just to have helper macros.
+
+@d if_def(#) == @{@&$IFDEF #@}
+@d if_not_def(#) == @{@&$IFNDEF #@}
+@d else_if_def(#) == @{@&$ELSEIF DEFINED(#)@}
+@d else_def == @{@&$ELSE@}
+@d endif == @{@&$ENDIF@}
+@d end_if == @+ endif
+@f if_def == if
+@f if_not_def == if
+@f else_if_def == else
+@f else_def == else
+@f endif == end
+@f end_if == end
+@f result == nil
+
+@ \node{Toggling IO Checking.} Another compiler directive enables and
+disables IO checking
+
+@d disable_io_checking == @{@&$I-@}
+@d enable_io_checking == @{@&$I+@}
+@d without_io_checking(#) == disable_io_checking; #; enable_io_checking
+
+@ \node{References.}
+I have inline citations to the literature, but there's some references
+worth explicitly drawing the reader's attention to (which may or may
+not make it to an inline citation):
+\enumerate
+\item Andrzej Trybulec, ``Some Features of the Mizar Language'', ESPRIT Workshop, Torino, 1993.\hfill\break
+  Eprint: \href{https://mizar.uwb.edu.pl/project/trybulec93.pdf}{{\tt mizar.uwb.edu.pl/project/trybulec93.pdf}} --- \section4 discusses grammatical aspects of Mizar
+\item Freek Wiedijk, ``Mizar's Soft Type System''. In K.\ Schneider and J.\
+Brandt, eds., \emph{Theorem Proving in Higher Order Logics. TPHOLs 2007},
+Springer, \doi{10.1007/978-3-540-74591-4_28}
+(\href{https://www.cs.ru.nl/F.Wiedijk/mizar/miztype.pdf}{Eprint pdf}).
+\item Adam Grabowski,
+  Artur Korni\l{}owicz, and
+  Adam Naumowicz's ``Mizar in a Nutshell''\hfill\break
+  (\doi{10.6092/issn.1972-5787/1980})
+\item Artur Korni\l{}owicz's
+  ``Registrations vs Redefinitions in Mizar''
+  (in A.\ Kohlhase, P.\ Libbrecht, BR.\ Miller, A.\ Naumowicz, W.\ Neuper, P.\ Quaresma, F.\ Wm.\ Tompa, M.\ Suda
+  (eds) \emph{Joint Proc.\ FM4M, MathUI, and ThEdu}, 2016, pp.17--20,
+  \href{https://ceur-ws.org/Vol-1785/F5.pdf}{{\tt ceur-ws.org/Vol-1785/F5.pdf}})
+\item Artur Korni\l{}owicz's
+  ``On rewriting rules in Mizar''
+  (\emph{J.\ Autom.\ Reason.} \textbf{50} no.2 (2013) 203--210,
+  \doi{10.1007/s10817-012-9261-6})
+\item Mario Carneiro, ``Reimplementing Mizar in Rust''.
+Eprint \arXiv{2304.08391}, see
+especially the first two sections for an overview of Mizar's
+workflow. (The code is available
+at \href{https://github.com/digama0/mizar-rs}{{\tt github.com/digama0/mizar-rs}}.)
+\endenumerate
+
+\medbreak\noindent%
+I should also credit Wayne Sewell's \emph{Weaving a Program: Literate Programming in Web}
+(Van Nostrand Reinhold Computer, 1989) for discussing how to take a
+pre-existing \PASCAL/ program and turn it into a \WEB/. Or, depending
+on the quality of writing in this literate program, it's all his fault.
+
+@^Grabowski, Adam@>
+@:Kornilowicz, Artur}{Korni\l{}owicz, Artur@>
+@^Naumowicz, Adam@>
+@^Trybulec, Andrzej@>
+@^Wiedijk, Freek@>
+
+@* [S] Mizar's workflow.
+This section will give a brief overview of what Mizar
+``does'' when we run it. The analogy to bear in mind is with a batch
+compiler: there's parsing, some intermediate steps, then emits some
+output.
+
+Just to give some rough estimates of where Mizar spends most of its
+time, there are four phases Mizar reports when checking an article:
+\enumerate
+\item Parser (transforms input into an abstract syntax tree, writes it
+to an \XML/ file);
+\item MSM (transforms the abstract syntax tree into an explicitly
+  typed intermediate representation) --- \texttt{base/first\_identification.pas},
+  the \\{MSMAnalyzer} procedure; this will require
+  transcribing \texttt{kernel/limits.pas} (which is mostly just a
+  bunch of constant parameters);
+\item Analyzer (performs type checking, tracks the goals, and other
+  miscellaneous jobs) --- the \\{Analyze} procedure in \texttt{kernel/analyzer.pas};
+  this requires transcribing kernel code
+  (\texttt{lexicon.pas}, \texttt{inout.pas}, \texttt{iocorrel.pas}, \texttt{correl.pas}, \texttt{generato.pas}, \texttt{builtin.pas}, \texttt{justhan.pas}, \texttt{enums.pas}, \texttt{formats.pas},
+  \texttt{identify.pas})
+  and base code (\texttt{xmldict.pas}), approximately 19590 lines
+  (16764 lines of code, the rest is whitespace and comments)
+\item Checker (performs the proof checking for validity) ---
+the \\{InferenceChecker} procedure
+in \texttt{kernel/checker.pas}. This requires transcribing kernel
+files (\texttt{checker.pas prechecker.pas equalizer.pas unifier.pas justhan.pas}),
+approximately 8191 lines of code.
+\endenumerate
+
+Using numbers Mario Carneiro reported in his github repository,
+roughly $14/15$ of Mizar's runtime (as measured in CPU time)
+is spent on the Analyzer and Checker phases (among which, Mizar
+spends about 5 times longer in the Checker phase than the Analyzer
+phase). Parsing and MSM transforms the input into an intermediate
+representation used in the latter two phases. Mizar spends about
+$1/15$ of its time here.
+
+@ \node{Accommodator.}
+This will produce, among other outputs, the ``\texttt{.dct}'' file
+(and its \XML/ counterpart, the ``\texttt{.dcx}'' file). The
+``\texttt{.dct}'' file contains all the identifiers imported from
+other articles and reserved keywords for Mizar. The Tokeniser needs it
+to properly tokenise an article.
+
+@ \node{Parsing phase.}
+We can look at \texttt{kernel/verfinit.pas} to find the parsing phase
+of the Mizar program is handled by the following lines of code:
+\medbreak
+
+\setbox0=\vbox{
+\Y\P$\\{InitPass}(\.{\'Parser\ \ \'})$;\5
+$\\{FileExam}(\\{EnvFileName}+\.{\'.dct\'})$;\5
+$\\{InitScanning}(\\{MizFileName}+\\{ArticleExt},\39\\{EnvFileName})$;\5
+\\{InitWSMizarArticle};\5
+\\{Parse};\5
+$\\{gFormatsColl}.\\{StoreFormats}(\\{EnvFileName}+\.{\'.frx\'})$;\5
+\\{gFormatsColl}.\\{Done};\5
+\\{FinishScanning};\5
+$\\{Write\_WSMizArticle}(\\{gWSTextProper},\39\\{EnvFileName}+\.{\'.wsx\'})$;%
+\par}
+
+\boxblock{\box0}
+
+\medbreak\noindent%
+Our goal is to examine these functions, and understand what is going on.
+We know \\{Parse} is defined in \texttt{base/parse.pas}, it
+populates the \\{gWSTextProper} global variable using \texttt{base/parseraddition.pas},
+and \\{Write\_WSMizArticle} is defined in \texttt{base/wsmarticle.pas}.
+The \\{Parse} function continuously invokes \\{ReadToken}
+(\section\xref{ReadToken}). 
+
+This phase will be responsible for generating a ``\texttt{.frx}''
+(formats \XML/) and a ``\texttt{.wsx}'' (weakly strict Mizar \XML/) file.
+
+
+@* [S] Log of todos, bugs, improvements.
+I have a number of observations from transcribing Mizar
+into \WEB/. They're the last thing I have included in the introductory chapter.
+
+@ \node{Possible improvements.}
+\enumerate
+\item In quicksort, picking the pivot is done by |P := (Low + High)/2|,
+but it should be done by |P := Low + ((High - Low)/2)| to avoid
+overflow.
+\item Actually, quicksort should delegate work to a different sorting
+algorithm when there is less than 10 items in the list. Sedgewick
+pointed this out in his PhD thesis. (If quicksort \emph{were} a
+culprit for slowness, we could even hardcode sort networks for small lists.)
+\item We should also determine the pivot by looking at the median
+value of |P = (3*Low + High)/4|, |P2 := (Low + High)/2|,
+|P3 := (Low + 3*High)/4|. This will improve the performance of quicksort.
+\item In \section\xref{numbers:gcd}, |GCD| could be optimized to avoid
+calculating |Mul(i,i)| in every loop iteration.
+\item In \section\xref{MStringList.ObjectOf}, |MStringList.ObjectOf|
+has duplicate code.
+\item It seems that parsing Mizar text, emitting \XML/, and
+parsing \XML/ seem to contain a lot of code which could be
+autogenerated from a grammar (a hypothetical ``\texttt{.ebnf}''
+file). This would avoid duplicate work.
+\endenumerate 
+
+@ \node{Possible bugs.} I have been working through the source code
+with the mindset of, ``How can I possibly break this?'' This has led
+me to identify a number of situations where things can ``go
+badly''. But they are not all bugs (some are impossible to occur).
+
+\startbugs%\par\advance\leftskip\parindent%
+\bug In \section\xref{numbers:rationalgt}, |RationalGT| is
+either misnamed (should be |RationalGEQ|) or implemented incorrectly
+(we should have |RationalGT(a,b) = RationalLT(b,a)| but do not)
+\bug In \section\xref{numbers:isrationalle} |IsRationalGT| is misnamed (should be |IsRationalGEQ|)
+\bug In \section\xref{MsortedExtList.FindInterval},
+|MSortedExtList.FindInterval| appears to assume that
+ |MSortedExtList.Find| returns the left-most index.
+\bug In \section\xref{MSortedCollection.Search}, |MSortedCollection.Search|
+may not return the correct index when there are duplicates.
+This is not terrible, since |IndexOf| corrects for this possibility.
+\bug In \section\xref{TXTStreamObj.Done}, I think |TXTStreamObj.Done|
+needs to close the associated file.
+\bug In \section\xref{TSymbol.Init}, |TSymbol.Init| expects an
+|fInfinitive| argument, but does not use it --- shouldn't it
+ initialize |Infinite := fInfinitive|?
+\bug In \section\xref{XMLScannObj.GetAttrValue}, escaped quotation
+marks are not properly handled.
+\bug For StreamObj (\section\xref{StreamObj}), the constructors and
+destructors are not virtual which would impact XMLOutStreamObj
+(\section\xref{XmlOutStreamObj}) --- well, we just do duplicate work
+in XMLOutStreamObj's constructors and destructors.
+\bug Shouldn't \\{TokensCollection.InitTokens} (\section\xref{TokensCollection.InitTokens})
+invoke the inherited constructor?
+\bug Shouldn't \\{MTokenObj.Init} (\section\xref{MTokenObj.Init})
+invoke inherited constructors? At least to insulate itself from
+changes to any of its parent (or grandparent) classes?
+\bug The constructor \\{OutWSMizFileObj.OpenFileWithXSL} (\section\xref{OutWSMizFileObj.OpenFileWithXSL})
+expects the \XML/-stylesheet located at \texttt{"file://'+\$MIZFILES+'/wsmiz.xml"},
+but that file is not present in Mizar.
+\endbugs
+
+
+@ \node{To do list.} There are some things I should revisit, revise,
+and edit --- specifically about this running commentary (\emph{not} the Mizar
+source code).
+\enumerate
+\item [Missing transcription] I skipped over transcribing
+the \\{ItemName} and other constants from \texttt{wsmarticle.pas},
+which I should probably include.
+\item [Revise] The \XML/ schema should use the \texttt{doc/mizar/xml/Mizar.rnc}
+  schema snippets.
+\item [Revise] Make an introduction to dynamic arrays as a data structure, just
+to standardize the terminology used. (Make sure I stick to the
+standardized terminology!) Including pictures may help\dots
+\item [Revise] Review quicksort. I should prove that it works, too. (Has this
+been done in Mizar? \texttt{exchsort} seems to be the closest match.)
+\item [Improve] Give a ``big picture'' summary of the architecture. For example,
+the most interesting routine in parsing Mizar, well, it's all handled
+in \\{MTokeniser.SliceIt} (\section\xref{MTokeniser.SliceIt}).
+\item [Linting] Standardize the names of basic data types. \PASCAL/
+accepts \\{integer} as synonymous with \\{Integer}, but they give
+different index entries.
+\item [Cosmetics] Check the typography is correct for the code
+\item [Cosmetics] Create more \WEB/ macros for conditional compilation
+\item [Cosmetics] Would it help to include more UML class diagrams?
+\item [Improve] It may be useful to use UML State diagrams to explain
+the parser --- or it may be a huge distraction?
+\endenumerate
+
+@ \node{Formatting types.}%
+This is still a finicky aspect of \WEB/.
+Strings are a type in Free \PASCAL/, like \emph{Boolean}.
+
+Looking at Wirth's book, he typesets a type in \emph{italics} and
+lowercase --- so we have \\{boolean} and not \&{boolean}
+or \\{Boolean} (or \&{Boolean} or \texttt{boolean} or\dots). Knuth's
+``\TeX: the program'' follows this convention
+(using \\{integer}, \\{boolean}, \\{char}, etc.).
+
+@ \node{Using Twill (or not).}%
+Knuth invented Twill as a ``hack'' atop \WEAVE/ to include
+``mini-indices'' every couple pages. The problem I have with Twill is
+that it does not adequately index local variables (in the sense that:
+Knuth's \TeX\ is a giant monolithic program, and any |var| appearing
+in it is almost certainly a global variable --- hence it makes sense
+to index \emph{all} variables, since they are almost certainly
+global).
+
+I \emph{want} to use Twill, but it is designed specifically \emph{for} Knuth.
+Consequently it is not terribly useful for our purposes. We would have
+to tailor it quite heavily, and I don't have the energy or patience to
+do so.
+
+@ \node{Caution:} Knuth takes advantage of \WEB/ to
+use \texttt{snake\_case} when naming things instead
+of Pascal's idiomatic \texttt{PascalCase}. This probably greatly
+improves the readability of the code. We should probably think hard
+about using it.
+
+When \WEAVE/ extracts the \PASCAL/ code, it will remove all
+underscores from the identifiers and capitalize all letters. So
+instead of ``|screaming_run_on_case|'' (which appears in the PDF), we
+will instead obtain ``\texttt{SCREAMINGRUNONCASE}'', which\dots yeah, that's a hot mess.

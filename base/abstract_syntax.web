@@ -1,0 +1,1806 @@
+
+@* [F] Abstract Syntax.
+A crucial step in any interpreter, compiler, or proof assistant is to
+transform the concrete syntax into an abstract syntax tree. This
+module provides all the classes for the abstract syntax tree \emph{of
+expressions, types, and formulas} in Mizar. The abstract syntax tree
+for ``statements'' will be found in the ``Weakly Strict Text Proper'' module.
+
+This is a bit, well, ``Java-esque'', in the sense that each different
+kind of node in the abstract syntax tree is represented by a different
+class. If you don't know abstract syntax trees, I can heartily
+recommend Bob Nystrom's \emph{Crafting Interpreters} (\href{https://craftinginterpreters.com/representing-code.html}{Ch.\ 5: Representing Code})
+for an overview.
+
+I'll be quoting from the grammar for Mizar as we go along, since the
+class hierarchy names their classes after the nonterminal symbols in
+the grammar. (It's what anyone would do.) You can find a local copy of
+the grammar on most \UNIX/ machines with Mizar installed located
+at \texttt{/usr/local/doc/Mizar/syntax.txt}, which you can study at
+your leisure.
+
+@ \node{Warning:} There is a lot of boiler plate code in the
+constructors and destructors. I am going to pass over them without
+much comment, because they are monotonous and uninteresting. The more
+interesting part will be discussed with the class declarations for
+each kind of node. I will simply entitle the paragraphs
+``Constructor'' to indicate I am recognizing their existence and
+moving on.
+
+@<abstract\_syntax.pas@>=
+@<GNU License@>@;
+
+unit abstract_syntax;
+
+interface
+
+uses errhan,mobjects,syntax; @#
+
+@<Interface for abstract syntax@>@; @#
+
+implementation @|@#
+@<Implementation of abstract syntax@>@t\2@>@; @#
+end.
+
+@ The implementation requires discussing a few ``special cases''
+(variables, qualified segments, adjectives) before getting to the
+usual syntactic classes (terms, types, formulas).
+
+
+@<Implementation of abstract syntax@>=
+@<Variable AST constructor@>@;
+@<Qualified segment AST constructor@>@;
+@<Adjective expression AST constructor@>@;
+@<Adjective AST constructor@>@;
+@<Negated adjective AST constructor@>@;
+@<Implementing term AST@>@;
+@<Implementing type AST@>@;
+@<Implementing formula AST@>@;
+@<Within expression AST implementation@>@;
+
+@ The interface consists mostly of classes, as well as a few
+enumerated types. The gambit resembles what we would do if we were
+programming in \CEE/: define an \texttt{enum TermSort}, then
+introduce a \texttt{struct TermAstNode \LB enum TermSort sort;\RB}
+to act as an abstract base class for terms (and do likewise for
+formulas, types, etc.). This allows us to use ``struct inheritance''
+in \CEE/, as Bob Nystrom's \emph{Crafting Interpreters}
+(\href{https://www.craftinginterpreters.com/strings.html}{Ch.\ 19})
+calls it.
+
+@<Interface for abstract syntax@>=
+type
+
+   @<Abstract base class for types@>;
+
+   @<Abstract base class for terms@>;
+
+   @<Abstract base class for formulas@>; @#
+
+   @<Adjective expression (abstract syntax tree)@>;
+
+   @<Negated adjective expression (abstract syntax tree)@>;
+   
+   @<Adjective (abstract syntax tree)@>; @#
+
+   { Auxiliary structures }
+
+   @<Variable (abstract syntax tree)@>;
+   
+   @<Qualified segment (abstract syntax tree)@>; @#
+
+   @<Classes for terms (abstract syntax tree)@>@;
+
+   @<Classes for type (abstract syntax tree)@>@;
+
+   @<Classes for formula (abstract syntax tree)@>@; @#
+
+   {----------------------------------------------------------------}
+
+   @<Class for Within expression@>;
+
+
+@ \node{Variable.} A variable in the abstract syntax tree is basically
+a de Bruijn index, in the sense that it is represented by an integer
+in the metalanguage (\PASCAL/).
+
+Logicians may feel uncomfortable at variables being outside the term
+syntax tree. But what logicians think of as ``variables'' in
+first-order logic, Mizar calls them ``Simple Terms''
+(\section\xref{ast:SimpleTerm}). 
+
+@<Variable (abstract syntax tree)@>=
+   VariablePtr = ^VariableObj; @/
+   VariableObj = object(MObject) @t\1@> @/
+      nIdent: integer; { identifier number }
+      nVarPos: Position; @/
+      constructor Init(const aPos:Position;@+ aIdentNr:integer); @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Variable AST constructor@>=
+constructor VariableObj.Init(const aPos:Position;@+ aIdentNr:integer);
+begin
+   nIdent:=aIdentNr;
+   nVarPos:=aPos;
+end;
+
+@ \node{Qualified segment.} A qualified segment refers to situations
+in, e.g.,``\texttt{consider} $\langle\hbox{\textit{qualified-segment\/}}\rangle^{+}$
+\texttt{such that} \dots''. This also happens in quantifiers where the
+Working Mathematician writes $\forall\vec{x}\ldotp P[\vec{x}]$, for
+example (that quantifier prefix ``$\forall\vec{x}\,$'' uses the
+qualifying segment $\vec{x}\,$).
+
+The Mizar grammar for qualified segments looks like:
+
+{\advance\leftskip by2pc\obeylines\tt
+Qualified-Variables = Implicitly-Qualified-Variables
+\quad\pipe\ Explicitly-Qualified-Variables
+\quad\pipe\ Explicitly-Qualified-Variables "," Implicitly-Qualified-Variables .
+
+Implicitly-Qualified-Variables = Variables .
+
+Explicitly-Qualified-Variables = Qualified-Segment \LB "," Qualified-Segment \RB .
+
+Qualified-Segment = Variables Qualification .
+
+Variables = Variable-Identifier \LB "," Variable-Identifier \RB .
+
+Qualification = ( "being" \pipe\ "be" ) Type-Expression .
+\par}
+
+\noindent We will implement \texttt{Qualified-Variables} as an array
+of pointers to \\{QualifiedSegment} objects, each one being either
+implicit or explicit.
+
+@ \node{Abstract base class for qualified segments.}
+We have \emph{implicitly} qualified segments and \emph{explicitly}
+qualified segments, which are ``both'' qualified
+segments. Object-oriented yoga teaches us to describe this situation
+using a ``qualified segment'' abstract base class, and then extend it
+with two subclasses.
+
+@<Qualified segment (abstract syntax tree)@>=
+   SegmentKind = (ikImplQualifiedSegm, ikExplQualifiedSegm); @#
+   
+   QualifiedSegmentPtr = ^QualifiedSegmentObj; @/
+   QualifiedSegmentObj = object(MObject) @t\1@> @/
+      nSegmPos: Position; @/
+      nSegmentSort: SegmentKind; @/
+      constructor Init(const aPos:Position;@+ aSort:SegmentKind); @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Qualified segment AST constructor@>=
+constructor QualifiedSegmentObj.Init(const aPos:Position;@+ aSort:SegmentKind);
+begin
+   nSegmPos:=aPos;
+   nSegmentSort:=aSort;
+end;
+
+@ \node{Implicitly qualified segments.} When we use ``reserved
+variables'' in the qualifying segment, we can suppress the type
+ascription (i.e., the ``\texttt{being} $\langle\textit{Type}\rangle$'').
+This makes the typing \emph{implicit}. Hence the
+name \emph{implicitly} qualified segments (the types are implicitly given).
+
+@<Qualified segment (abstract syntax tree)@>=
+   ImplicitlyQualifiedSegmentPtr = ^ImplicitlyQualifiedSegmentObj; @/
+   ImplicitlyQualifiedSegmentObj = object(QualifiedSegmentObj) @t\1@> @/
+      nIdentifier: VariablePtr; @/
+      constructor Init(const aPos:Position;@+ aIdentifier:VariablePtr); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end;
+
+@ \node{Constructor.}
+The constructors and destructors for implicitly qualified segments
+are straightforward.
+
+@<Qualified segment AST constructor@>=
+constructor ImplicitlyQualifiedSegmentObj.Init(const aPos:Position;@+ aIdentifier:VariablePtr);
+begin
+   inherited Init(aPos,ikImplQualifiedSegm);
+   nIdentifier:=aIdentifier;
+end; @#
+
+destructor ImplicitlyQualifiedSegmentObj.Done;
+begin
+   dispose(nIdentifier,Done);
+end;
+
+@ \node{Explicitly qualified segment.} The other possibility in Mizar
+is that we will have ``explicitly typed variables'' in the qualifying
+segment. The idea is that, in Mizar, we can permit the following
+situation:
+
+\smallbreak
+{\narrower\tt consider x,y,z being set such that \dots\par}
+\smallbreak\noindent%
+This means the three variables $x$, $y$, $z$ are explicitly qualified
+variables with the type ``\texttt{set}''. We represent this using one 
+\\{ExplicitlyQualifiedSegment} object, a vector for the identifiers
+($x$, $y$, $z$) and a pointer to their type (\texttt{set}).
+
+@<Qualified segment (abstract syntax tree)@>=
+   ExplicitlyQualifiedSegmentPtr = ^ExplicitlyQualifiedSegmentObj; @/
+   ExplicitlyQualifiedSegmentObj = object(QualifiedSegmentObj) @t\1@> @/
+      nIdentifiers: PList; { of identifier numbers }
+      nType: TypePtr; @/
+      constructor Init(const aPos:Position;@+ aIdentifiers:PList;@+ aType:TypePtr); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end
+
+@ The constructors and destructors for explicitly qualified segments
+are straightforward.
+
+@<Qualified segment AST constructor@>=
+constructor ExplicitlyQualifiedSegmentObj.Init(const aPos:Position;
+@t\hskip17.3333pc @>  aIdentifiers:PList;
+                         @t\hskip17.3333pc @>  aType:TypePtr);
+begin
+   inherited Init(aPos,ikExplQualifiedSegm);
+   nIdentifiers:=aIdentifiers;
+   nType:=aType;
+end; @#
+
+destructor ExplicitlyQualifiedSegmentObj.Done;
+begin
+   dispose(nIdentifiers,Done);
+   dispose(nType,Done);
+end;
+
+@ \node{Attributes.}
+Attributes can have arguments \emph{preceding} it.
+The relevant part of the Mizar grammar, I think, is:
+
+{\advance\leftskip by2pc\obeylines\tt
+Adjective-Cluster = \LB\ Adjective \RB\ .
+
+Adjective = [ "non" ] [ Adjective-Arguments ] Attribute-Symbol .
+
+\par}
+
+@<Adjective expression (abstract syntax tree)@>=
+   AdjectiveSort = (wsNegatedAdjective,wsAdjective); @#
+
+   AdjectiveExpressionPtr = ^AdjectiveExpressionObj; @/
+   AdjectiveExpressionObj = object(MObject) @t\1@> @/
+      nAdjectivePos: Position; @/
+      nAdjectiveSort: AdjectiveSort; @/
+      constructor Init(const aPos:Position;@+ aSort: AdjectiveSort); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end
+
+@ @<Adjective expression AST constructor@>=
+constructor AdjectiveExpressionObj.Init(const aPos:Position;@+ aSort: AdjectiveSort);
+begin
+   nAdjectivePos:=aPos;
+   nAdjectiveSort:=aSort;
+end;
+
+destructor AdjectiveExpressionObj.Done;
+begin
+end;
+
+@ \node{Negated adjective.} We represent an adjective using the EBNF
+grammar (c.f., the WSM article-related function \\{InWSMizFileObj.Read\_Adjective:AdjectiveExpressionPtr}):
+
+\smallbreak
+{\advance\leftskip by2pc\obeylines\tt
+Negated-Adjective ::= "non" Adjective-Expr;
+Positive-Adjective ::= [Adjective-Arguments] Attribute-Symbol;
+Adjective-Expr ::= Negated-Adjective \pipe\ Positive-Adjective;
+\par}
+\smallbreak\noindent%
+Hence we only really need a pointer to the ``adjective being negated''.
+
+@<Negated adjective expression (abstract syntax tree)@>=
+   NegatedAdjectivePtr = ^NegatedAdjectiveObj; @/
+   NegatedAdjectiveObj = object(AdjectiveExpressionObj) @t\1@> @/
+      nArg: AdjectiveExpressionPtr; { of TermPtr, visible arguments }
+      constructor Init(const aPos:Position;@+ aArg:AdjectiveExpressionPtr); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Negated adjective AST constructor@>=
+constructor NegatedAdjectiveObj.Init(const aPos:Position;@+ aArg:AdjectiveExpressionPtr);
+begin
+   inherited Init(aPos,wsNegatedAdjective);
+   nArg:=aArg;
+end;
+
+destructor NegatedAdjectiveObj.Done;
+begin
+   dispose(nArg,Done);
+end;
+
+@ \node{Adjective objects.} \Ithink{This is the preferred node for later
+intermediate representations for attributes, since \\{nNegated} is a
+field in the class.}
+
+@<Adjective (abstract syntax tree)@>=
+   AdjectivePtr = ^AdjectiveObj; @/
+   AdjectiveObj = object(AdjectiveExpressionObj) @t\1@> @|@/
+      nAdjectiveSymbol: integer; @/
+      nNegated: boolean; @/
+      nArgs: PList; { of TermPtr, visible arguments }
+      constructor Init(const aPos:Position;@+ aAdjectiveNr: integer@+;@+ aArgs:PList); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Adjective AST constructor@>=
+constructor AdjectiveObj.Init(const aPos:Position;@+ aAdjectiveNr:integer;@+ aArgs:PList);
+begin
+   inherited Init(aPos,wsAdjective);
+   nAdjectiveSymbol:=aAdjectiveNr;
+   nArgs:=aArgs;
+end;
+
+destructor AdjectiveObj.Done;
+begin
+   dispose(nArgs,Done);
+end;
+
+@* [S] Terms (abstract syntax tree).
+We have an abstract base class for terms, along with the ``sorts''
+(syntactic subclasses) allowed. This allows, e.g., formulas, to refer
+to terms without knowing the sort of term involved. The UML class
+diagram for term:
+\medbreak
+\figure
+\centerline{\graphics{img/classdiagram-0}}
+%\centerline{\includegraphics{img/classdiagram-0.pdf}}
+% \epsfbox{img/termclassUML.eps} % for non-PDF output
+\caption{UML class diagram for abstract syntax tree for terms.}
+\endfigure
+\medbreak\noindent%
+The arrows indicate inheritance, pointing from the subclass to the
+parent superclass. The abstract base class \\{TermExpression} is
+italicized, but it is so difficult to distinguish we have colored it
+yellow.
+
+N{\sc OTE}: the class UML diagram may be missing a few descendents
+of \\{TermExpression}, but it contains the important subclasses which
+I could fit into it.
+
+\label{uml-class-diagram-for-term-ast}
+
+@<Abstract base class for terms@>=
+   TermSort = (wsErrorTerm,
+               wsPlaceholderTerm,
+               wsNumeralTerm,
+               wsSimpleTerm,
+               wsPrivateFunctorTerm,
+               wsInfixTerm,
+               wsCircumfixTerm,
+               wsAggregateTerm,
+               wsForgetfulFunctorTerm,
+               wsInternalForgetfulFunctorTerm,
+               wsSelectorTerm,
+               wsInternalSelectorTerm,
+               wsQualificationTerm,
+               wsGlobalChoiceTerm,
+               wsSimpleFraenkelTerm,
+               wsFraenkelTerm,
+               wsItTerm,
+               wsExactlyTerm
+              );
+
+   TermPtr = ^TermExpressionObj; @/
+   TermExpressionObj = object(MObject) @/
+      nTermSort: TermSort; @/
+      nTermPos: Position; @/
+   end
+
+@
+The grammar for term expressions in Mizar as stated in \texttt{syntax.txt}:
+
+{\advance\leftskip by2pc\obeylines\tt
+Term-Expression = "(" Term-Expression ")" 
+\quad\pipe\ [ Arguments ] Functor-Symbol [ Arguments ] 
+\quad\pipe\ Left-Functor-Bracket Term-Expression-List Right-Functor-Bracket 
+\quad\pipe\ Functor-Identifier "(" [ Term-Expression-List ] ")" 
+\quad\pipe\ Structure-Symbol "(\#" Term-Expression-List "\#)" 
+\quad\pipe\ "the" Structure-Symbol "of" Term-Expression 
+\quad\pipe\ Variable-Identifier 
+\quad\pipe\ "\LB" Term-Expression \LB\ Postqualification \RB\ ":" Sentence "\RB"
+\quad\pipe\ "the" "set" "of" "all" Term-Expression \LB\ Postqualification \RB
+\quad\pipe\ Numeral 
+\quad\pipe\ Term-Expression "qua" Type-Expression 
+\quad\pipe\ "the" Selector-Symbol "of" Term-Expression 
+\quad\pipe\ "the" Selector-Symbol 
+\quad\pipe\ "the" Type-Expression 
+\quad\pipe\ Private-Definition-Parameter 
+\quad\pipe\ "it" .
+\par}
+\smallbreak\noindent%
+But I think it might be clearer if we view it using the equivalent
+grammar:
+
+
+{\advance\leftskip by2pc\obeylines\tt
+Term-Expression = "(" Term-Expression ")" 
+\quad\pipe\ [ Arguments ] Functor-Symbol [ Arguments ] 
+\quad\pipe\ Left-Functor-Bracket Term-Expression-List Right-Functor-Bracket 
+\quad\pipe\ Functor-Identifier "(" [ Term-Expression-List ] ")" 
+\quad\pipe\ Aggregate-Term
+\quad\pipe\ Forgetful-Functor-Term 
+\quad\pipe\ Variable-Identifier 
+\quad\pipe\ Fraenkel-Term
+\quad\pipe\ Numeral 
+\quad\pipe\ Qualified-Term 
+\quad\pipe\ Selector-Functor 
+\quad\pipe\ Internal-Selector-Functor 
+\quad\pipe\ Choice-Term 
+\quad\pipe\ Private-Definition-Parameter 
+\quad\pipe\ "it" .
+Aggregate-Term = Structure-Symbol "(\#" Term-Expression-List "\#)" .
+Choice-Term = "the" Type-Expression.
+Forgetful-Functor-Term = "the" Structure-Symbol "of" Term-Expression.
+Fraenkel-Term = "\LB" Term-Expression \LB Postqualification\RB\ ":" Sentence "\RB"
+\quad\pipe\ "the" "set" "of" "all" Term-Expression \LB\ Postqualification \RB.
+Internal-Selector-Functor = "the" Selector-Symbol.
+Selector-Functor = "the" Selector-Symbol "of" Term-Expression.
+Qualified-Term = Term-Expression "qua" Type-Expression.
+\par}
+
+@ Class structure for this syntax tree.
+
+@<Classes for terms (abstract syntax tree)@>=
+   { Terms }
+   @<Simple term (abstract syntax tree)@>; 
+
+   @<Placeholder term (abstract syntax tree)@>; 
+
+   @<Numeral term (abstract syntax tree)@>; 
+
+   @<Infix term (abstract syntax tree)@>; 
+
+   @<Terms with arguments (abstract syntax tree)@>; 
+
+   @<Circumfix term (abstract syntax tree)@>; 
+
+   @<Private functor term (abstract syntax tree)@>; 
+
+   @<One-argument term (abstract syntax tree)@>; 
+
+   @<Selector term (abstract syntax tree)@>; 
+
+   @<Internal selector term (abstract syntax tree)@>; 
+
+   @<Aggregate term (abstract syntax tree)@>; 
+
+   @<Forgetful functor (abstract syntax tree)@>; 
+
+   @<Internal forgetful functors (abstract syntax tree)@>; 
+
+   @<Fraenkel terms (abstract syntax tree)@>; 
+
+   @<Exactly term (abstract syntax tree)@>; 
+
+   @<Qualified term (abstract syntax tree)@>; 
+
+   @<Choice term (abstract syntax tree)@>; 
+
+   @<``It'' term (abstract syntax tree)@>; 
+
+   @<Incorrect term (abstract syntax tree)@>; 
+
+@ \node{Simple terms.} Mizar describes variables \emph{as terms} as
+a \\{SimpleTerm}.
+
+\label{ast:SimpleTerm}
+
+@<Simple term (abstract syntax tree)@>=
+   SimpleTermPtr = ^SimpleTermObj; @/
+   SimpleTermObj = object(TermExpressionObj) @t\1@> @/
+      nIdent: integer; { identifier number }
+      constructor Init(const aPos:Position; @+ aIdentNr:integer); @t\2\2\2@>
+   end
+
+@ \node{Constructors.}
+
+@<Implementing term AST@>=
+constructor SimpleTermObj.Init(const aPos:Position;@+ aIdentNr:integer);
+begin
+   nTermPos:=aPos;
+   nTermSort:=wsSimpleTerm;
+   nIdent:=aIdentNr;
+end;
+
+@ \node{Placeholder terms.} These are the parameters ``\texttt{\$1}'',
+``\texttt{\$2}'', etc., which appear in a private functor
+``\texttt{deffunc Foo(object) = \dots}''.
+
+@<Placeholder term (abstract syntax tree)@>=
+   PlaceholderTermPtr = ^PlaceholderTermObj; {placeholder}
+   PlaceholderTermObj = object(TermExpressionObj) @t\1@> @/
+      nLocusNr: integer; { \$1, ... }
+      constructor Init(const aPos:Position;@+ aLocusNr:integer); @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing term AST@>=
+constructor PlaceholderTermObj.Init(const aPos:Position;@+ aLocusNr:integer);
+begin
+   nTermPos:=aPos;
+   nTermSort:=wsPlaceholderTerm;
+   nLocusNr:=aLocusNr;
+end;
+
+@ \node{Numeral terms.} Mizar can handle 32-bit integers. If we wanted
+to extend this to, say, arbitrary precision arithmetic, then we would
+want to modify this class (and a few other places).
+
+@<Numeral term (abstract syntax tree)@>=
+   NumeralTermPtr = ^NumeralTermObj; @/
+   NumeralTermObj = object(TermExpressionObj) @t\1@> @/
+      nValue: integer; @/
+      constructor Init(const aPos:Position;@+ aValue:integer); @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing term AST@>=
+constructor NumeralTermObj.Init(const aPos:Position;@+ aValue:integer);
+begin
+   nTermPos:=aPos;
+   nTermSort:=wsNumeralTerm;
+   nValue:=aValue;
+end;
+
+@ \node{Infix terms.} When we have infix binary operators, they are terms
+with arguments on both sides of it. For example $x + 2$ will have
+``+'' be an infix term with arguments $(x, 2)$.
+
+We \emph{could} permit multiple arguments on the left-hand side (and
+on the right-hand side), but they are comma-separated in Mizar. This
+could happen in finite group theory, for example,
+``\texttt{p -signalizer\_over H,G}'' has two arguments on the right
+but only one argument on the left.
+
+@<Infix term (abstract syntax tree)@>=
+   InfixTermPtr = ^InfixTermObj; @/
+   InfixTermObj = object(TermExpressionObj) @t\1@> @/
+      nFunctorSymbol: integer; @/
+      nLeftArgs,nRightArgs: PList; @/
+      constructor Init(const aPos:Position;@+ aFunctorNr:integer; @+ aLeftArgs,aRightArgs:PList); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing term AST@>=
+constructor InfixTermObj.Init(const aPos:Position;
+@t\hskip11.3333pc@> aFunctorNr:integer;
+@t\hskip11.3333pc@> aLeftArgs,aRightArgs:PList);
+begin
+   nTermPos:=aPos;
+   nTermSort:=wsInfixTerm;
+   nFunctorSymbol:=aFunctorNr;
+   nLeftArgs:=aLeftArgs;
+   nRightArgs:=aRightArgs;
+end; @#
+
+destructor InfixTermObj.Done;
+begin
+   dispose(nLeftArgs,Done);
+   dispose(nRightArgs,Done);
+end;
+
+@ \node{Terms with arguments.} This class seems to be used only
+internally to the \texttt{abstract\_syntax.pas} module. Recalling the
+UML class diagram (\section\xref{uml-class-diagram-for-term-ast}), we
+remember there are three sublcasses to this: private functor terms
+(which appear in Mizar when we use ``\texttt{deffunc F(...) = \dots}''),
+circumfix (``bracketed'') terms, and aggregate terms (when we
+construct an instance of a structure).
+
+@<Terms with arguments (abstract syntax tree)@>=
+   TermWithArgumentsPtr = ^TermWithArgumentsObj; @/
+   TermWithArgumentsObj = object(TermExpressionObj) @t\1@> @/
+      nArgs: PList; @/
+      constructor Init(const aPos:Position;@+ aKind:TermSort;@+ aArgs:PList); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing term AST@>=
+constructor TermWithArgumentsObj.Init(const aPos:Position;@+ aKind:TermSort;@+ aArgs:PList);
+begin
+   nTermPos:=aPos;
+   nTermSort:=aKind;
+   nArgs:=aArgs;
+end; @#
+
+destructor TermWithArgumentsObj.Done;
+begin
+   dispose(nArgs,Done);
+end;
+
+
+@ \node{Circumfix terms.} We can introduce different types of brackets
+in Mizar. For example, for groups, we have the commutator of group
+elements \texttt{[.x,y.]}. These ``bracketed terms'' are referred to
+as circumfix terms.
+
+@^Bracket@>
+@^Term, Bracket@>
+
+@<Circumfix term (abstract syntax tree)@>=
+   CircumfixTermPtr = ^CircumfixTermObj; @/
+   CircumfixTermObj = object(TermWithArgumentsObj) @t\1@> @/
+      nLeftBracketSymbol,nRightBracketSymbol: integer; @/
+      constructor Init(const aPos:Position;@+ aLeftBracketNr,aRightBracketNr:integer;@+ aArgs:PList); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing term AST@>=
+constructor CircumfixTermObj.Init(const aPos:Position;
+  @t\hskip13.3333pc@>                  aLeftBracketNr,aRightBracketNr:integer;
+  @t\hskip13.3333pc@>                  aArgs:PList);
+begin
+   inherited Init(aPos,wsCircumfixTerm,aArgs);
+   nLeftBracketSymbol:=aLeftBracketNr;
+   nRightBracketSymbol:=aRightBracketNr;
+end; @#
+
+destructor CircumfixTermObj.Done;
+begin
+   dispose(nArgs,Done);
+end;
+
+@ \node{Private functor terms.} We introduce private functor terms in
+Mizar when we have ``{\tt defpred F(\dots) = \dots}''.
+
+@<Private functor term (abstract syntax tree)@>=
+   PrivateFunctorTermPtr = ^PrivateFunctorTermObj; @/
+   PrivateFunctorTermObj = object(TermWithArgumentsObj) @t\1@> @/
+      nFunctorIdent: integer; @/
+      constructor Init(const aPos:Position;@+ aFunctorIdNr:integer;@+ aArgs:PList); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing term AST@>=
+constructor PrivateFunctorTermObj.Init(const aPos:Position;@+ aFunctorIdNr:integer;@+
+                                       aArgs:PList);
+begin
+   inherited Init(aPos,wsPrivateFunctorTerm,aArgs);
+   nFunctorIdent:=aFunctorIdNr;
+end; @#
+
+destructor PrivateFunctorTermObj.Done;
+begin
+   dispose(nArgs,Done);
+end;
+
+@ \node{One-argument terms.} Recalling the UML class diagram for terms
+(\section\xref{uml-class-diagram-for-term-ast}), we remember the class for
+\\{OneArgument} terms are either selector terms (``\texttt{the}
+$\langle\textit{field\/}\rangle$ \texttt{of} $\langle\textit{aggregate\/}\rangle\,$'') or forgetful functors
+(``\texttt{the}
+$\langle\textit{structure\/}\rangle$ \texttt{of} $\langle\textit{aggregate\/}\rangle\,$'').
+
+@<One-argument term (abstract syntax tree)@>=
+   OneArgumentTermPtr = ^OneArgumentTermObj; @/
+   OneArgumentTermObj = object(TermExpressionObj) @t\1@> @/
+      nArg: TermPtr; @/
+      constructor Init(const aPos:Position;@+ aKind:TermSort;@+ aArg:TermPtr); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing term AST@>=
+constructor OneArgumentTermObj.Init(const aPos:Position;@+ aKind:TermSort;@+ aArg:TermPtr);
+begin
+   nTermPos:=aPos;
+   nTermSort:=aKind;
+   nArg:=aArg;
+end; @#
+
+destructor OneArgumentTermObj.Done;
+begin
+   dispose(nArg,Done);
+end;
+
+@ \node{Selector terms.} When we have an aggregate term (i.e., an
+instance of a structure), we want to refer to fields of the
+structure. This is done with selector terms. \Ithink{The selector
+number refers to the position in the underlying tuple of the structure instance.}
+
+@<Selector term (abstract syntax tree)@>=
+   SelectorTermPtr = ^SelectorTermObj; @/
+   SelectorTermObj = object(OneArgumentTermObj) @t\1@> @/
+      nSelectorSymbol: integer; @/
+      constructor Init(const aPos:Position;@+ aSelectorNr:integer;@+ aArg:TermPtr); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing term AST@>=
+constructor SelectorTermObj.Init(const aPos:Position;@+ aSelectorNr:integer;@+ aArg:TermPtr);
+begin
+   inherited Init(Apos,wsSelectorTerm,aArg);
+   nSelectorSymbol:=aSelectorNr;
+end; @#
+
+destructor SelectorTermObj.Done;
+begin
+   dispose(nArg,Done);
+end;
+
+@ \node{Internal selector terms.} An ``internal selector'' term refers
+to the case where we have in Mizar ``\texttt{the} $\langle\textit{selector\/}\rangle\,$''
+treated as a term.
+
+@<Internal selector term (abstract syntax tree)@>=
+   InternalSelectorTermPtr = ^InternalSelectorTermObj; @/
+   InternalSelectorTermObj = object(TermExpressionObj) @t\1@> @/
+      nSelectorSymbol: integer; @/
+      constructor Init(const aPos:Position;@+ aSelectorNr:integer); @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing term AST@>=
+constructor InternalSelectorTermObj.Init(const aPos:Position;@+ aSelectorNr:integer);
+begin
+   nTermPos:=aPos;
+   nTermSort:=wsInternalSelectorTerm;
+   nSelectorSymbol:=aSelectorNr;
+end;
+
+@ \node{Aggregate terms.} When we construct a new instance of a
+structure, well, that's a term. Such terms are called ``aggregate
+terms'' in Mizar.
+
+@<Aggregate term (abstract syntax tree)@>=
+   AggregateTermPtr = ^AggregateTermObj; @/
+   AggregateTermObj = object(TermWithArgumentsObj) @t\1@> @/
+      nStructSymbol: integer; @/
+      constructor Init(const aPos:Position;@+ aStructSymbol:integer;@+ aArgs:PList); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing term AST@>=
+constructor AggregateTermObj.Init(const aPos:Position;@+ aStructSymbol:integer;@+
+                                  aArgs:PList);
+begin
+   inherited Init(aPos,wsAggregateTerm,aArgs);
+   nStructSymbol:=aStructSymbol;
+end; @#
+
+destructor AggregateTermObj.Done;
+begin
+   dispose(nArgs,Done);
+end;
+
+@ \node{Forgetful functors.} When we have structure inheritance in
+Mizar, say structure $B$ extends structure $A$, and we have $b$ being
+an instance of $B$, then we can obtain ``the $A$-object underlying $b$''
+by writing ``\texttt{the A of b}''. This is an example of what Mizar
+calls a ``forgetful functor'' (which is quite the pun).
+
+@<Forgetful functor (abstract syntax tree)@>=
+   ForgetfulFunctorTermPtr = ^ForgetfulFunctorTermObj; @/
+   ForgetfulFunctorTermObj = object(OneArgumentTermObj) @t\1@> @/
+      nStructSymbol: integer; @/
+      constructor Init(const aPos:Position;@+ aStructSymbol:integer;@+ aArg:TermPtr); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing term AST@>=
+constructor ForgetfulFunctorTermObj.Init(const aPos:Position;@+ aStructSymbol:integer;
+   @t\hskip15.75pc @>                                      aArg:TermPtr);
+begin
+   inherited Init(aPos,wsForgetfulFunctorTerm,aArg);
+   nStructSymbol:=aStructSymbol;
+end; @#
+
+destructor ForgetfulFunctorTermObj.Done;
+begin
+   dispose(nArg,Done);
+end;
+
+@ \node{Internal forgetful functors.} When we omit the ``structure instance''
+$b$ in a forgetful functor term --- e.g., when we have ``\texttt{the A}''
+--- then we have an ``internal forgetful functor'' (named analogous to
+internal selectors).
+
+@<Internal forgetful functors (abstract syntax tree)@>=
+   InternalForgetfulFunctorTermPtr = ^InternalForgetfulFunctorTermObj; @/
+   InternalForgetfulFunctorTermObj = object(TermExpressionObj) @t\1@> @/
+      nStructSymbol: integer; @/
+      constructor Init(const aPos:Position;@+ aStructSymbol:integer); @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing term AST@>=
+constructor InternalForgetfulFunctorTermObj.Init(const aPos:Position;@+ aStructSymbol:integer);
+begin
+   nTermPos:=aPos;
+   nTermSort:= wsInternalForgetfulFunctorTerm;
+   nStructSymbol:=aStructSymbol;
+end;
+
+@ \node{Simple Fraenkel terms.} Fraenkel terms are set-builder
+notation in Mizar. But ``simple'' Fraenkel terms occurs when we have
+``\texttt{the set of all $\langle\textit{term expr\/}\rangle\,$}''.
+
+@<Fraenkel terms (abstract syntax tree)@>=
+   SimpleFraenkelTermPtr = ^SimpleFraenkelTermObj; @/
+   SimpleFraenkelTermObj = object(TermExpressionObj) @t\1@> @/
+      nPostqualification: PList; { of segments }
+      nSample: TermPtr; @/
+      constructor Init(const aPos:Position;@+ aPostqual:PList;@+ aSample:TermPtr); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end;
+
+@ \node{Constructor.}
+
+@<Implementing term AST@>=
+constructor SimpleFraenkelTermObj.Init(const aPos:Position;@+ aPostqual:PList;@+ aSample:TermPtr);
+begin
+   nTermPos:=aPos;
+   nTermSort:=wsSimpleFraenkelTerm;
+   nPostqualification:=aPostqual;
+   nSample:=aSample;
+end; @#
+
+destructor SimpleFraenkelTermObj.Done;
+begin
+   dispose(nSample,Done);
+end;
+
+@ \node{Fraenkel terms.} Fraenkel terms are sets given by set-builder
+notation, usually they look like
+$$\{f(\vec{t})\hbox{\texttt{\ where\ }} \vec{t}\hbox{\texttt{\ being\ }}\vec{T} \texttt{\ :\ } P[\vec{t}]\}$$
+This is technically a higher-order object (look, it takes a functor
+$f$ and a predicate $P$).
+
+@^Fraenkel term@>
+@^Term, Fraenkel@>
+
+@<Fraenkel terms (abstract syntax tree)@>=
+   FraenkelTermPtr = ^FraenkelTermObj; @/
+   FraenkelTermObj = object(SimpleFraenkelTermObj) @t\1@> @/
+      nFormula: FormulaPtr; @/
+      constructor Init(const aPos:Position;@+ aPostqual:PList;@+ aSample:TermPtr;@+ aFormula:FormulaPtr); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing term AST@>=
+constructor FraenkelTermObj.Init(const aPos:Position;
+  @t\hskip12.75pc@>                 aPostqual:PList;
+  @t\hskip12.75pc@>                 aSample:TermPtr;
+  @t\hskip12.75pc@>                 aFormula:FormulaPtr);
+begin
+   nTermPos:=aPos;
+   nTermSort:=wsFraenkelTerm;
+   nPostqualification:=aPostqual;
+   nSample:=aSample;
+   nFormula:=aFormula;
+end; @#
+
+destructor FraenkelTermObj.Done;
+begin
+   dispose(nSample,Done);
+   dispose(nPostqualification,Done);
+   dispose(nFormula,Done);
+end;
+
+@ \node{Qualified terms.} We may wish to explicitly type cast a term
+(e.g., ``\texttt{term qua newType}''),
+which is what Mizar calls a ``qualified term''.
+
+@<Qualified term (abstract syntax tree)@>=
+   QualifiedTermPtr = ^QualifiedTermObj; @/
+   QualifiedTermObj = object(ExactlyTermObj) @t\1@> @/
+      nQualification: TypePtr; @/
+      constructor Init(const aPos:Position;@+ aSubject:TermPtr;@+ aType:TypePtr); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing term AST@>=
+constructor QualifiedTermObj.Init(const aPos:Position;@+ aSubject:TermPtr;@+ aType:TypePtr);
+begin
+   nTermPos:=aPos;
+   nTermSort:=wsQualificationTerm;
+   nSubject:=aSubject;
+   nQualification:=aType;
+end; @#
+
+destructor QualifiedTermObj.Done;
+begin
+   dispose(nSubject,Done);
+   dispose(nQualification,Done);
+end;
+
+@ \node{Exactly terms.} This is the base class for qualified terms. It
+does not appear to be used anywhere outside the abstract syntax module.
+
+@<Exactly term (abstract syntax tree)@>=
+   ExactlyTermPtr = ^ExactlyTermObj; @/
+   ExactlyTermObj = object(TermExpressionObj) @t\1@> @/
+      nSubject: TermPtr; @/
+      constructor Init(const aPos:Position;@+ aSubject:TermPtr); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing term AST@>=
+constructor ExactlyTermObj.Init(const aPos:Position;@+ aSubject:TermPtr);
+begin
+   nTermPos:=aPos;
+   nTermSort:=wsExactlyTerm;
+   nSubject:=aSubject;
+end; @#
+
+destructor ExactlyTermObj.Done;
+begin
+   dispose(nSubject,Done);
+end;
+
+@ \node{Choice terms.} This refers to ``\texttt{the} $\langle\textit{type}\rangle$''
+terms. It is a ``global choice term'' of sorts, except it ``operates''
+on soft types instead of arbitrary predicates.
+
+@^Choice, Axiom of@>
+@^Choice operator@>
+@:the}{\texttt{the} (Choice operator)@>
+
+@<Choice term (abstract syntax tree)@>=
+   ChoiceTermPtr = ^ChoiceTermObj; @/
+   ChoiceTermObj = object(TermExpressionObj) @t\1@> @/
+      nChoiceType: TypePtr; @/
+      constructor Init(const aPos:Position;@+ aType:TypePtr); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing term AST@>=
+constructor ChoiceTermObj.Init(const aPos:Position;@+ aType:TypePtr);
+begin
+   nTermPos:=aPos;
+   nTermSort:=wsGlobalChoiceTerm;
+   nChoiceType:=aType;
+end; @#
+
+destructor ChoiceTermObj.Done;
+begin
+   dispose(nChoiceType,Done);
+end;
+
+@ \node{It terms.} When we define a new mode [type] or functors
+[terms], Mizar introduces an anaphoric keyword ``\texttt{it}'' referring to 
+an example of the mode (resp., to the term being defined). Here I
+borrow the scary phrase ``anaphoric'' from Lisp macros, so blame Paul
+Graham for this pretentiousness.
+
+@^Graham, Paul@>
+@:it}{\texttt{it}, reserved word@>
+@^Anaphora@>
+
+@<``It'' term (abstract syntax tree)@>=
+   ItTermPtr = ^ItTermObj; @/
+   ItTermObj = object(TermExpressionObj) @t\1@> @/
+      constructor Init(const aPos:Position); @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing term AST@>=
+constructor ItTermObj.Init(const aPos:Position);
+begin
+   nTermPos:=aPos;
+   nTermSort:=wsItTerm;
+end;
+
+@ \node{Incorrect terms.} Generically, when we run into an error of
+some kind, we represent the term with an \\{Incorrect} term
+instance. This will allow Mizar to continue working when the user
+goofed.
+
+@<Incorrect term (abstract syntax tree)@>=
+   IncorrectTermPtr = ^IncorrectTermObj; @/
+   IncorrectTermObj = object(TermExpressionObj) @t\1@> @/
+      constructor Init(const aPos:Position); @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing term AST@>=
+constructor IncorrectTermObj.Init(const aPos:Position);
+begin
+   nTermPos:=aPos;
+   nTermSort:=wsErrorTerm;
+end;
+
+@* [S] Types (abstract syntax tree).
+The grammar for Mizar types looks like:
+
+{\advance\leftskip by2pc\obeylines\tt
+Type-Expression = "(" Radix-Type ")" 
+\quad\pipe\ Adjective-Cluster Type-Expression 
+\quad\pipe\ Radix-Type .
+
+Structure-Type-Expression =
+\quad\phantom{\pipe} "(" Structure-Symbol ["over" Term-Expression-List] ")" 
+\quad\pipe\ Adjective-Cluster Structure-Symbol [ "over" Term-Expression-List ].
+
+Radix-Type = Mode-Symbol [ "of" Term-Expression-List ] 
+\quad\pipe\ Structure-Symbol [ "over" Term-Expression-List ] .
+
+Type-Expression-List = Type-Expression \LB\ "," Type-Expression \RB\ .
+\par}
+\medbreak\noindent%
+So there are several main sources of modes [types]: structures,
+primitive types (like ``\texttt{set}'' and ``\texttt{object}''), and
+affixing adjectives to types.
+
+For readers who are unfamiliar with types in Mizar, they are ``soft types''.
+What does this mean? Well, we refer the reader to
+Free Wiedijk's ``Mizar's Soft Type System'' (in K.\ Schneider and J.\
+Brandt, eds., \emph{Theorem Proving in Higher Order Logics. TPHOLs 2007},
+Springer, \doi{10.1007/978-3-540-74591-4_28}).
+Essentially, a type ascription in Mizar of the form ``\texttt{for x
+being Foo st P[x] holds Q[x]}'', this is equivalent to \texttt{Foo}
+being a unary predicate and the formula in first-order logic is
+``$\forall x\ldotp\texttt{Foo}[x]\land Q[x]\implies P[x]$''.
+
+@^Wiedijk, Freek@>
+@^Type, Soft@>
+@^Soft type@>
+
+@
+We have an abstract base class for types.
+
+@<Abstract base class for types@>=
+   TypeSort = (wsErrorType,
+               wsStandardType,
+               wsStructureType,
+               wsClusteredType,
+               wsReservedDscrType
+              );
+
+   { Initial structures }
+
+   TypePtr = ^TypeExpressionObj; @/
+   TypeExpressionObj = object(MObject) @/
+      nTypeSort: TypeSort; @/
+      nTypePos: Position; @/
+   end
+
+@ \node{Radix type.} A ``radix type'' refers to any type of the form
+``\texttt{$\langle\textit{RadixType\/}\rangle$ of $T_{1}$, \dots, $T_{n}$}''.
+This usually appears when defining a new expandable mode, where we
+have:
+
+{\narrower
+``\texttt{mode $\langle\textit{Expandable\ Mode\/}\rangle$ is 
+$\langle\textit{Adjective\/}_{1}\rangle$ \dots
+$\langle\textit{Adjective\/}_{n}\rangle$ 
+$\langle\textit{Radix\ Type\/}\rangle\,$}''\par}
+
+\noindent%
+This appears to be used only in definitions.
+
+@<Classes for type (abstract syntax tree)@>=
+   { Types }
+
+   RadixTypePtr = ^RadixTypeObj; @/
+   RadixTypeObj = object(TypeExpressionObj) @t\1@> @/
+      nArgs: PList; { of }
+      constructor Init(const aPos:Position;@+ aKind: TypeSort;@+ aArgs:PList); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end;
+
+@ \node{Constructor.}
+
+@<Implementing type AST@>=
+constructor RadixTypeObj.Init(const aPos:Position;@+ aKind:TypeSort;@+ aArgs:PList);
+begin
+   nTypePos:=aPos;
+   nTypeSort:=aKind;
+   nArgs:=aArgs;
+end;
+
+destructor RadixTypeObj.Done;
+begin
+   dispose(nArgs,Done);
+end;
+
+@ \node{Standard type.} When we want to refer to an expandable mode in
+a Mizar formula, then it is represented by a ``standard type''. This
+contrasts it with ``clustered types'' (i.e., a type stacked with
+adjectives) and ``structure types''.
+
+@^Type, Standard@>
+
+@<Classes for type (abstract syntax tree)@>=
+   StandardTypePtr = ^StandardTypeObj; @/
+   StandardTypeObj = object(RadixTypeObj) @t\1@> @/
+      nModeSymbol: integer; @/
+      constructor Init(const aPos:Position;@+ aModeSymbol:integer;@+ aArgs:PList); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end;
+
+@ \node{Constructor.}
+
+@<Implementing type AST@>=
+constructor StandardTypeObj.Init(const aPos:Position;@+ aModeSymbol:integer;@+ aArgs:PList);
+begin
+   inherited Init(aPos,wsStandardType,aArgs);
+   nModeSymbol:=aModeSymbol;
+end; @#
+
+destructor StandardTypeObj.Done;
+begin
+   inherited Done;
+end;
+
+@ \node{Structure type.} When we define a new structure, we are really
+introducing a new type. \Ithink{The \\{aArgs} tracks its parent
+structures and parameter types.} The structure type extends the
+RadixType class because RadixType instances can be ``stacked with adjectives''.
+
+@<Classes for type (abstract syntax tree)@>=
+   StructTypePtr = ^StructTypeObj; @/
+   StructTypeObj = object(RadixTypeObj) @t\1@> @/
+      nStructSymbol: integer; @/
+      constructor Init(const aPos:Position;@+ aStructSymbol:integer;@+ aArgs:PList); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end;
+
+@ \node{Constructor.}
+
+@<Implementing type AST@>=
+constructor StructTypeObj.Init(const aPos:Position;@+ aStructSymbol:integer;@+ aArgs:PList);
+begin
+   inherited Init(aPos,wsStructureType,aArgs);
+   nStructSymbol:=aStructSymbol;
+end; @#
+
+destructor StructTypeObj.Done;
+begin
+   inherited Done;
+end;
+
+@ \node{Clustered type.} The clustered type describes the situation
+where we accumulate \\{aCluster} of adjectives atop \\{aType}.
+
+@<Classes for type (abstract syntax tree)@>=
+   ClusteredTypePtr = ^ClusteredTypeObj; @/
+   ClusteredTypeObj = object(TypeExpressionObj) @t\1@> @/
+      nAdjectiveCluster: PList; @/
+      nType: TypePtr; @/
+      constructor Init(const aPos:Position;@+ aCluster:PList;@+ aType:TypePtr); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end;
+
+@ \node{Constructor.}
+
+@<Implementing type AST@>=
+constructor ClusteredTypeObj.Init(const aPos:Position;@+ aCluster:PList;@+ aType:TypePtr);
+begin
+   nTypePos:=aPos;
+   nTypeSort:=wsClusteredType;
+   nAdjectiveCluster:=aCluster;
+   nType:=aType;
+end; @#
+
+destructor ClusteredTypeObj.Done;
+begin
+   dispose(nAdjectiveCluster,Done);
+   dispose(nType,Done);
+end;
+
+@ \node{Incorrect type.} We want Mizar to be resilient against typing
+errors, so we have an \\{IncorrectType} node for the syntax tree. The
+alternative would be to crash upon error.
+
+@<Classes for type (abstract syntax tree)@>=
+   IncorrectTypePtr = ^IncorrectTypeObj; @/
+   IncorrectTypeObj = object(TypeExpressionObj) @t\1@> @/
+      constructor Init(const aPos:Position); @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing type AST@>=
+constructor IncorrectTypeObj.Init(const aPos:Position);
+begin
+   nTypePos:=aPos;
+   nTypeSort:=wsErrorType;
+end;
+
+@* [S] Formulas (abstract syntax tree).
+We have an abstract base class for formulas.
+
+@<Abstract base class for formulas@>=
+   FormulaSort = (wsErrorFormula,
+                  wsThesis,
+                  wsContradiction,
+                  wsRightSideOfPredicativeFormula,
+                  wsPredicativeFormula,
+                  wsMultiPredicativeFormula,
+                  wsPrivatePredicateFormula,
+                  wsAttributiveFormula,
+                  wsQualifyingFormula,
+                  wsUniversalFormula,
+                  wsExistentialFormula,
+                  wsNegatedFormula,
+                  wsConjunctiveFormula,
+                  wsDisjunctiveFormula,
+                  wsConditionalFormula,
+                  wsBiconditionalFormula,
+                  wsFlexaryConjunctiveFormula,
+                  wsFlexaryDisjunctiveFormula
+                 );
+
+   FormulaPtr = ^FormulaExpressionObj; @/
+   FormulaExpressionObj = object(MObject) @/
+      nFormulaSort: FormulaSort; @/
+      nFormulaPos: Position; @/
+   end
+
+@
+The syntax for Mizar formulas looks like:
+
+%{\advance\leftskip by2pc\obeylines\ninett
+{\obeylines\tt
+Formula-Expression = "(" Formula-Expression ")" 
+\quad\pipe\  Atomic-Formula-Expression 
+\quad\pipe\  Quantified-Formula-Expression 
+\quad\pipe\  Formula-Expression "\AM" Formula-Expression 
+\quad\pipe\  Formula-Expression "\AM" "..." "\AM" Formula-Expression 
+\quad\pipe\  Formula-Expression "or" Formula-Expression 
+\quad\pipe\  Formula-Expression "or" "..." "or" Formula-Expression 
+\quad\pipe\  Formula-Expression "implies" Formula-Expression 
+\quad\pipe\  Formula-Expression "iff" Formula-Expression 
+\quad\pipe\  "not" Formula-Expression 
+\quad\pipe\  "contradiction" 
+\quad\pipe\  "thesis" .
+
+Atomic-Formula-Expression =
+{\advance\leftskip1.5pc
+[Term-Expression-List] [("does" \pipe\ "do") "not"] Predicate-Symbol \rlap{[Term-Expression-List] }
+\LB[("does" \pipe\  "do") "not"] Predicate-Symbol Term-Expression-List\RB\par}
+\quad\pipe\  Predicate-Identifier "[" [ Term-Expression-List ] "]" 
+\quad\pipe\  Term-Expression "is" Adjective \LB\ Adjective \RB 
+\quad\pipe\  Term-Expression "is" Type-Expression .
+
+Quantified-Formula-Expression =
+\quad\qquad"for" Qualified-Variables
+\quad\qquad[ "st" Formula-Expression ]
+\quad\qquad( "holds" Formula-Expression \pipe\  Quantified-Formula-Expression ) 
+\quad\pipe\  "ex" Qualified-Variables "st" Formula-Expression .
+\par}
+
+@ \node{Right-side of predicative formula.}
+
+@<Classes for formula (abstract syntax tree)@>=
+   { Formulas }
+
+   RightSideOfPredicativeFormulaPtr = ^RightSideOfPredicativeFormulaObj; @/
+   RightSideOfPredicativeFormulaObj = object(FormulaExpressionObj) @t\1@> @/
+      nPredNr: integer; @/
+      nRightArgs: PList; @/
+      constructor Init(const aPos:Position;@+ aPredNr:integer;@+ aRightArgs:PList); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing formula AST@>=
+constructor RightSideOfPredicativeFormulaObj.Init(const aPos:Position;
+@t\hskip19pc@> aPredNr:integer;
+@t\hskip19pc@> aRightArgs:PList);
+begin
+   nFormulaPos:=aPos;
+   nFormulaSort:=wsRightSideOfPredicativeFormula;
+   nPredNr:=aPredNr;
+   nRightArgs:=aRightArgs;
+end; @#
+
+destructor RightSideOfPredicativeFormulaObj.Done;
+begin
+   dispose(nRightArgs,Done);
+end;
+
+@ \node{Predicative formula.}
+A ``predicative'' formula refers to a formula involving predicates. A
+predicate will have a list of terms $\vec{t}$ it expects as arguments, as well
+as two numbers $\ell$, $r$ such that $t_{1},\dots,t_{\ell}$ are the
+arguments to its left, and $t_{\ell+1}$, \dots, $t_{\ell+r}$ are on
+the right. When $\ell=0$, all arguments are on the right; and when
+$r=0$, all arguments are on the left.
+
+@<Classes for formula (abstract syntax tree)@>=
+   PredicativeFormulaPtr = ^PredicativeFormulaObj; @/
+   PredicativeFormulaObj = object(RightSideOfPredicativeFormulaObj) @t\1@> @/
+      nLeftArgs: PList; @/
+      constructor Init(const aPos:Position;@+ aPredNr:integer;@+ aLeftArgs,aRightArgs:PList); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing formula AST@>=
+constructor PredicativeFormulaObj.Init(const aPos:Position;
+@t\hskip14.6667pc@> aPredNr:integer;
+@t\hskip14.6667pc@> aLeftArgs,aRightArgs:PList);
+begin
+   nFormulaPos:=aPos;
+   nFormulaSort:=wsPredicativeFormula;
+   nPredNr:=aPredNr;
+   nLeftArgs:=aLeftArgs;
+   nRightArgs:=aRightArgs;
+end; @#
+
+destructor PredicativeFormulaObj.Done;
+begin
+   dispose(nLeftArgs,Done);
+   dispose(nRightArgs,Done);
+end;
+
+@ \node{Multi-predicative formula.}
+The Working Mathematician writes things like ``$1\leq i\leq\magnitude{T}$''
+and Mizar wants to support this. Multi-predicative formulas are of
+this form ``\texttt{1 <= i <= len T}''. This occurs
+in \texttt{VECTSP13}, for example.
+
+@<Classes for formula (abstract syntax tree)@>=
+   MultiPredicativeFormulaPtr = ^MultiPredicativeFormulaObj; @/
+   MultiPredicativeFormulaObj = object(FormulaExpressionObj) @t\1@> @/
+      nScraps: PList; @/
+      constructor Init(const aPos:Position;@+ aScraps:PList); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing formula AST@>=
+constructor MultiPredicativeFormulaObj.Init(const aPos:Position;@+ aScraps:PList);
+begin
+   nFormulaPos:=aPos;
+   nFormulaSort:=wsMultiPredicativeFormula;
+   nScraps:=aScraps;
+end; @#
+
+destructor MultiPredicativeFormulaObj.Done;
+begin
+   dispose(nScraps,Done);
+end;
+
+
+@ \node{Attributive formula.} As part of Mizar's soft type system,
+we can use attributes (adjectives) to form a formula like
+``\texttt{$\langle\textit{term\/}\rangle$ is $\langle\textit{adjective\/}\rangle$}''.
+We can stack multiple adjectives in an attributive formula.
+
+@<Classes for formula (abstract syntax tree)@>=
+   AttributiveFormulaPtr = ^AttributiveFormulaObj; @/
+   AttributiveFormulaObj = object(FormulaExpressionObj) @t\1@> @/
+      nSubject: TermPtr; @/
+      nAdjectives: PList; @/
+      constructor Init(const aPos:Position;@+ aSubject:TermPtr;@+ aAdjectives:PList); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing formula AST@>=
+constructor AttributiveFormulaObj.Init
+   (const aPos:Position;@+ aSubject:TermPtr; @+ aAdjectives:PList);
+begin
+   nFormulaPos:=aPos;
+   nFormulaSort:=wsAttributiveFormula;
+   nSubject:=aSubject;
+   nAdjectives:=aAdjectives;
+end; @#
+
+destructor AttributiveFormulaObj.Done;
+begin
+   dispose(nSubject,Done);
+   dispose(nAdjectives,Done);
+end;
+
+@ \node{Private predicative formula.}
+When we have ``\texttt{defpred P[\dots] means \dots}'' in Mizar, we
+refer to ``\texttt{P}'' as a private predicate. It is represented in
+the abstract syntax tree as a private predicative formula object.
+
+@<Classes for formula (abstract syntax tree)@>=
+   PrivatePredicativeFormulaPtr = ^PrivatePredicativeFormulaObj; @/
+   PrivatePredicativeFormulaObj = object(FormulaExpressionObj) @t\1@> @/
+      nPredIdNr: integer; @/
+      nArgs: PList; @/
+      constructor Init(const aPos:Position;@+ aPredIdNr:integer;@+ aArgs:PList); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing formula AST@>=
+constructor PrivatePredicativeFormulaObj.Init(const aPos:Position;
+@t\hskip17.3333pc@> aPredIdNr:integer;
+       @t\hskip17.3333pc@>                                       aArgs:PList);
+begin
+   nFormulaPos:=aPos;
+   nFormulaSort:=wsPrivatePredicateFormula;
+   nPredIdNr:=aPredIdNr;
+   nArgs:=aArgs;
+end; @#
+
+destructor PrivatePredicativeFormulaObj.Done;
+begin
+   dispose(nArgs,Done);
+end;
+
+@ \node{Qualifying formula.}
+Using Mizar's soft type system, we may have formulas of the form
+``\texttt{$\langle\textit{term\/}\rangle$ is $\langle\textit{type\/}\rangle$}''.
+These are referred to as ``qualifying formulas'', at least when
+discussing the abstract syntax tree.
+
+@<Classes for formula (abstract syntax tree)@>=
+   QualifyingFormulaPtr = ^QualifyingFormulaObj; @/
+   QualifyingFormulaObj = object(FormulaExpressionObj) @t\1@> @/
+      nSubject: TermPtr; @/
+      nType: TypePtr; @/
+      constructor Init(const aPos:Position;@+ aSubject:TermPtr;@+ aType:TypePtr);y @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing formula AST@>=
+constructor QualifyingFormulaObj.Init(const aPos:Position;@+ aSubject:TermPtr;@+ aType:TypePtr);
+begin
+   nFormulaPos:=aPos;
+   nFormulaSort:=wsQualifyingFormula;
+   nSubject:=aSubject;
+   nType:=aType;
+end; @#
+
+destructor QualifyingFormulaObj.Done;
+begin
+   dispose(nSubject,Done);
+   dispose(nType,Done);
+end;
+
+@ \node{Negative formula.} Now we can proceed with the familiar
+formulas in first-order logic. Negative formulas are of the form
+$\neg\varphi$ for some formula $\varphi$.
+
+@<Classes for formula (abstract syntax tree)@>=
+   NegativeFormulaPtr = ^NegativeFormulaObj; @/
+   NegativeFormulaObj = object(FormulaExpressionObj) @t\1@> @/
+      nArg: FormulaPtr; @/
+      constructor Init(const aPos:Position;@+ aArg:FormulaPtr); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing formula AST@>=
+constructor NegativeFormulaObj.Init(const aPos:Position;@+ aArg:FormulaPtr);
+begin
+   nFormulaPos:=aPos;
+   nFormulaSort:=wsNegatedFormula;
+   nArg:=aArg;
+end; @#
+
+destructor NegativeFormulaObj.Done;
+begin
+   dispose(nArg,Done);
+end;
+
+@ \node{Binary arguments formula.} We have a class describing formulas
+involving binary logical connectives. We will extend it to describe
+conjunctive formulas, disjunctive formulas, conditionals,
+biconditionals, etc.
+
+@<Classes for formula (abstract syntax tree)@>=
+   BinaryFormulaPtr = ^BinaryArgumentsFormula; @/
+   BinaryArgumentsFormula = object(FormulaExpressionObj) @t\1@> @/
+      nLeftArg,nRightArg: FormulaPtr;
+      constructor Init(const aPos:Position;@+ aLeftArg,aRightArg:FormulaPtr); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing formula AST@>=
+constructor BinaryArgumentsFormula.Init(const aPos:Position;@+ aLeftArg,aRightArg:FormulaPtr);
+begin
+   nFormulaPos:=aPos;
+   nLeftArg:=aLeftArg;
+   nRightArg:=aRightArg;
+end; @#
+
+destructor BinaryArgumentsFormula.Done;
+begin
+   dispose(nLeftArg,Done);
+   dispose(nRightArg,Done);
+end;
+
+@ \node{Conjunctive formula.} A conjunctive formula looks like
+$\varphi\land\psi$ where $\varphi$ and $\psi$ are logical formulas.
+
+@<Classes for formula (abstract syntax tree)@>=
+   ConjunctiveFormulaPtr = ^ConjunctiveFormulaObj; @/
+   ConjunctiveFormulaObj = object(BinaryArgumentsFormula) @t\1@> @/
+      constructor Init(const aPos:Position;@+ aLeftArg,aRightArg:FormulaPtr); @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing formula AST@>=
+constructor ConjunctiveFormulaObj.Init(const aPos:Position;@+ aLeftArg,aRightArg:FormulaPtr);
+begin
+   inherited Init(aPos,aLeftArg,aRightArg);
+   nFormulaSort:=wsConjunctiveFormula;
+end;
+
+@ \node{Disjunctive formula.} Disjunctive formulas look like $\varphi\lor\psi$
+where $\varphi$ and $\psi$ are formulas.
+
+@<Classes for formula (abstract syntax tree)@>=
+   DisjunctiveFormulaPtr = ^DisjunctiveFormulaObj; @/
+   DisjunctiveFormulaObj = object(BinaryArgumentsFormula) @t\1@> @/
+      constructor Init(const aPos:Position;@+ aLeftArg,aRightArg:FormulaPtr); @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing formula AST@>=
+constructor DisjunctiveFormulaObj.Init(const aPos:Position; aLeftArg,aRightArg:FormulaPtr);
+begin
+   inherited Init(aPos,aLeftArg,aRightArg);
+   nFormulaSort:=wsDisjunctiveFormula;
+end;
+
+@ \node{Conditional formula.} Conditional formulas look like
+$\varphi\implies\psi$ where $\varphi$ and $\psi$ are formulas.
+
+@<Classes for formula (abstract syntax tree)@>=
+   ConditionalFormulaPtr = ^ConditionalFormulaObj; @/
+   ConditionalFormulaObj = object(BinaryArgumentsFormula) @t\1@> @/
+      constructor Init(const aPos:Position;@+ aLeftArg,aRightArg:FormulaPtr); @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing formula AST@>=
+constructor ConditionalFormulaObj.Init(const aPos:Position;@+ aLeftArg,aRightArg:FormulaPtr);
+begin
+   inherited Init(aPos,aLeftArg,aRightArg);
+   nFormulaSort:=wsConditionalFormula;
+end;
+
+@ \node{Biconditional formula.} Biconditional formulas look like
+$\varphi\iff\psi$ where $\varphi$ and $\psi$ are formulas.
+
+@<Classes for formula (abstract syntax tree)@>=
+   BiconditionalFormulaPtr = ^BiconditionalFormulaObj; @/
+   BiconditionalFormulaObj = object(BinaryArgumentsFormula) @t\1@> @/
+      constructor Init(const aPos:Position;@+ aLeftArg,aRightArg:FormulaPtr); @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing formula AST@>=
+constructor BiconditionalFormulaObj.Init(const aPos:Position;@+ aLeftArg,aRightArg:FormulaPtr);
+begin
+   inherited Init(aPos,aLeftArg,aRightArg);
+   nFormulaSort:=wsBiconditionalFormula;
+end;
+
+@ \node{Flexary Conjunctive formula.} Flexary conjunctive formulas are
+unique to Mizar, though the Working Mathematician would recognize them
+as ``just a bunch of conjunctions''. These look like
+$\varphi[1]\land\cdots\land\varphi[n]$ where $\varphi[i]$ is a formula
+parametrized by a natural number $i$.
+
+@<Classes for formula (abstract syntax tree)@>=
+   FlexaryConjunctiveFormulaPtr = ^FlexaryConjunctiveFormulaObj; @/
+   FlexaryConjunctiveFormulaObj = object(BinaryArgumentsFormula) @t\1@> @/
+      constructor Init(const aPos:Position;@+ aLeftArg,aRightArg:FormulaPtr); @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing formula AST@>=
+constructor FlexaryConjunctiveFormulaObj.Init(const aPos:Position;
+ @t\hskip17.6667pc@> aLeftArg,aRightArg:FormulaPtr);
+begin
+   inherited Init(aPos,aLeftArg,aRightArg);
+   nFormulaSort:=wsFlexaryConjunctiveFormula;
+end;
+
+@ \node{Flexary Disjunctive formula.} Flexary disjunctive formulas are
+unique to Mizar, though the Working Mathematician would recognize them
+as ``just a bunch of disjunctions''. These look like
+$\varphi[1]\lor\cdots\lor\varphi[n]$ where $\varphi[i]$ is a formula
+parametrized by a natural number $i$.
+
+@<Classes for formula (abstract syntax tree)@>=
+   FlexaryDisjunctiveFormulaPtr = ^FlexaryDisjunctiveFormulaObj; @/
+   FlexaryDisjunctiveFormulaObj = object(BinaryArgumentsFormula) @t\1@> @/
+      constructor Init(const aPos:Position;@+ aLeftArg,aRightArg:FormulaPtr); @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing formula AST@>=
+constructor FlexaryDisjunctiveFormulaObj.Init(const aPos:Position;
+@t\hskip17.6667pc@> aLeftArg,aRightArg:FormulaPtr);
+begin
+   inherited Init(aPos,aLeftArg,aRightArg);
+   nFormulaSort:=wsFlexaryDisjunctiveFormula;
+end;
+
+@ \node{Quantified formula.}
+First-order logic is distinguished by the use of terms and quantifying
+formulas over terms. We have a base class for quantified
+formulas. Using the Mizar soft type system, quantified variables are
+``qualified segments''.
+
+@<Classes for formula (abstract syntax tree)@>=
+   QuantifiedFormulaPtr = ^QuantifiedFormulaObj; @/
+   QuantifiedFormulaObj = object(FormulaExpressionObj) @t\1@> @/
+      nSegment: QualifiedSegmentPtr; @/
+      nScope: FormulaPtr; @/
+      constructor Init(const aPos:Position;@+ aSegment:QualifiedSegmentPtr;@+ aScope:FormulaPtr); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing formula AST@>=
+constructor QuantifiedFormulaObj.Init(const aPos:Position;
+@t\hskip14.5pc@>  aSegment:QualifiedSegmentPtr;
+ @t\hskip14.5pc@>                                     aScope:FormulaPtr);
+begin
+   nFormulaPos:=aPos;
+   nSegment:=aSegment;
+   nScope:=aScope;
+end; @#
+
+destructor QuantifiedFormulaObj.Done;
+begin
+   dispose(nSegment,Done);
+   dispose(nScope,Done);
+end;
+
+@ \node{Universal formula.}
+When we want to describe a formula of the form ``$\forall x:T\ldotp\varphi[x]$''
+where $T$ is a soft type and $\varphi[x]$ is a formula parametrized by $x$.
+
+@<Classes for formula (abstract syntax tree)@>=
+   UniversalFormulaPtr = ^UniversalFormulaObj; @/
+   UniversalFormulaObj = object(QuantifiedFormulaObj) @t\1@> @/
+      constructor Init(const aPos:Position;@+ aSegment:QualifiedSegmentPtr;@+ aScope:FormulaPtr); @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing formula AST@>=
+constructor UniversalFormulaObj.Init(const aPos:Position;
+@t\hskip14.25pc@> aSegment:QualifiedSegmentPtr;
+   @t\hskip14.25pc@>                                  aScope:FormulaPtr);
+begin
+   inherited Init(aPos,aSegment,aScope);
+   nFormulaSort:=wsUniversalFormula;
+end;
+
+@ \node{Existential formula.}
+The other quantified formula are existentially quantified formulas,
+which resemble ``$\exists x:T\ldotp\varphi[x]$'' where $T$ is a soft
+type and $\varphi[x]$ is a formula parametrized by $x$.
+
+@<Classes for formula (abstract syntax tree)@>=
+   ExistentialFormulaPtr = ^ExistentialFormulaObj; @/
+   ExistentialFormulaObj = object(QuantifiedFormulaObj) @t\1@> @/
+      constructor Init(const aPos:Position;@+ aSegment:QualifiedSegmentPtr;@+ aScope:FormulaPtr); @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing formula AST@>=
+constructor ExistentialFormulaObj.Init(const aPos:Position;
+@t\hskip14.6667pc@> aSegment:QualifiedSegmentPtr;
+@t\hskip14.6667pc@>                                      aScope:FormulaPtr);
+begin
+   inherited Init(aPos,aSegment,aScope);
+   nFormulaSort:=wsExistentialFormula;
+end;
+
+@ \node{Contradiction formula.}
+The canonical contradiction $\bot$ in Mizar is represented by the
+reserved keyword ``\texttt{contradiction}''.
+
+@^Contradiction@>
+
+@<Classes for formula (abstract syntax tree)@>=
+   ContradictionFormulaPtr = ^ContradictionFormulaObj; @/
+   ContradictionFormulaObj = object(FormulaExpressionObj) @t\1@> @/
+      constructor Init(const aPos:Position); @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing formula AST@>=
+constructor ContradictionFormulaObj.Init(const aPos:Position);
+begin
+   nFormulaPos:=aPos;
+   nFormulaSort:=wsContradiction;
+end;
+
+@ \node{Thesis formula.}
+When we are in the middle of a proof, the goal or obligation left to
+be proven is called the ``\texttt{thesis}''.
+
+@:Thesis}{\texttt{thesis}@>
+
+@<Classes for formula (abstract syntax tree)@>=
+   ThesisFormulaPtr = ^ThesisFormulaObj; @/
+   ThesisFormulaObj = object(FormulaExpressionObj) @t\1@> @/
+      constructor Init(const aPos:Position); @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing formula AST@>=
+constructor ThesisFormulaObj.Init(const aPos:Position);
+begin
+   nFormulaPos:=aPos;
+   nFormulaSort:=wsThesis;
+end;
+
+@ \node{Incorrect formula.}
+We also have a node in abstract syntax trees for ``incorrect''
+formulas.
+
+@<Classes for formula (abstract syntax tree)@>=
+   IncorrectFormulaPtr = ^IncorrectFormula; @/
+   IncorrectFormula = object(FormulaExpressionObj) @t\1@> @/
+      constructor Init(const aPos:Position); @t\2\2\2@>
+   end
+
+@ \node{Constructor.}
+
+@<Implementing formula AST@>=
+constructor IncorrectFormula.Init(const aPos:Position);
+begin
+   nFormulaPos:=aPos;
+   nformulaSort:=wsErrorFormula;
+end;

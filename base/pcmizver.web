@@ -1,0 +1,99 @@
+
+@* [F] PC Mizar Version.
+This is used to track the version of Mizar.
+
+@<pcmizver.pas@>=
+  @<GNU License@>
+unit pcmizver;
+
+interface @|@#
+
+const  @/
+   PCMizarReleaseNbr = 8; @/
+   PCMizarVersionNbr = 1; @/
+   PCMizarVariantNbr = 14; @#
+
+   CurrentYear = 2025; @#
+
+@{@&$IFDEF WIN32@}
+   DirSeparator = '\'; @/
+@{@&$ELSE@}
+   DirSeparator = '/'; @/
+@{@&$ENDIF@}
+
+@ There are only four functions provided by this module.
+
+\interface
+@p
+function @? PCMizarVersionStr: String;
+function @? VersionStr: String;
+function @? PlatformNameStr: String;
+function @? Copyright : String;
+@ \endinterface
+Their implementation is relativiely straightforward: just print the
+appropriate constants to the screen.
+
+@p
+implementation @|@#
+function Copyright : String;
+var s:String;
+begin
+ Str(CurrentYear,s);
+ Copyright:='Copyright (c) 1990-'+s+' Association of Mizar Users';
+end;
+
+@ @p
+function  VersionStr: String;
+ var lRel,lVer,lVar: String[2]; lStr:String;
+begin
+ Str(PCMizarReleaseNbr,lRel);
+ Str(PCMizarVersionNbr,lVer);
+ Str(PCMizarVariantNbr,lVar);
+ if length(lVar) = 1 then lVar:='0'+lVar; @/
+@{@&$IFDEF VERALPHA@} 
+ lStr:='-alpha'; @/
+@{@&$ELSE@}
+ lStr:=''; @/
+@{@&$ENDIF@} @/
+ VersionStr:=lRel+'.'+lVer+'.'+lVar+lStr;
+end;
+
+@ There are a number of platforms supported, a surprisingly large
+number. If we were to support more platforms (other \BSD/s, \BeOS/, \GNU/
+Hurd, etc.), then we would need to update this function. To see what
+platforms are predefined for FreePascal, consult:
+\item{$\bullet$}\href{https://wiki.freepascal.org/Platform_defines}{\texttt{https://wiki.freepascal.org/Platform_defines}}
+
+\noindent Ostensibly, we could extend the platform name string to
+display ``generic \UNIX/'' (and even ``generic \BSD/''), as well as
+``generic Windows''.
+
+@p
+function  PlatformNameStr: String;
+var lStr: String;
+begin
+   lStr:=''; @#
+   
+   if_def(WIN32) lStr:=lStr+'Win32'; @+ end_if
+   if_def(LINUX) lStr:=lStr+'Linux'; @+ end_if
+   if_def(SOLARIS) lStr:=lStr+'Solaris'; @+ end_if
+   if_def(FREEBSD) lStr:=lStr+'FreeBSD'; @+ end_if
+   if_def(DARWIN) lStr:=lStr+'Darwin'; @+ end_if @#
+
+   if_def(FPC) lStr:=lStr+'/FPC'; @+ end_if
+   if_def(DELPHI) lStr:=lStr+'/Delphi'; @+ end_if @#
+
+   PlatformNameStr:=lStr;
+end;
+
+@ The last function in the \texttt{pcmizver.pas} file provides a
+String for the Mizar version.
+
+@p
+function  PCMizarVersionStr: String;
+begin
+ PCMizarVersionStr:='Mizar Ver. '+VersionStr;
+end;
+@t\2@>
+
+end.

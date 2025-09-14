@@ -1,0 +1,103 @@
+
+@* [F] Mizar internal state.
+As far as \emph{processing} an article, Mizar works like a ``batch compiler''
+and works in multiple ``passes''.
+
+@<mstate.pas@>=
+  @<GNU License@>
+
+unit mstate;
+
+interface @;@|@/
+
+@<Interface for \texttt{mstate.pas}@> @#
+
+implementation @; @|@/
+
+uses mizenv, pcmizver, monitor, errhan, mconsole, mtime @/
+mdebug @+ ,info @+ end_mdebug @+; @t\1@>
+
+var PassTime: longint; @|@/
+
+@<Implementation for \texttt{mstate.pas}@>
+
+@t\2@>
+end
+
+@ @<Interface for \texttt{mstate.pas}@>=
+procedure @? InitPass(const aPassName: String); @t\2@>
+procedure @? FinishPass; @t\2@>
+procedure @? InitProcessing(const aProgName,aExt: String); @t\2@>
+procedure @? ProcessingEnding;
+
+@ The implementation amounts to, well, these four functions. We have a
+couple ``private'' functions to help us: |MError| and |MizarExitProc|.
+
+@<Implementation for \texttt{mstate.pas}@>=
+procedure InitPass(const aPassName: String);
+begin
+ CurPos.Line:=1;
+ CurPos.Col:=1;
+ InitDisplayLine(aPassName);
+ TimeMark(PassTime);
+end;
+
+procedure FinishPass;
+begin
+ FinishingPass:=true;
+ if QuietMode then DisplayLine(CurPos.Line,ErrorNbr);
+ FinishingPass:=false;
+ DrawTime('  '+ReportTime(PassTime));
+end;
+
+procedure MError(Pos:Position; ErrNr:integer);
+begin
+ WriteError(Pos,ErrNr);
+ DisplayLine(CurPos.Line,ErrorNbr);
+end;
+@ We also have |MizarExitProc| as a private ``helper'' function.
+
+@p
+var _ExitProc: pointer;
+procedure MizarExitProc;
+begin
+ ExitProc := _ExitProc; @/
+ disable_io_checking;
+ if IOResult<>0 then;
+ if not StopOnError then DisplayLine(CurPos.Line,ErrorNbr);
+ PutError:=WriteError;
+ DrawVerifierExit(ReportTime(gStartTime));
+{Halt(ErrorCode);}
+ enable_io_checking;
+end;
+
+@ @p
+procedure InitProcessing(const aProgName,aExt: String);
+begin
+  DrawMizarScreen(aProgName);
+  if ParamCount<1 then EmptyParameterList;
+  GetArticleName;
+  GetEnvironName;
+  DrawArticleName(MizFileName+aExt);
+  GetOptions;
+  InitExitProc;
+  FileExam(MizFileName+aExt);
+  _ExitProc := ExitProc;
+  ExitProc:=@@MizarExitProc;
+  PutError:=MError;
+  OpenErrors(MizFileName); @/
+  mdebug
+  OpenInfoFile; @+
+  end_mdebug
+end;
+@ At the end, we should report the number of errors (if any were encountered).
+
+@p
+procedure ProcessingEnding;
+begin
+ if ErrorNbr > 0 then
+  begin
+   DrawErrorsMsg(ErrorNbr);
+   FinishDrawing;
+  end;
+end;

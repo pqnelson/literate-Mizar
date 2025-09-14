@@ -1,0 +1,597 @@
+
+@* [F] I/O with XML. %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+We will want to print some \XML/ to a buffer or stream.
+
+Note that \XML/ seems to be frozen at version 1.0 (first published in
+1998, last revised in its fifth edition released November 26, 2008).
+
+@<xml\_inout.pas@>=
+  @<GNU License@>
+
+unit xml_inout;
+
+interface @|@#
+
+uses errhan,mobjects,xml_parser;@#
+
+@t\4@> @<Type declarations for XML I/O@>@;
+
+   function QuoteStrForXML(const aStr:string):string; @t\2@>
+   function XMLToStr(const aXMLStr:string): string; @t\2@>
+   function QuoteXMLAttr( aStr:string): string; @t\2@> @#
+
+   const gXMLHeader = '<?xml version="1.0"?>' + #10; @#
+
+implementation @|@#
+
+uses SysUtils,mizenv,pcmizver,librenv,xml_dict @/
+mdebug, info @+ end_mdebug; @#
+
+@t\4@> @<Implementation for I/O of XML@> @t\2@>
+
+end.
+
+@ There are only 4 types of streams we care about: Streams, Text
+Streams, \XML/ Input Streams, and \XML/ Output Streams.
+
+@<Type declarations for XML I/O@>=
+   @<Public interface for XML Input Stream@>; @#
+
+   @<Public declaration for Stream Object@>; @#
+
+   @<Public declaration for Text Stream Object@>; @#
+
+   @<Public declaration for XML Output Stream@>;
+
+@ \node{Escape for quote string.}
+We want to allow only alphanumerics [a-zA-Z0-9] as well as dashes
+(``-''), spaces (``\.{}''), commas (``,'') periods (``.''),
+apostrophes (``\texttt{'}''), forward slashes (``\texttt{/}''),
+underscores (``\_''), brackets (``\texttt{[}'' and ``\texttt{]}''),
+exclamation points (``!''), semicolons and colons (``;'' and ``:''),
+and equal signs (``=''). Everything else we transform into an \XML/
+entity of the form ``{\tt\AM{}xx}'' where {\tt x} is a hexadecimal digit.
+
+\label{QuoteStrForXML}
+
+@<Implementation for I/O of XML@>=
+function QuoteStrForXML(const aStr:string): string;
+const
+   ValidCharTable = (['a'..'z','A'..'Z','0'..'9','-',' ',',','.','\','/','_',
+                      '[',']','!',';',':','=']);
+var c : char;
+i : integer;
+begin
+   result := aStr;
+   for i := length(result) downto 1 do
+   begin
+      c := result[i];
+      if not (c in ValidCharTable)  then
+      begin
+         result[i] := '&';
+         Insert('#x' + IntToHex(Ord(c),2) + ';', result,i+1);
+      end;
+   end;
+end;
+
+@ This appears to ``undo'' the previous function, transforming \XML/
+entities of the form ``{\tt\AM xx}'' into characters.
+
+@p
+function XMLToStr(const aXMLStr:string): string;
+var i, h : integer;
+lHexNr: string;
+begin
+   result := aXMLStr;
+   for i := length(result)-5 downto 1 do begin
+      @<Transform XML entity into character, if encountering an XML entity at |i|@>;
+   end;
+   result := Trim(result);
+end;
+
+@ Transforming an \XML/ entity into a character. This specifically
+checks for \emph{hexadecimal} entities of the form
+``\texttt{\AM\#x}$XX$'' for some hexadecimal digits $X$. Note we must prepend
+``\texttt{0x}'' to a numeric string for \PASCAL/ to parse it as hexadecimal.
+
+Since \PASCAL/ does not have shortcircuiting Boolean operations, we
+need to make this a nested \&{if} statement.
+
+@<Transform XML entity into character, if encountering an XML entity at |i|@>=
+   if (result[i] = '&') and (length(result) >= i+5) then
+   begin
+      if (result[i+1] = '#') and (result[i+2] = 'x') then
+      begin
+         lHexNr := result[i+3]+result[i+4];
+         h := StrToInt('0x' + lHexNr);
+         Delete(result, i, 5);
+         result[i] := chr(h);
+      end;
+   end
+
+@ We can quote an \XML/ attribute, escaping quotes, ampersands, and
+angled brackets. For non-\ASCII/ characters, we escape it to a
+hexadecimal \XML/ entity.
+
+@<Implementation for I/O of XML@>=
+function QuoteXMLAttr(aStr:string): string;
+var i:integer;
+begin
+   result:= '';
+   for i:=1 to length(aStr) do
+      case aStr[i] of
+         '"':  result:= result + '&quot;';
+         '&':  result:= result + '&amp;';
+         '<':  result:= result + '&lt;';
+         '>':  result:= result + '&gt;';
+      othercases if integer(aStr[i]) > 127 then
+         result:= result + '&#x' + IntToHex(Ord(aStr[i]),2) + ';'
+      else result:= result + aStr[i];
+      endcases;
+end;
+
+@ \node{Stream object class.}
+A stream consists of a file, a character buffer, as well as integers
+tracking the size of the buffer and (I think) the position in the buffer.
+This is the parent class to \XML/ output buffers.
+
+
+
+\label{StreamObj}
+
+@<Public declaration for Stream Object@>=
+   StreamObj = object(MObject) @t\1@> @/
+         nFile: File; @/
+         fFileBuff: ^BuffChar; @/
+         fBuffCount,fBuffInd: longint; @/
+         constructor InitFile(const AFileName:string); @t\2@>
+         procedure Error(Code,Info:integer); virtual; @t\2@>
+         destructor Done; virtual; @t\2\2\2@> 
+      end
+
+@ We will have a wrapper function for conveniently reporting errors.
+
+@<Implementation for I/O of XML@>=
+procedure StreamObj.Error(Code,Info:integer);
+begin
+   RunError(2000+Code);
+end;
+
+@ \node{Constructor.} We begin by |Assign|-ing a name to a file,
+allocating a file buffer, then initializing the buffer size to zero,
+and the buffor position to zero. (The buffer position |fBuffInd| is
+needed only when writing to an output \XML/ stream.)
+
+@p
+constructor StreamObj.InitFile(const AFileName:string);
+begin
+   Assign(nFile,AFileName);
+   new(fFileBuff);
+   fBuffCount:=0; fBuffInd:=0;
+end;
+
+@ \node{Destructor.} We close the file, and free up the file buffer.
+
+@p
+destructor StreamObj.Done;
+begin
+   Close(nFile);
+   dispose(fFileBuff);
+end;
+
+@ \node{Text Stream Object.} A text stream is very similar to a Stream
+Object, except it is specifically for text.
+
+@<Public declaration for Text Stream Object@>=
+   TXTStreamObj = object(MObject) @t\1@> @/
+         nFile: text; @/
+         nFileBuff: pointer; @/
+         constructor InitFile(const AFileName:string); @t\2@>
+         procedure Error(Code,Info:integer); virtual; @t\2@>
+         destructor Done; virtual; @t\2\2\2@> 
+      end
+
+@ We have the convenience function for reporting errors.
+
+@<Implementation for I/O of XML@>=
+procedure TXTStreamObj.Error(Code,Info:integer);
+begin
+   RunError(2000+Code);
+end;
+
+@ \node{Constructor.} Assign a name to the file, allocate an input
+buffer, then initialize the buffer.
+
+@p
+constructor TXTStreamObj.InitFile(const AFileName:string);
+begin
+   Assign(nFile,AFileName);
+   GetMem(nFileBuff,InOutFileBuffSize);
+   SetTextBuf(nFile,nFileBuff^,InOutFileBuffSize);
+end;
+
+@ \node{Destructor.} Simply free the underlying file buffer.
+
+\label{TXTStreamObj.Done}
+
+@p
+destructor TXTStreamObj.Done;
+begin
+   FreeMem(nFileBuff,InOutFileBuffSize);
+end;
+
+@ \node{XML Input Streams.}
+An input stream reads an \XML/ file and produces an abstract syntax
+tree for its contents. This extends this \XML/ parser class
+(\section\xref{XMLParserObj}). It may be tempting to draw similarities
+with, e.g., the StAX library (in Java), but the truth is there's only
+finitely many ways to parse \XML/, and some ways are just more natural.
+
+@^StAX, Java@>
+
+\label{XMLInStreamObj}
+
+@<Public interface for XML Input Stream@>=
+   XMLInStreamPtr = ^XMLInStreamObj; @/
+   XMLInStreamObj = object(XMLParserObj) @t\1@>
+      constructor OpenFile(const AFileName:string); @t\2@> 
+      function GetOptAttr(@t\hskip-1em@>@+@+const aAttrName: string;@+
+         var aVal:string@t\hskip-0.45em@>): boolean; @t\2@>
+      function GetAttr( const aAttrName: string): string; @t\2@>
+      function GetIntAttr( const aAttrName: string): integer; @t\2\2\2@> 
+   end
+
+@ \node{Constructor.} The non-debugging code just invokes the XML
+Parser's constructor (\section\xref{XMLParserObj.InitParsing}).
+
+@<Implementation for I/O of XML@>=
+constructor XMLInStreamObj.OpenFile(const AFileName:string);
+begin @|@/
+   mdebug;
+   write(InfoFile, AFileName); @+
+   end_mdebug; @/
+   InitParsing(AFileName); @/
+   mdebug;
+   WriteLn(InfoFile,' reset'); @+
+   end_mdebug;
+end;
+
+@ We use the inherited |XMLParserObj|'s |nAttrVals : MSortedStrList|
+to track the XML attributes. If |aAttrName| is stored there, this will
+mutate |aVal| to store the associated value and the function will
+return |true|. Otherwise, this will return |false|.
+
+This is useful for getting the value of an \emph{optional} \XML/
+attribute. 
+
+@p
+@t\4\4@> {get string denoted by optional \XML/ attribute aAttrName}
+function XMLInStreamObj.GetOptAttr(@t\hskip-0.5em@>@+const aAttrName: string; @+
+                                    var aVal:string@t\hskip-0.3333em@>): boolean;
+var lAtt: XMLAttrPtr;
+begin
+   lAtt:=XMLAttrPtr(nAttrVals.ObjectOf(aAttrName));
+   if lAtt<>nil then
+   begin
+      aVal:=lAtt^.nValue;
+      GetOptAttr:= true;
+      exit;
+   end;
+   GetOptAttr:= false;
+end;
+
+@ When we know an \XML/ attribute is \emph{required}, we can just get
+the associated value directly (and raise an error if it is missing).
+
+@p
+@t\4\4@> {get string denoted by  required \XML/ attribute aAttrName}
+function XMLInStreamObj.GetAttr( const aAttrName: string): string;
+var lAtt: XMLAttrPtr;
+begin
+   lAtt:=XMLAttrPtr(nAttrVals.ObjectOf(aAttrName));
+   if Latt<>nil then
+   begin
+      GetAttr:=lAtt^.nValue;
+      exit;
+   end;
+   MizAssert(errMissingXMLAttribute, false);
+end;
+
+@ When the required attribute has an integer value, we should return
+the integer-value of it. Does this ever happen? Yes! For example, when
+writing an article named \texttt{article.miz}, then we run the
+verifier on it, we shall obtain \texttt{article.xml} which will
+contain tags of the form ``\texttt{<Adjective nr="5">}''. 
+
+@p
+@t\4\4@> {get integer denoted by required \XML/ attribute aAttrName}
+function XMLInStreamObj.GetIntAttr(const aAttrName: string): integer;
+var lInt,ec:integer;
+begin
+   val(GetAttr(aAttrName), lInt, ec);
+   GetIntAttr:= lInt;
+end;
+
+@ \node{XML Output Streams.}
+We will want to write data to an \XML/ file. This gives us an
+abstraction for doing so.
+
+\label{XmlOutStreamObj}
+
+@<Public declaration for XML Output Stream@>=
+   XMLOutStreamPtr = ^XMLOutStreamObj; @/
+   XMLOutStreamObj = object(StreamObj) @t\1@> @/
+      nIndent:	integer; 	{indenting}
+      constructor OpenFile(const AFileName:string); @t\2@>
+      constructor OpenFileWithXSL(const AFileName:string); @t\2@>
+      destructor EraseFile; @t\2@> @#
+
+      procedure OutChar(AChar: char); @t\2@>
+      procedure OutNewLine; @t\2@>
+      procedure OutString(const AString: string); @t\2@>@#
+
+      procedure OutIndent; @t\2@>
+      procedure Out_XElStart(const fEl: string); @t\2@>
+      procedure Out_XAttrEnd; @t\2@>
+      procedure Out_XElStart0(const fEl: string); @t\2@>
+      procedure Out_XElEnd0; @t\2@>
+      procedure Out_XEl1(const fEl: string); @t\2@>
+      procedure Out_XElEnd(const fEl: string); @t\2@>
+      procedure Out_XAttr(const fAt, fVal: string); @t\2@>
+      procedure Out_XIntAttr(const fAt: string; fVal: integer); @t\2@>
+      procedure Out_PosAsAttrs(const fPos: Position); @t\2@>
+      procedure Out_XElWithPos(const fEl: string; const fPos: Position); @t\2@>
+      procedure Out_XQuotedAttr(const fAt,fVal: string); @t\2@>
+      destructor Done; virtual; @t\2\2\2@> 
+   end
+
+@ \node{Constructor.}
+We initialize a file, open it for writing, set the initial indentation
+amount to zero, and then print the \XML/ header declaration.
+
+@<Implementation for I/O of XML@>=
+constructor XMLOutStreamObj.OpenFile(const AFileName:string);
+begin @|@/
+   mdebug
+   write(InfoFile,MizFileName+'.'+copy(AFileName, length(AFilename)-2,3)); @+
+   end_mdebug @/
+   InitFile(AFileName);
+   Rewrite(nFile,1); @/
+   mdebug
+   WriteLn(InfoFile,' rewritten'); @+
+   end_mdebug @/
+   nIndent := 0;
+   OutString( gXMLHeader);
+end;
+
+@ \node{Constructor.} Since \XML/ supports custom style declarations
+(think of \XSLT/),
+we can also support writing an \XML/ file which uses them. This
+specifically needs to adjust the \XML/ declaration.
+
+@p
+{add the stylesheet procesing info}
+constructor XMLOutStreamObj.OpenFileWithXSL(const AFileName:string);
+begin
+   OpenFile(AFileName);
+   OutString('<?xml-stylesheet type="text/xml" href="file://' +
+                MizFiles + 'miz.xml"?>'+ #10);
+end;
+
+@ \node{Destructor.} We need to flush the buffer to the file before
+freeing up the buffer.
+
+@p
+destructor XMLOutStreamObj.Done;
+begin
+   if (fBuffInd > 0) and (fBuffInd < InOutFileBuffSize) then
+      BlockWrite(nFile,fFileBuff^,fBuffInd,fBuffCount);
+   inherited Done;
+end;
+
+@ \node{Destructor.} Some times we want to further erase the output
+file (which seems, at first glance, like \emph{a really bad idea}\dots).
+
+@p
+destructor XMLOutStreamObj.EraseFile;
+begin Done;
+Erase(nFile);
+end;
+
+@ Writing a character to the buffer. When the buffer is full, we flush it.
+
+@p
+procedure XMLOutStreamObj.OutChar (aChar: char);
+begin
+   fFileBuff^[fBuffInd]:=AnsiChar(aChar);
+   inc(fBuffInd);
+   @<Flush \XML/ output buffer, if full@>;
+end;
+
+@ The \XML/ output buffer is full when the logical size (\\{fBuffInd})
+is equal to the \\{InOutFileBuffSize}. When this happens, we should
+write everything to the file, then reset the logical size parameter to
+zero. 
+
+@<Flush \XML/ output buffer, if full@>=
+   if fBuffInd = InOutFileBuffSize then
+   begin BlockWrite(nFile,fFileBuff^,InOutFileBuffSize,fBuffCount);
+   fBuffInd:=0;
+   end
+
+@ Print a newline (\texttt{"\BS n"}) to the XML output stream.
+
+@<Implementation for I/O of XML@>=
+procedure XMLOutStreamObj.OutNewLine;
+begin
+   OutChar(#10);
+end;
+
+@ Printing a string to the output buffer.
+
+@p
+procedure XMLOutStreamObj.OutString (const aString: string);
+var i: integer;
+begin
+   for i:=1 to length(aString) do
+      OutChar(aString[i]);
+end;
+
+@ Printing |nIndent| spaces (``\texttt{\SP}'') to the output buffer.
+
+@p
+@t\4\4@> {print \\{nIndent} spaces}
+procedure XMLOutStreamObj.OutIndent;
+var i:integer;
+begin
+   for i:=1 to nIndent do OutChar(' ');
+end;
+
+@ When printing a start-tag to the file, we start by printing the
+indentation, then we increment the indentation, then we print the
+``\texttt{<}'' followed by the name of the tag.
+
+\label{XMLOutStreamObj.Out_XElStart}
+
+@p
+@t\4\4@>{print '\texttt{<}' and the representation of \\{fEl} with indenting}
+procedure XMLOutStreamObj.Out_XElStart(const fEl: string);
+begin
+   OutIndent;
+   inc(nIndent);
+   OutChar('<');
+   OutString(fEl);
+end;
+
+@ When we are done writing the attributes of a tag, we print the
+``\texttt{>}'' to the file, and we also print a newline to the file.
+
+@p
+@t\4\4@> {close the attributes with '\texttt{>}'}
+procedure  XMLOutStreamObj.Out_XAttrEnd;
+begin
+   OutChar('>');
+   OutNewLine;
+end;
+
+@ When we want to write the tag, but omit the attributes, we can do so.
+
+@p
+@t\4\4@> {no attributes expected}
+procedure XMLOutStreamObj.Out_XElStart0( const fEl: string);
+begin
+   Out_XElStart(fEl);
+   Out_XAttrEnd;
+end;
+
+@ For empty-element tags, we should close the tag with
+``\texttt{/>}'', print a new line, then \emph{decrement} the
+indentation since there are no children to the tag.
+
+\label{XMLOutStreamObj.Out_XElEnd0}
+
+@p
+@t\4\4@> {print '\texttt{/>}' with indenting}
+procedure XMLOutStreamObj.Out_XElEnd0;
+begin
+   OutString('/>');
+   OutNewLine;
+   dec(nIndent);
+end;
+
+@ When printing an empty-element tag without any attributes, we can
+combine the preceding functions together.
+
+@p
+@t\4\4@> {no attributes and elements expected}
+procedure XMLOutStreamObj.Out_XEl1(const fEl: string);
+begin
+   Out_XElStart( fEl);
+   Out_XElEnd0;
+end;
+
+@ Printing end-tags should first decrement the
+indentation \emph{before} printing the indentation to the file (so
+that the end-tag vertically aligns with the associated
+start-tag). Then we print ``\texttt{</}'' followed by the tag name and
+then ``\texttt{>}''. We should print a newline to the file, too.
+
+@p
+@t\4\4@> {close the \\{fEl} element using '\texttt{</}'}
+procedure XMLOutStreamObj.Out_XElEnd( const fEl: string);
+begin
+   dec(nIndent);
+   OutIndent;
+   OutString('</');
+   OutString( fEl);
+   OutChar('>');
+   OutNewLine;
+end;
+
+@ When printing one attribute to a tag, we need a whitespace printed
+(to separate the tag's name --- or preceding attribute --- from the
+current attribute being printed), followed by the attribute's name
+printed with an equality symbol, then enquoted the value of the
+attribute.
+
+\label{XMLOutStreamObj.Out_XAttr}
+
+@p 
+@t\4\4@> {print one attribute key-value pair}
+procedure XMLOutStreamObj.Out_XAttr(const fAt,fVal: string);
+begin
+   OutChar(' ');
+   OutString( fAt);
+   OutString('="');
+   OutString(fVal);
+   OutChar('"');
+end;
+
+@ When the value of an attribute is an integer, invoke
+$\\{IntToStr}(\\{fVal})$ to pretend it is a string value. Then printing
+out to a file an attribute with an integer value boils down to
+printing out the attribute with a string value.
+
+@p
+@t\4\4@> {print one attribute key-value pair, where value is integer}
+procedure XMLOutStreamObj.Out_XIntAttr(const fAt: string; @+ fVal: integer);
+begin
+   Out_XAttr(fAt, IntToStr(fVal));
+end;
+
+@ We can now just compose writing the start of a tag
+(\section\xref{XMLOutStreamObj.Out_XElStart}), followed by its
+attributes (\section\xref{XMLOutStreamObj.Out_PosAsAttrs}), and then
+close the empty-element tag (\section\xref{XMLOutStreamObj.Out_XElEnd0}).
+
+@p
+procedure XMLOutStreamObj.Out_XElWithPos(const fEl: string;@+ const fPos: Position);
+begin
+   Out_XElStart(fEl);
+   Out_PosAsAttrs(fPos);
+   Out_XElEnd0;
+end;
+
+@ We will want to treat a \emph{position} (i.e., the line and
+column) as two attributes. We print this out using \\{Out\_PosAsAttrs}.
+We rely on the \\{XMLDict}'s \\{XMLAttrName} for standardizing the
+name for the line and column.
+
+\label{XMLOutStreamObj.Out_PosAsAttrs}
+
+@p
+procedure XMLOutStreamObj.Out_PosAsAttrs(const fPos: Position);
+begin
+   Out_XIntAttr(XMLAttrName[atLine], fPos.Line);
+   Out_XIntAttr(XMLAttrName[atCol], fPos.Col);
+end;
+
+@ We print a quoted attribute, leveraging printing attributes out to
+the file (\section\xref{XMLOutStreamObj.Out_XAttr}). We just need to
+escape the \XML/ string (\section\xref{QuoteStrForXML}).
+
+@p
+procedure XMLOutStreamObj.Out_XQuotedAttr(const fAt, fVal: string);
+begin
+   Out_XAttr(fAt, QuoteStrForXML( fVal) );
+end;

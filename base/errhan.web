@@ -1,0 +1,203 @@
+
+@* [F] Error handling.
+
+@<errhan.pas@>=
+  @<GNU License@>
+
+unit errhan;
+
+interface @;@|@/
+
+@<Interface for \texttt{errhan.pas}@>@;
+
+implementation @; @|@/
+
+uses mconsole,mizenv; @/
+
+@<Implementation for \texttt{errhan.pas}@>@; @+ @t\2@>
+
+end;
+
+@ We have a few custom types and internal variables describing the
+state of the Mizar error handler.
+
+\label{type:Position}
+
+@<Interface for \texttt{errhan.pas}@>=
+type Position = @<Declare |Position| as |record|@>;
+     ErrorReport = @+ procedure(Pos:Position; ErrNr:integer); @t\2 @>
+
+const ZeroPos : Position = (Line:0; Col:0); @#
+
+var  CurPos:    Position; {current position}
+     ErrorNbr:  integer;  {current error number}
+
+     PutError: ErrorReport = nil; {reporter for errors}
+
+     RTErrorCode: integer = 0; {runtime error code}
+     OverflowErroor: boolean = false; {overflow error? They're horrible, treat accordingly}
+
+@ Position is just a pair of integers recording the line and offset
+(``column'').
+
+@<Declare |Position| as |record|@>=
+record Line,Col: integer end
+
+@ And we just provide the public-facing functions and procedures.
+
+\interface
+@<Interface for \texttt{errhan.pas}@>=
+procedure @? Error(Pos:Position; ErrNr:integer);
+procedure @? ErrImm(ErrNr:integer); @#
+
+procedure @? WriteError(Pos:Position; ErrNr:integer);
+procedure @? OpenErrors(FileName:String);
+procedure @? AppendErrors(FileName:String);
+procedure @? EraseErrors;
+procedure @? CloseErrors; @#
+
+procedure @? OverflowError(ErrorCode:word);
+procedure @? Mizassert (ErrorCode:word; Cond:boolean);
+procedure @? RunTimeError(ErrorCode:word);
+
+@ \endinterface
+The implementation begins as we would expect/hope. If we have
+a \emph{preferred} error reporter already present in |PutError|, then
+we just use it. If we have toggled |StopOnError| to true, then we
+should end the program here (with a message).
+
+If we want to report an error at the |CurrPos| (current position),
+then we have a helper function do that for us.
+
+\label{ErrImm}
+
+@<Implementation for \texttt{errhan.pas}@>=
+procedure Error(Pos:Position; ErrNr:integer);
+begin
+   inc(ErrorNbr);
+   if @@PutError <> nil then PutError(Pos,ErrNr);
+   if StopOnError then 
+   begin 
+      DrawMessage('Stopped on first error',''); 
+      Halt(1); @+
+   end;
+end; @#
+
+procedure ErrImm(ErrNr:integer);
+begin
+ Error(CurPos,ErrNr);
+end;
+
+@ We also can write errors to a file. This requires keeping track of
+the file (dubbed |Errors|) and whether it has been opened or not (in
+the Boolean condition |OpenedErrors|).
+
+Note this takes advantage of |with| to destructure |Pos| into a |Line|
+and |Col| for us.
+
+@p
+var
+  Errors: text; {file name for errors file}
+  OpenedErrors: boolean = false; {have we opened it yet?}
+
+procedure WriteError(Pos:Position; ErrNr:integer);
+begin
+ if not OpenedErrors then RunTimeError(2001);
+ with Pos do WriteLn(Errors,Line,' ',Col,' ',ErrNr);
+end;
+
+@ \node{Opening an errors file.}%
+We can open an errors file, which will reset the |ErrorNbr| counter to
+zero and re-initialize |CurPos| to line 1 and column 1.
+
+When |PutError| is |nil|, we initialize it to be |WriteError|.
+
+@p
+procedure OpenErrors(FileName:String);
+begin
+   if ExtractFileExt(FileName)='' then FileName:=FileName+'.err';
+   Assign(Errors,FileName);
+   without_io_checking(Rewrite(Errors));
+   if IOResult <> 0 then
+   begin
+      DrawMessage('Can''t open errors file '''+FileName+''' for writing','');
+      halt(1);
+   end;
+   OpenedErrors:=true;
+   ErrorNbr:=0;  with CurPos do begin Line:=1; Col:=1 end;
+   if @@PutError = nil then PutError:=WriteError;
+end;
+
+@ Appending errors to the errors file.
+
+@p
+procedure AppendErrors(FileName:String);
+begin
+ OpenedErrors:=true;
+ if ExtractFileExt(FileName)=''  then FileName:=FileName+'.err';
+ Assign(Errors,FileName);
+ ErrorNbr:=0;
+ with CurPos do begin Line:=1; Col:=1 end; @/
+ without_io_checking(append(Errors));
+ if ioresult<>0 then Rewrite(Errors);
+end;
+
+@ We can also close the errors file and unset the |Errors| variable,
+``forgetting'' where we logged the errors.
+
+@p
+procedure EraseErrors;
+begin
+ if OpenedErrors then
+  begin
+   OpenedErrors:=false;
+   close(Errors); erase(Errors);
+  end;
+end;
+
+@ We can also just close the errors file.
+
+@p
+procedure CloseErrors;
+begin
+ if OpenedErrors then
+  begin
+   OpenedErrors:=false;
+   close(Errors);
+  end;
+end;
+
+@ Like I said, overflow errors are especially problematic. If/when
+they occur, we should just bail out immediately.
+
+@p
+procedure OverflowError(ErrorCode:word);
+begin
+ RTErrorCode:=ErrorCode;
+ OverflowErroor:=true;
+ RunError(97);
+end;
+
+@ We have an assertion utility to check if a |Cond| is |true|. When it
+is |false|, we should report a runtime error.
+
+\label{MizAssert}
+
+@p
+procedure MizAssert( ErrorCode:word; Cond: boolean );
+begin
+ if not Cond then
+  begin
+   RTErrorCode:=ErrorCode;
+   RunError(98);
+  end;
+end;
+
+@ Last, we have a catchall for runtime errors encountered.
+
+@p
+procedure RunTimeError(ErrorCode:word);
+begin
+ RTErrorCode:=ErrorCode;
+ RunError(99);
+end;

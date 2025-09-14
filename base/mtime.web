@@ -1,0 +1,144 @@
+
+@* [F] Time utilities.
+This is another heavily ``system dependent'' library.
+
+@<mtime.pas@>=
+  @<GNU License@>
+
+unit mtime;
+
+interface @;@|@/
+
+@<Interface for \texttt{mtime.pas}@>@;
+
+implementation @; @|@/
+
+@<Implementation for \texttt{mtime.pas}@>@; @+ @t\2@>
+
+end;
+
+@ @<Interface for \texttt{mtime.pas}@>=
+procedure @? TimeMark(var W:longint);  @t\2@>
+function @? ElapsedTime(W:longint): longint; @t\2@>
+procedure @? MUnpackTime(W:longint; var H,M,S,F: word); @t\2@>
+function @? ReportTime(W:longint): String;
+
+@ We also have one global variable tracking the start time.
+
+@p
+var
+  gStartTime: longint;
+@ The implementation begins with a rather \emph{thorny} digression
+depending on which compiler we're using.
+
+@<Implementation for \texttt{mtime.pas}@>=
+@<Timing utilities |uses| for Delphi@>@;
+@<Timing utilities |uses| for FreePascal@>@;
+@ Delphi simply requires us to introduce a constant for milliseconds.
+
+@<Timing utilities |uses| for Delphi@>=
+@{@&$IFDEF DELPHI@}
+uses windows;
+const cmSecs = 1000; @/
+@{@&$ENDIF@}
+@ FreePascal requires a bit more work, alas.
+
+@<Timing utilities |uses| for FreePascal@>=
+@{@&$IFDEF FPC@}
+uses dos;
+const cmSecs = 100;
+type
+   TSystemTime = @/
+     record
+      wHour:word;
+      wMinute:word;
+      wSecond:word;
+      wMilliseconds:word;
+     end;
+procedure GetLocalTime(var aTime: TSystemTime);
+begin
+ with aTime do GetTime(wHour,wMinute,wSecond,wMilliseconds);
+end; @/
+@{@&$ENDIF@}
+
+@ Now we can happily plug along implementing the functions we need.
+
+@<Implementation for \texttt{mtime.pas}@>=
+function SystemTimeToMiliSec(const fTime: TSystemTime): longint;
+begin
+ SystemTimeToMiliSec:=fTime.wHour*(3600*cmSecs)+
+                      fTime.wMinute*longint(60*cmSecs)+
+                      fTime.wSecond*cmSecs+
+                      fTime.wMilliseconds;
+end;
+
+@ We ``start the clock''.
+
+@p
+procedure TimeMark(var W:longint);
+ var @? SystemTime: TSystemTime;
+begin
+ GetLocalTime(SystemTime);
+ W:=SystemTimeToMiliSec(SystemTime);
+end;
+
+@ We measure the time lapse since we ``started the clock''.
+
+@p
+function ElapsedTime(W:longint): longint;
+ var @? T : longint;
+     @? SystemTime: TSystemTime;
+begin
+ GetLocalTime(SystemTime);
+ T := SystemTimeToMiliSec(SystemTime)-W;
+ if T < 0 then T:=86400*cmSecs+T;
+ ElapsedTime:=T;
+end;
+
+@ We can transform an interval of time (in milliseconds) into hours,
+minutes, seconds, a fractional amount of time.
+
+@p
+procedure MUnpackTime(W:longint; var H,M,S,F: word);
+begin
+ H := W div (3600*cmSecs);
+ M := (W-H*3600*cmSecs) div (60*cmSecs);
+ S := (W-H*3600*cmSecs-M*60*cmSecs) div cmSecs;
+ F := W-H*3600*cmSecs-M*60*cmSecs-S*cmSecs;
+end;
+
+@ When reporting time, we want to pad the time by a zero. This is
+standard conventional stuff (e.g., I have an appointment at 11:01~AM,
+not 11:1~AM).
+
+@p
+function LeadingZero(w : word) : String;
+var lStr: String;
+begin
+  Str(w:0,lStr);
+  if length(lStr) = 1 then lStr := '0' + lStr;
+  LeadingZero := lStr;
+end;
+
+@
+Reporting time transforms a time interval (measured in milliseconds)
+into a human readable String.
+
+@p
+function ReportTime(W:longint): String;
+var H,M,S,F: word; lTimeStr: String;
+begin
+   MUnpackTime(ElapsedTime(W),H,M,S,F);
+   if F >= (cmSecs div 2) then inc(S);
+   if H<>0 then
+   begin Str(H,lTimeStr); lTimeStr:=lTimeStr+'.'+LeadingZero(M) end
+   else Str(M:2,lTimeStr);
+   ReportTime:=lTimeStr+':'+LeadingZero(S);
+end;
+
+@ When we run the program, we should mark the time.
+
+@p
+begin
+ TimeMark(gStartTime);
+end.

@@ -1,0 +1,641 @@
+
+@* [F] Vocabulary file dictionaries.
+Mizar works with vocabulary files (suffixed with \texttt{.voc})
+for introducing new identifiers.
+
+\label{dicthan.pas}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%
+%%%
+%%%
+@<dicthan.pas@>=
+  @<GNU License@>
+
+unit dicthan;
+
+interface @|@#
+
+uses mobjects; @|@#
+
+@t\4@> @<Public constants for \texttt{dicthan.pas}@>@; @#
+
+type
+   SymbolCounters = array['A'..'Z'] of word;
+   SymbolIntSeqArr = array['A'..'Z'] of IntSequence; @#
+
+@<Class declarations for \texttt{dicthan.pas}@>@;
+
+@<Public function declarations for \texttt{dicthan.pas}@>@; @#
+
+implementation @|@#
+
+uses mizenv,xml_inout,xml_dict; @#
+
+@t\4@> @<Implementation for \texttt{dicthan.pas}@>@t\2@> @#
+
+end.
+
+@ We recall from  Adam Grabowski,
+Artur Korni\l{}owicz, and
+Adam Naumowicz's ``Mizar in a Nutshell'' (\section4.3, \doi{10.6092/issn.1972-5787/1980}), the various
+prefixes for vocabulary file entries:
+@^Grabowski, Adam@>
+@:Kornilowicz, Artur}{Korni\l{}owicz, Artur@>
+@^Naumowicz, Adam@>
+
+\label{dicthan.pas:constants}
+
+{-- G} for structures
+
+{-- K} for left-functor brackets
+
+{-- L} for right-functor brackets
+
+{-- M} for modes
+
+{-- O} for functors
+
+{-- R} for predicates
+
+{-- U} for selectors
+
+{-- V} for attributes
+
+@<Public constants for \texttt{dicthan.pas}@>=
+const @|@/
+   StandardPriority = 64; @/
+   AvailableSymbols = ['G','K','L','M','O','R','U','V'];
+
+@ There are only three classes in the dictionary handling module. We
+have an abstraction for a symbol appearing in a vocabulary file, a
+sort of ``checksum'' for the counts of symbols appearing in a
+vocabulary file, and a dictionary associating to each article name
+(string) a collection of symbols.
+
+@<Class declarations for \texttt{dicthan.pas}@>=
+   @<Symbol for vocabulary@>; @#
+   @<Abstract vocabulary object declaration@>; @#
+   @<Vocabulary object declaration@>;
+
+@ @<Public function declarations for \texttt{dicthan.pas}@>=
+   function GetPrivateVoc(const fName:string):PVocabulary; @t\2@>
+   function GetPublicVoc(@t\hskip-0.6667em@>@+const fName:string;@+ var fVocFile:text):PVocabulary; @t\2@>@#
+   
+   procedure LoadMmlVcb(@t\hskip-0.6667em@>@+const aFileName: string;@+ var aMmlVcb: MStringList); @t\2@>
+   procedure StoreMmlVcb(const aFileName: string;@+ const aMmlVcb: MStringList); @t\2@>
+   procedure StoreMmlVcbX(const aFileName: string;@+ const aMmlVcb: MStringList); @t\2@>
+
+
+@ We can test if an entry in the dictionary is valid. Remember, only
+functor symbols can have a priority associated with it (and a priority
+is a number between 0 and $255=2^{8}-1$, inclusive).
+
+Also remember, that a symbol in a dictionary entry \textbf{cannot}
+have whitespaces in it.
+
+\label{IsValidSymbol}
+
+@d delete_prefix == Delete(lLine,1,1)
+
+@<Implementation for \texttt{dicthan.pas}@>=
+function IsValidSymbol(const aLine: string): boolean;
+var lLine: string;
+lKind: char;
+lPriority,lPos,lCode: integer;
+begin
+   IsValidSymbol:=false;
+   lLine:=TrimString(aLine);
+   @<Initialize \\{lKind}, but exit if dictionary line contains invalid symbol@>;
+   delete_prefix;
+   case lKind of
+      'O': @<Check if functor symbol is valid@>;
+      'R': @<Check if predicate symbol is valid@>;
+   othercases
+   begin
+      if Pos(' ',lLine) > 0 then exit;
+      IsValidSymbol:=true;
+   end;
+   endcases;
+end;
+
+@ An ``invalid'' line in the dictionary file would be empty lines
+(whose length is less than one), and lines which do not start with a
+valid prefix. At the end of this chunk, the \\{lKind} should be
+initialized to the prefix of the line.
+
+@<Initialize \\{lKind}, but exit if dictionary line contains invalid symbol@>=
+   if length(lLine)<=1 then exit;
+   lKind:=lLine[1];
+   if not (lKind in AvailableSymbols) then exit
+
+@ Recall the \href{https://wiki.freepascal.org/Val}{specification}
+for \\{Val} sets \\{lCode} to zero for
+success, and the nonzero values store the index where the string is
+not a numeric value.
+
+We copy the identifier (as determined from the start of the line
+until, but not including, the index of the first space in the line)
+and throw away everything after the first whitespace.
+
+When the identifier for the functor symbol is not an empty
+string \emph{and} the priority can be determined unambiguously, then
+the functor symbol entry is valid. Otherwise it is invalid.
+
+@<Check if functor symbol is valid@>=
+         begin
+            IsValidSymbol:=true;
+            lPos:=Pos(' ',lLine);
+            if lPos <> 0 then
+            begin {Parse priority for symbol}
+               val(TrimString(Copy(lLine,lPos,length(lLine))),lPriority,lCode);
+               lLine:=TrimString(Copy(lLine,1,lPos-1));
+               IsValidSymbol:=(lCode = 0) and (lLine<>'');
+            end;
+         end
+
+@ A predicate entry in the dictionary file should not include a
+priority, nor should it include any whitespaces. This is the criteria
+for a valid predicate symbol entry in the dictionary.
+
+We enforce this by finding the first ``\texttt{\SP}'' character in the
+line. If there is one, then we trim both sides of the line (removing
+leading and trailing whitespace). We should have no more spaces in the
+line. If there is a space, then it is an invalid predicate symbol.
+
+@<Check if predicate symbol is valid@>=
+         begin
+            lPos:=Pos(' ',lLine);
+            if lPos <> 0 then {\\{lLine} contains a space}
+            begin
+               lLine:=TrimString(Copy(lLine,lPos,length(lLine)));
+               if Pos(' ',lLine) > 0 then exit;
+            end;
+            IsValidSymbol:=true;
+         end
+
+@ \node{TSymbol.} These are used in \texttt{kernel/accdict.pas}.
+The \\{Kind} is its one-letter kind (discussed
+in \section\xref{dicthan.pas:constants}), and \\{Repr} is its lexeme.
+For functors, its priority is stored as its \\{Prior}.
+
+The ``infinitive'' appears to be only used for
+predicates.
+
+@<Symbol for vocabulary@>=
+   PSymbol = ^TSymbol; @/
+   TSymbol  = object(MObject) @t\1@>@/
+      Kind: char; @/
+      Repr,Infinitive: string; @/
+      Prior: byte; @/
+      constructor Init(fKind: char; fRepr,fInfinitive: string; fPriority:byte); @t\2@>
+      constructor Extract(const aLine: string); @t\2@>
+      function SymbolStr: string; @t\2@>
+      constructor Load(var aText: text); @t\2@>
+      procedure Store(var aText: text); @t\2@>
+      destructor Done; virtual;  @t\2\2\2@>
+   end
+
+@ \node{Constructor.} Given the ``kind'', its ``representation'' and
+``infinitive'', and its priority (as a number between 0 and 255), we
+can construct a symbol.
+
+\label{TSymbol.Init}
+
+@<Implementation for \texttt{dicthan.pas}@>=
+constructor TSymbol.Init(fKind: char; fRepr,fInfinitive: string; fPriority:byte);
+begin
+   Kind:=fKind; Repr:=fRepr;
+   Prior:=fPriority;
+   Infinitive:='';
+end;
+
+@ \node{Constructor.} When we want to extract a symbol from a line in
+the dictionary file, care must be taken for functors (since they may
+contain an explicit priority) and for predicates. Predicates have an
+undocumented feature to allow ``infinitives'', so an acceptable
+predicate line in a dictionary may look like
+{\smallbreak\tt\narrower
+Rpredicate infinitive\smallbreak}
+\noindent%
+Although what Mizar does with infinitives, I do not know\dots
+
+@p
+constructor TSymbol.Extract(const aLine: string);
+var lPos,lCode:integer; lRepr: string;
+begin
+   Kind:=aLine[1];
+   Repr:=TrimString(Copy(aLine,2,length(aLine)));
+   Prior:=0;
+   Infinitive:='';
+   case Kind of
+      'O':
+         begin
+            lPos:=Pos(' ',Repr);
+            Prior:=StandardPriority;
+            if lPos <> 0 then
+               @<Initialize explicit priority for functor entry in dictionary@>;
+         end;
+      'R':
+         begin
+            lPos:=Pos(' ',Repr);
+            if lPos <> 0 then
+            @<Initilize explicit infinitive for a predicate entry in dictionary@>;
+         end;
+   endcases;
+end;
+
+@ Predicates can have an optional infinitive, separated from the
+lexeme by a single whitespace. It remains unclear what Mizar uses
+predicate infinitives for, but it is a feature. This is written out to
+the \texttt{.vcx} file, according to \texttt{xml\_dict.pas}.
+
+Note that there are 4 predicates with infinitives in Mizar:
+\enumerate
+\item \texttt{jumps\_in} (infinitive: \texttt{jump\_in}) occurs in the
+article \texttt{AMISTD\_1}
+\item \texttt{halts\_in} (infinitive: \texttt{halt\_in}) occurs in the
+article \texttt{EXTPRO\_1}
+\item \texttt{refers} (infinitive: \texttt{refer}) occurs in the
+article \texttt{SCMFSA7B}
+\item \texttt{destroys} (infinitive: \texttt{destroy}) occurs in the
+article \texttt{SCMFSA7B}
+\endenumerate
+
+@<Initilize explicit infinitive for a predicate entry in dictionary@>=
+begin
+   lRepr:=Repr; Repr:='';
+   Repr:=TrimString(Copy(lRepr,1,lPos-1));
+   Infinitive:=TrimString(Copy(lRepr,lPos+1,length(lRepr)));
+end
+
+@ Functors with explicit priorities require parsing that priority. It
+is assumed that a single whitespace separates the lexeme from the priority.
+
+@<Initialize explicit priority for functor entry in dictionary@>=
+begin
+   lRepr:=Repr;
+   Repr:=''; @/
+   val(TrimString(Copy(lRepr,lPos+1,length(lRepr))),Prior,lCode); {Store the priority}
+   Repr:=TrimString(Copy(lRepr,1,lPos-1)); {Store the lexeme}
+end
+
+@ \node{Serialize symbols.} We can serialize a \\{TSymbol} object,
+which produces the sort of entry we'd expect to find in a
+dictionary. So we would have the symbol kind, the lexeme, and optional
+data (non-default priorities for functors, infinitives for predicates).
+
+\label{TSymbol.SymbolStr}
+
+@<Implementation for \texttt{dicthan.pas}@>=
+function TSymbol.SymbolStr: string;
+var lStr,lIntStr: string;
+begin
+   lStr:=Kind+Repr;
+   case Kind of
+      'O':
+         if Prior <> StandardPriority then
+         begin
+            Str(Prior,lIntStr);
+            lStr:=lStr+' '+lIntStr;
+         end;
+      'R':
+         if Infinitive <> '' then
+            lStr:=lStr+' '+Infinitive;
+   endcases; @/
+   SymbolStr:=lStr;
+end;
+
+@ Given a text (usually the contents of a vocabulary file), we read in
+a line. When the line is a nonempty string, we initialize the lexeme
+representation, priority, and infinitives.
+Then, when the dictionary entry describes a valid symbol (\section\xref{IsValidSymbol}),
+we populate the fields of the \\{TSymbol}.
+
+@p
+constructor TSymbol.Load(var aText: text);
+var lDictLine: string;
+begin
+   ReadLn(aText,lDictLine);
+   lDictLine:=TrimString(lDictLine);
+   if length(lDictLine) = 0 then exit;
+   Repr:=''; Prior:=0; Infinitive:='';
+   if IsValidSymbol(lDictLine) then
+      Extract(lDictLine);
+end;
+
+@ Storing a \\{TSymbol} in a file amounts to writing its serialization
+(\section\xref{TSymbol.SymbolStr}) to the file.
+
+@p
+procedure TSymbol.Store(var aText: text);
+begin
+   WriteLn(aText,SymbolStr);
+end;
+
+@ \node{Destructor.} We just reset the lexeme and infinitive strings
+to be empty strings.
+
+@p
+destructor TSymbol.Done;
+begin
+   Repr:='';
+   Infinitive:='';
+end;
+
+@ \node{Abstract vocabulary objects.}
+This is used in \texttt{kernel/impobjs.pas}.
+We recall (\section\xref{dicthan.pas}) that the \\{SymbolCounters} are just
+an enumerated type consisting of a single uppercase Latin Letter. 
+
+@<Abstract vocabulary object declaration@>=
+   AbsVocabularyPtr = ^AbsVocabularyObj; @/
+   AbsVocabularyObj = object(MObject) @t\1@> @/
+      fSymbolCnt: SymbolCounters;
+      constructor Init; @t\2@>
+      destructor Done; virtual;  @t\2\2\2@>
+   end
+
+@ We only have the constructor and destructor for abstract vocabulary
+objects. 
+
+@<Implementation for \texttt{dicthan.pas}@>=
+constructor AbsVocabularyObj.Init;
+begin
+   FillChar(fSymbolCnt,SizeOf(fSymbolCnt),0);
+end;
+
+destructor AbsVocabularyObj.Done;
+begin
+end;
+
+@ \node{Vocabulary objects.} A ``vocabulary object'' is just a
+collection of \\{PSymbol}s read in from a vocabulary file.
+
+These are also used in \texttt{kernel/accdict.pas}. 
+
+@<Vocabulary object declaration@>=
+   PVocabulary = ^TVocabulary; @/
+   TVocabulary = object(AbsVocabularyObj) @t\1@> @/
+      Reprs: MCollection; @/
+      constructor Init; @t\2@>
+      constructor ReadPrivateVoc(const aFileName: string); @t\2@>
+      constructor LoadVoc(var aText: text); @t\2@>
+      procedure StoreVoc(@t\hskip-0.6667em@>@+const aFileName: string;@+ var aText: text); @t\2@>
+      destructor Done; virtual; @t\2\2\2@>
+   end
+
+@ \node{Constructor (Empty vocabulary).} We can construct the empty
+vocabulary by just initializing the underlying collection.
+
+@<Implementation for \texttt{dicthan.pas}@>=
+constructor TVocabulary.Init;
+begin
+   FillChar(fSymbolCnt,SizeOf(fSymbolCnt),0);
+   Reprs.Init(10,10);
+end;
+
+@ \node{Destructor.} We only need to free up the underlying collection.
+
+@p
+destructor TVocabulary.Done;
+begin
+   Reprs.Done;
+end;
+
+@ \node{Constructor.} We can read from a private vocabulary file.
+
+@p
+constructor TVocabulary.ReadPrivateVoc(const aFileName: string);
+ var lDict: text;
+     lDictLine: string;
+     lSymbol: PSymbol;
+begin
+    Init;
+    Assign(lDict,aFileName); @/
+    without_io_checking(reset(lDict)); @/
+    if ioresult <> 0 then exit; {file is not ready to be read, bail out!}
+    while not seekEOF(lDict) do
+    @<Read line into vocabulary from dictionary file@>;
+   Close(lDict);
+end;
+
+@ When reading dictionary lines into a vocabulary file, we skip over
+blank lines. Further, we only read \emph{valid} entries into the
+vocabulary. 
+
+@<Read line into vocabulary from dictionary file@>=
+begin
+   readln(lDict,lDictLine);
+   lDictLine:=TrimString(lDictLine);
+   if length(lDictLine) > 1 then {if dictionary line is not blank}
+   begin
+      lSymbol:=new(PSymbol,Extract(lDictLine));
+      if IsValidSymbol(lDictLine) then {add the symbol}
+      begin
+         inc(fSymbolCnt[lSymbol^.Kind]);
+         Reprs.Insert(lSymbol); @+
+      end;
+   end;
+end
+
+@ \node{Constructor.}
+We can read in the vocabulary from a file. If I am not mistaken, this
+is usually from \texttt{mml.vct}. We have the first line look like
+``\texttt{G3 K0 L0 M1 O7 R2 U4 V6}'', which enumerates the number of
+different types of definitions appearing in an article.
+
+\label{TVocabulary.LoadVoc}
+
+@<Implementation for \texttt{dicthan.pas}@>=
+constructor TVocabulary.LoadVoc(var aText: text);
+var i, lSymbNbr, lNbr: integer;
+    lKind,lDummy,c: Char;
+begin
+   lSymbNbr:=0;
+   @<Count \\{lNbr} the number of dictionary entries for an article@>;
+   ReadLn(aText);
+   Reprs.Init(10,10);
+   for i:=1 to lSymbNbr do
+   begin
+      Reprs.Insert(new(PSymbol,Load(aText)));
+   end;
+end;
+
+@ Since the first line counts the different sorts of definitions
+appearing in the article, we can parse the numbers, then add them
+up. This initializes the \\{fSymbolcCnt} entry for $c$.
+
+@<Count \\{lNbr} the number of dictionary entries for an article@>=
+   for c:='A' to 'Z' do if c in AvailableSymbols then
+   begin
+      Read(aText, lKind, lNbr, lDummy);
+      fSymbolCnt[c]:=lNbr;
+      Inc(lSymbNbr, fSymbolCnt[c]);
+   end
+
+@ \node{Storing a dictionary entry.} This appends to a \texttt{.vct}
+file the entries for an article. Specifically, this is just the
+``\texttt{\#}ARTICLE'' and then the counts of the different kinds of
+definitions.
+
+\label{TVocabulary.StoreVoc}
+
+@<Implementation for \texttt{dicthan.pas}@>=
+procedure TVocabulary.StoreVoc(@t\hskip-0.5em@> @+const aFileName: string;@+ var aText: text);
+var i: Byte; c: Char;
+begin
+   WriteLn(aText, '#', aFileName);
+   for c:='A' to 'Z' do
+      if c in AvailableSymbols then Write(aText, c,fSymbolCnt[c], ' ');
+   WriteLn(aText);
+   for i:=0 to Reprs.Count - 1 do PSymbol(Reprs.Items^[i])^.Store(aText);
+end;
+
+@ \node{Miscellaneous public-facing functions.}
+
+
+@<Implementation for \texttt{dicthan.pas}@>=
+function GetPrivateVoc(const fName:string):PVocabulary;
+var lName: string;
+begin
+   lName:=fName;
+   if ExtractFileExt(lName) = '' then lName:=lName+'.voc';
+   if not MFileExists(lName) then
+   begin
+      GetPrivateVoc:=nil;
+      exit;
+   end;
+   GetPrivateVoc:=new(PVocabulary,ReadPrivateVoc(lName));
+end;
+
+@ \node{Reading mml.vct entries.}
+The \texttt{\$MIZFILES/mml.vct} file contains all the vocabularies
+concatenated together into one giant vocabulary file. It uses lines
+prefixed with ``\#'' followed by the article name to separate the
+vocabularies from different files. We search for the given article
+name (stored in the \\{fName} argument). When we find it, we construct
+the Vocabulary object (\section\xref{TVocabulary.LoadVoc}).
+
+@p
+function GetPublicVoc(@t\hskip-0.6667em@> @+const fName:string;@+ var fVocFile:text): PVocabulary;
+var lLine: string;
+begin
+   GetPublicVoc:=nil;
+   reset(fVocFile);
+   while not eof(fVocFile) do
+   begin
+      readln(fVocFile,lLine);
+      if (length(lLIne)>0) and (lLine[1]='#') and
+            (copy(lLine,2,length(lLine)) = fName) then
+      begin
+         GetPublicVoc:=new(PVocabulary,LoadVoc(fVocFile));
+         exit;
+      end;
+   end;
+end;
+
+@ \node{Reading from mml.vct.}
+This function is used by \texttt{libtools/checkvoc.dpr} and in a
+couple user tools. In those other functions, they
+pass \texttt{\$MIZFILES/mml.vct} as the value for \\{aFileName}.
+This procedure will then populate the \\{aMmlVcb} file associating to
+each article name its vocabulary.
+
+@p
+procedure LoadMmlVcb(@t\hskip-0.6667em@> @+const aFileName: string;@+ var aMmlVcb: MStringList);
+var lFile: text;
+lDummy: char;
+lDictName: string;
+r:Integer;
+begin
+   FileExam(aFileName);
+   Assign(lFile, aFileName);
+   Reset(lFile); {initialize file for reading}
+   aMmlVcb.Init(1000);
+   aMmlVcb.fSorted:=true;
+   while not eof (lFile) do
+   begin
+      ReadLn(lFile, lDummy, lDictName);
+      r:=aMmlVcb.AddObject(lDictName,new(PVocabulary,LoadVoc(lFile)));
+   end;
+   Close(lFile);
+end;
+
+@ Storing a vocabulary delegates much work
+(\section\xref{TVocabulary.StoreVoc}). However, since \\{fCount} is
+not initialized, I am uncertain how this works, exactly\dots
+Furthermore, this function is not used anywhere in Mizar.
+
+@p
+procedure StoreMmlVcb(const aFileName: string;@+ const aMmlVcb: MStringList);
+var lFile: text;
+i: Integer;
+begin
+   Assign(lFile, aFileName);
+   Rewrite(lFile);
+   with aMmlVcb do
+      for i:=0 to fCount - 1 do
+         PVocabulary(fList^[i].fObject)^.StoreVoc(fList^[i].fString^,lFile);
+   Close(lFile);
+end;
+
+@ Like \\{StoreMmlVcb}, this function is not used anywhere in Mizar.
+This appears to produce the \XML/-equivalent to the previous function.
+
+@p
+procedure StoreMmlVcbX(const aFileName: string;@+ const aMmlVcb: MStringList);
+var i,s: Integer;
+c: char;
+VCXfile: XMLOutStreamPtr;
+begin
+   VCXfile:=new(XMLOutStreamPtr,OpenFile(aFileName));
+   VCXfile.Out_XElStart0(XMLElemName[elVocabularies]);
+   with aMmlVcb do
+      for i:=0 to fCount - 1 do
+         with PVocabulary(fList^[i].fObject)^ do
+      begin
+         VCXfile.Out_XElStart(XMLElemName[elVocabulary]);
+         VCXfile.Out_XAttr(XMLAttrName[atName],fList^[i].fString^);
+         VCXfile.Out_XAttrEnd;
+         @<Write vocabulary counts to \XML/ file@>;
+         @<Write symbols to vocabulary \XML/ file@>;
+         VCXfile.Out_XElEnd(XMLElemName[elVocabulary]);
+      end;
+   VCXfile.Out_XElEnd(XMLElemName[elVocabularies]);
+   dispose(VCXfile,Done);
+end;
+
+@ We write out the counts of each kind of definition appearing in the
+article.
+ 
+@<Write vocabulary counts to \XML/ file@>=
+         {Kinds}
+         for c:='A' to 'Z' do
+            if c in AvailableSymbols then
+            begin
+               VCXfile.Out_XElStart(XMLElemName[elSymbolCount]);
+               VCXfile.Out_XAttr(XMLAttrName[atKind],c);
+               VCXfile.Out_XIntAttr(XMLAttrName[atNr],fSymbolCnt[c]);
+               VCXfile.Out_XElEnd0;
+            end
+
+@ We write out each symbol appearing in the article's vocabulary.
+
+@<Write symbols to vocabulary \XML/ file@>=
+         {Symbols}
+         VCXfile.Out_XElStart0(XMLElemName[elSymbols]);
+         for s:=0 to Reprs.Count - 1 do
+            with PSymbol(Reprs.Items[s])^ do
+         begin
+            VCXfile.Out_XElStart(XMLElemName[elSymbol]);
+            VCXfile.Out_XAttr(XMLAttrName[atKind],Kind);
+            VCXfile.Out_XAttr(XMLAttrName[atName],QuoteStrForXML(Repr));
+            case Kind of
+               'O': VCXfile.Out_XIntAttr(XMLAttrName[atPriority],Prior);
+               'R': if Infinitive <> '' then VCXfile.Out_XAttr(XMLAttrName[atInfinitive],Infinitive);
+            end;
+            VCXfile.Out_XElEnd0;
+         end;
+         VCXfile.Out_XElEnd(XMLElemName[elSymbols])
+

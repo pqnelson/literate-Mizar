@@ -28,7 +28,8 @@
 \def\graphics#1{\ifpdf\includegraphics{#1.pdf}\else\epsfbox{#1.eps}\fi}
 
 % Grammar related helpers
-\def\<#1>{\ifmmode\langle\hbox{\textit{#1\/}}\rangle\else$\langle$\hbox{\textit{#1\/}}$\rangle$\fi}
+%\def\<#1>{\ifmmode\langle\hbox{\textit{#1\/}}\rangle\else$\langle$\hbox{\textit{#1\/}}$\rangle$\fi}
+\def\<#1>{\hbox{$\langle$\textit{#1\/}$\rangle$}}
 % for my unconfirmed suspicions, to make it easier to edit them out
 % (Style based on Knuth's 1984 article on literate programming)
 \def\Ithink#1{\ifhmode\ \fi$[\mkern-2mu[$#1$]\mkern-2mu]$\ } 

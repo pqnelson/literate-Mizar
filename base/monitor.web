@@ -1,0 +1,217 @@
+
+@* [F] Monitor.
+
+@<monitor.pas@>=
+  @<GNU License@>
+
+unit monitor;
+
+interface @;@|@/
+
+procedure @? InitExitProc;
+
+implementation @; @|@/
+
+uses @|@/
+@{@&$IFDEF FPC@} @/
+ @t\quad @> @{@&$IFNDEF WIN32@} @/
+   baseunix, @/
+ @t\quad @> @{@&$ENDIF@} @/
+@{@&$ENDIF@} @/
+mizenv,errhan,mconsole @/
+@{@&$IFDEF WIN32@} @+ ,windows @{@&$ENDIF@}
+mdebug @+ ,info @+ end_mdebug @+@+;@#
+
+var
+   _ExitProc: pointer;
+   _IOResult:integer; @|@/
+
+@<Implementation for \texttt{monitor.pas}@>
+
+@t\2@>
+end
+
+@ There are a few private helper functions in this module.
+
+@<Implementation for \texttt{monitor.pas}@>=
+procedure _Halt_(ErrorCode: word);
+begin
+  _IOResult:=IOResult;
+   ErrorAddr:=nil;
+  if ErrorCode>1 then
+   case ErrorCode of
+    2..4:     begin ErrImm(1000+ErrorCode);
+                DrawMessage('I/O error',ErrMsg[ErrorCode]) @+
+              end;
+    5..6:     begin ErrImm(1000+ErrorCode); BugInProcessor @+ end;
+    12:       begin ErrImm(1000+ErrorCode); BugInProcessor @+ end;
+    97,98,99:
+     begin ErrImm(RTErrorCode);
+       @<Handle runtime error cases for \texttt{monitor.pas}@>
+     end;
+    100..101: begin ErrImm(1000+ErrorCode);
+                DrawMessage('I/O error',ErrMsg[ErrorCode-95]);
+              end;
+    102..106: begin ErrImm(1000+ErrorCode); BugInProcessor @+ end;
+    150..162: begin ErrImm(1000+ErrorCode);
+                DrawMessage('I/O error','Critical disk error');
+              end;
+    200..201: begin ErrImm(1000+ErrorCode); BugInProcessor @+ end;
+    202:      begin ErrImm(1000+ErrorCode); DrawMessage('Stack overflow error','') @+ end;
+    203,204:  begin ErrImm(1000+ErrorCode); DrawMessage('Heap overflow error','') @+ end;
+    208:      begin ErrImm(1000+ErrorCode); DrawMessage('Overlay manager not installed','') @+ end;
+    209:      begin ErrImm(1000+ErrorCode); DrawMessage('Overlay file read error','') @+ end;
+    210..212: begin ErrImm(1000+ErrorCode); BugInProcessor @+ end;
+    213:      begin ErrImm(1000+ErrorCode); DrawMessage('Collection Index out of range','') @+ end;
+    214:      begin ErrImm(1000+ErrorCode); DrawMessage('Collection overflow error','') @+ end;
+    215:      begin ErrImm(1000+ErrorCode); DrawMessage('Arithmetic overflow error','') @+ end;
+    216:      begin ErrImm(1000+ErrorCode); DrawMessage('General Protection fault','') @+ end;
+    217:      begin ErrImm(1000+ErrorCode); DrawMessage('Segmentation fault','') @+ end;
+    218..254: begin ErrImm(1000+ErrorCode); BugInProcessor @+ end;
+    255:      ErrImm(1000+ErrorCode);
+    othercases
+     begin ErrImm(ErrorCode);
+      if OverflowErroor then
+       DrawMessage('Mizar parameter overflow error','')
+      else BugInProcessor
+     end;
+   endcases;
+  CloseErrors;
+  ExitProc:=_ExitProc;
+  if (ErrorCode = 0) and (ErrorNbr <> 0) then Halt(1) else Halt(ErrorCode);
+end;
+
+@ @<Handle runtime error cases for \texttt{monitor.pas}@>=
+case RTErrorCode of
+  800,804:  DrawMessage('Library Corrupted','');
+  857:      DrawMessage('Connection Fault','');
+  {900..999: DrawMessage('Mizar parameter overflow: '+IntToStr(RTErrorCode),'');}
+  1255:     DrawMessage('User break','');
+  othercases
+    if OverflowErroor then
+      DrawMessage('Mizar parameter overflow: '+IntToStr(RTErrorCode),'')
+    else BugInProcessor
+endcases;
+
+@ The |MizExitProc| is a private ``bail out'' function.
+
+@<Implementation for \texttt{monitor.pas}@>=
+procedure MizExitProc;
+begin @|@/
+@{@&$IFDEF IODEBUG@}
+  ExitProc:=_ExitProc; @/
+@{@&$ELSE@}
+  _Halt_(ExitCode); @/
+@{@&$ENDIF@}
+end;
+
+@ We use the |MizExitProc| to initialize the |ExitProc| pointer.
+
+@p
+procedure InitExitProc;
+begin ExitProc := @@MizExitProc end;
+
+@ \node{Initializing Control.}%
+This is a \emph{heavily} system dependent piece of code. There are two
+ways to implement it (one way for Windows, another way for everyone
+else). Once we're done, we have to initialize the |_ExitProc| and
+invoke |InitCtrl|.
+
+@p
+@<Non-windows FreePascal implemenation for |InitCtrl|@>@; @#
+
+@<Windows implemenation for |InitCtrl|@>@;@#
+
+begin
+  _ExitProc := ExitProc;
+   InitCtrl;
+end.
+
+@ @<Non-windows FreePascal implemenation for |InitCtrl|@>=
+@{@&$IFDEF FPC@}
+@t\quad @> @{@&$IFNDEF WIN32@}
+procedure CatchSignal(aSig : integer);cdecl;
+begin @t\1@> @/
+ case aSig of
+@t\qquad @>    SIGINT,SIGQUIT,SIGTERM:
+     begin
+      CtrlCPressed:=true;
+      RunTimeError(1255); @+
+     end; @+
+ endcases; @t\2@>
+end; @#
+
+var NewSignal, OldSigInt : SignalHandler; @#
+
+procedure InitCtrl;
+begin
+  NewSignal:=SignalHandler(@@CatchSignal);
+  OldSigInt:=fpSignal(SIGINT,NewSignal);
+  OldSigInt:=fpSignal(SIGQUIT,NewSignal);
+  OldSigInt:=fpSignal(SIGTERM,NewSignal);
+end; @|@/
+@t\quad @> @{@&$ENDIF@}
+@{@&$ENDIF@}
+
+@ Microsoft breaks everything. This is a mess because of them.
+
+@<Windows implemenation for |InitCtrl|@>=
+@{@&$IFDEF WIN32@} @t\1@> @/
+@<Windows implemenation for |CtrlSignal|@>@; @/
+@{@&$IFDEF FPC@} @t\1@> @/
+@<FreePascal implementation of |InitCtrl| for Windows@>@; @t\2@>
+@t\4@> @{@&$ENDIF@}@/
+@{@&$IFDEF DELPHI@} @t\1@> @/
+@<Delphi implementation of |InitCtrl| for Windows@>@;  @t\2@>
+@t\4@>  @{@&$ENDIF@} @t\2@>@/
+ @{@&$ENDIF@}
+
+@ The FreePascal implementation is pretty succinct thanks to the
+libraries they provide.
+
+@<FreePascal implementation of |InitCtrl| for Windows@>=
+procedure InitCtrl;
+begin
+ SetConsoleCtrlHandler(CtrlSignal, TRUE); @+
+end;
+
+@ @<Delphi implementation of |InitCtrl| for Windows@>=
+procedure InitCtrl;
+var
+  ConsoleMode,lConsoleMode: DWORD;
+begin
+  if GetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), ConsoleMode) then
+  begin
+    lConsoleMode := ConsoleMode or ENABLE_PROCESSED_INPUT;
+     {Treat Ctrl+C as a signal}
+    if SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), lConsoleMode) then
+    begin
+      SetConsoleCtrlHandler(@@CtrlSignal, TRUE);
+    end;
+  end;
+end;
+
+@ Windows requires a helper function |CtrlSignal| for this Microsoft
+mania.
+
+@<Windows implemenation for |CtrlSignal|@>=
+@<FreePascal declaration of |CtrlSignal| for Windows@>@;
+@<Delphi declaration of |CtrlSignal| for Windows@>@;
+begin
+  {TRUE: do not call next handler in the queue, FALSE: call it}
+  CtrlCPressed:=true;
+  RunTimeError(1255);
+  CtrlSignal := true;
+  {ExitProcess(1);}
+end;
+
+@ @<FreePascal declaration of |CtrlSignal| for Windows@>=
+@{@&$IFDEF FPC@}
+function CtrlSignal(aSignal: DWORD): WINBOOL ;stdcall; @/
+@{@&$ENDIF@}
+
+@ @<Delphi declaration of |CtrlSignal| for Windows@>=
+@{@&$IFDEF DELPHI@} 
+function CtrlSignal(aSignal: DWORD): BOOL; cdecl; @/
+@t\hskip-1em @>  @{@&$ENDIF@}
+

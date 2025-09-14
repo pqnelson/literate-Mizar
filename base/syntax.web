@@ -1,0 +1,1192 @@
+
+@* [F] Syntax.
+This describes the syntax for the Mizar language, using expressions,
+subexpressions, blocks, and ``items'' (statements).
+
+We will need to recall \\{StackedObj} from \texttt{mobjects.pas}
+(\section\xref{StackedObj}). 
+
+@<syntax.pas@>=
+@<GNU License@>
+
+unit syntax;
+
+interface @|@#
+
+uses mobjects,errhan;
+
+@<Interface for \texttt{syntax.pas}@>@;
+
+implementation @|@#
+
+uses mconsole
+mdebug , info @+ end_mdebug; @/
+
+@<Implementation for \texttt{syntax.pas}@> @t\2@> @; @#
+
+end.
+
+@ The maximum number of ``visible'' arguments to an expression is set
+here, at 10.
+
+\label{MaxVisArgNbr}
+
+@<Public constants for \texttt{syntax.pas}@>=
+const
+   MaxVisArgNbr = 10;
+
+@ The implementation for the abstract syntax of Mizar is rather
+uninteresting, since most of the methods are abstract.
+
+@<Implementation for \texttt{syntax.pas}@>=
+@<Subexpression constructor@>@;
+
+@<Subexpression destructor@>@;
+
+@<Expression constructor@>@;
+
+@<Subexpression procedures@>@;
+
+@<Create a subexpression for an expression@>@;
+
+@<Item object implementation@>@;
+
+@<Block object implementation@>@;
+
+@<Public procedures implementation for \texttt{syntax.pas}@>@; 
+
+@ \node{Destructor wrappers.}
+We have a few public-facing procedures to free the global
+subexpression, expression, etc., variables describing the state of the
+parser.
+
+\label{KillSubexpression}
+
+@<Public procedures implementation for \texttt{syntax.pas}@>=
+procedure KillSubexpression;
+begin
+   if gSubexpPtr = nil then RunTimeError(2144)
+   else dispose(gSubexpPtr, Done);
+end;
+@
+
+
+@<Public procedures implementation for \texttt{syntax.pas}@>=
+procedure KillExpression;
+begin
+   if gExpPtr = nil then RunTimeError(2143)
+   else dispose(gExpPtr, Done);
+end;
+
+@ This method will not be used until we get to the parser, sadly. I am
+not sure why there are calls to \\{DisplayLine} in \\{KillItem}
+and \\{KillBlock}, though.
+
+The \\{KillItem} is called in exactly two places: (1) \\{Semicolon}
+in \texttt{parser.pas}, (2) \\{SchemeBlock}, also in the
+parser. (And \\{KillBlock} is called only in the parser, as well.)
+
+\label{KillItem:syntax.pas}
+
+@<Public procedures implementation for \texttt{syntax.pas}@>=
+procedure KillItem;
+begin
+   if gItemPtr = nil then RunTimeError(2142)
+   else
+   begin
+      gItemPtr^.Pop;
+      dispose(gItemPtr, Done); @+
+   end;
+   DisplayLine(CurPos.Line,ErrorNbr);
+end;
+@
+\label{KillBlock}
+@<Public procedures implementation for \texttt{syntax.pas}@>=
+procedure KillBlock;
+begin
+   if gBlockPtr = nil then RunTimeError(2141)
+   else
+   begin
+      gBlockPtr^.Pop;
+      dispose(gBlockPtr, Done);
+   end;
+   DisplayLine(CurPos.Line,ErrorNbr);
+end;
+
+
+
+@
+
+@<Interface for \texttt{syntax.pas}@>=
+@<Public constants for \texttt{syntax.pas}@>
+
+type @/
+   @<BlockKinds (\texttt{syntax.pas})@>@; @#
+
+   @<ItemKinds (\texttt{syntax.pas})@>@; @#
+   
+   @<ExpKinds (\texttt{syntax.pas})@>@; @#
+
+   @<Block object interface@>; @#
+
+   @<Class declaration for Item object@>; @#
+
+   @<Subexpression object class@>; @#
+
+   @<Expression class declaration@>; @#
+      
+   @<Public procedures for \texttt{syntax.pas}@>@; @#
+
+   @<Public variables for \texttt{syntax.pas}@>@;
+
+@ @<Public procedures for \texttt{syntax.pas}@>=
+   procedure @? KillBlock; @t\2@>
+   procedure @? KillItem; @t\2@>
+   procedure @? KillExpression; @t\2@>
+   procedure @? KillSubexpression; @t\2\2@>
+
+@ These global public variables for syntax will be manipulated by the
+parser.
+
+\label{gSubexpPtr}
+
+@<Public variables for \texttt{syntax.pas}@>=
+   var
+      gBlockPtr	 : BlockPtr = nil;
+      gItemPtr	   : ItemPtr = nil;
+      gExpPtr	   : ExpressionPtr = nil;
+      gSubexpPtr	 : SubexpPtr = nil;
+
+@* [S] Block Object.
+The Mizar language is block-structured, so we have a Block represent a
+sequence of statements contained within a block.
+
+This is extended in \texttt{parseraddition.pas}.
+
+\label{BlockObj:syntax.pas}
+
+\medbreak
+\figure
+\centerline{\graphics{img/classdiagram-2}}
+\caption{UML class diagram for Block object class.}
+\endfigure
+\medbreak\noindent%
+
+@ There are about a dozen different kinds of blocks.
+
+\label{type:BlockKind}
+
+@<BlockKinds (\texttt{syntax.pas})@>=
+  @! BlockKind =
+      (@! blMain, @! blDiffuse, @! blHereby, @! blProof,@! blDefinition,@! blNotation,
+       @! blRegistration,@! blCase,@! blSuppose,@! blPublicScheme ); @#
+
+@ @<Block object interface@>=
+  @! BlockPtr = ^BlockObj; @/
+  @! ItemPtr = ^ItemObj; @#
+
+   @! BlockObj =
+      object(StackedObj) @t\1@> @/
+        @! nBlockKind: BlockKind; @/
+         constructor @? Init(fBlockKind:BlockKind); @t\2@>
+         procedure @? Pop; virtual; @t\2@> {inheritance}
+         destructor @? Done; virtual; @t\2@>
+         procedure @? StartProperText; virtual; @t\2@>
+         procedure @? ProcessLink; virtual; @t\2@>
+         procedure @? ProcessRedefine; virtual; @t\2@>
+         procedure @? ProcessBegin; virtual; @t\2@>
+         procedure @? ProcessPragma; virtual; @t\2@>
+         procedure @? StartAtSignProof; virtual; @t\2@>
+         procedure @? FinishAtSignProof; virtual; @t\2@>
+         procedure @? FinishDefinition; virtual; @t\2@>
+         procedure @? CreateItem(fItemKind:ItemKind); virtual; @t\2@>
+         procedure @? CreateBlock(fBlockKind:BlockKind); virtual; @t\2@>
+         procedure @? StartSchemeDemonstration; virtual; @t\2@>
+         procedure @? FinishSchemeDemonstration; virtual; @t\2\2\2@>
+      end
+
+@ The constructor for a Block will initialize its \\{Previous} pointer
+to point at the global \\{gBlockPtr} instance.
+
+\label{BlockObj.Init}
+
+@<Block object implementation@>=
+constructor @? BlockObj.Init(fBlockKind: BlockKind);
+begin
+   nBlockKind:=fBlockKind;
+   Previous:=gBlockPtr;
+end;
+
+@ Note that popping a block object is left for subclasses to handle.
+
+\label{BlockObj.Pop}
+
+@<Block object implementation@>=
+procedure @? BlockObj.Pop;
+begin
+end;
+
+@ @<Block object implementation@>=
+destructor @? BlockObj.Done;
+begin
+   gBlockPtr:=BlockPtr(Previous);
+end;
+
+@ \node{Abstract methods.}
+
+\label{BlockObj.abstract-methods}
+
+@<Block object implementation@>=
+procedure @? BlockObj.StartProperText; begin end;
+
+procedure @? BlockObj.ProcessRedefine; begin end;
+
+procedure @? BlockObj.ProcessLink; begin end;
+
+procedure @? BlockObj.ProcessBegin; begin end;
+
+procedure @? BlockObj.ProcessPragma; begin end;
+
+procedure @? BlockObj.StartAtSignProof; begin end;
+
+procedure @? BlockObj.FinishAtSignProof; begin end;
+
+procedure @? BlockObj.FinishDefinition; begin end;
+
+@ @<Block object implementation@>=
+procedure @? BlockObj.CreateItem(fItemKind:ItemKind);
+begin
+   gItemPtr:=new(ItemPtr, Init(fItemKind));
+end;
+
+@ @<Block object implementation@>=
+procedure @? BlockObj.CreateBlock(fBlockKind:BlockKind);
+begin
+   gBlockPtr:=new(BlockPtr, Init(fBlockKind));
+end;
+
+@ More abstract methods.
+
+@<Block object implementation@>=
+procedure @? BlockObj.StartSchemeDemonstration; begin end;
+
+procedure @? BlockObj.FinishSchemeDemonstration; begin end;
+
+@* [S] Item objects.
+The class declaration for an \\{Item} object is depressingly long,
+with most of its virtual methods not used. The class diagram is worth
+drawing out.
+
+\medbreak
+\figure
+\centerline{\graphics{img/classdiagram-1}}
+\caption{UML class diagram for Item object class.}
+\endfigure
+\medbreak\noindent%
+
+@ Items are a tagged union, tagged by the ``kind'' of item.
+\label{type:ItemKind}
+
+@<ItemKinds (\texttt{syntax.pas})@>=
+  @! ItemKind =
+      (@! itIncorrItem, @!
+        itDefinition, @! itSchemeBlock, @! itSchemeHead, @! itTheorem, @! itAxiom, @!
+        itReservation, @!
+        itCanceled, @! itSection, @!
+        itRegularStatement, @! itChoice, @! itReconsider, @!
+        itPrivFuncDefinition, @! itPrivPredDefinition, @! itConstantDefinition, @!
+        itGeneralization, @! itLociDeclaration, @!itExistentialAssumption, @! itExemplification, @!
+        itPerCases, @! itConclusion, @! itCaseBlock, @! itCaseHead, @! itSupposeHead, @! itAssumption, @!
+        itCorrCond, @! itCorrectness, @! itProperty, @!
+        itDefPred, @! itDefFunc, @! itDefMode, @! itDefAttr, @! itDefStruct, @!
+        itPredSynonym, @! itPredAntonym, @! itFuncNotation, @! itModeNotation, @!
+        itAttrSynonym, @! itAttrAntonym, @!
+        itCluster, @! itIdentify, @! itReduction, @! itPropertyRegistration,
+        @! itPragma
+      );
+
+@ @<Class declaration for Item object@>=
+ @!  ItemObj =
+      object(StackedObj) @t\1@> @/
+        @! nItemKind: ItemKind; @/
+         constructor @? Init(fItemKind:ItemKind); @t\2@>
+         procedure @? Pop; virtual; @t\2@>
+         destructor @? Done; virtual;@|@/ 
+ @t\4\4@>        @<Method declarations for Item object@> @t\2\2\2@>@;
+      end
+
+@ It is particularly important to note, when constructing an \\{Item}
+object, the previous item will \emph{automatically} be set to point to
+the global \\{gItem} variable.
+
+\label{ItemObj.Pop}
+
+@<Item object implementation@>=
+constructor @? ItemObj.Init(fItemKind:ItemKind);
+begin
+   nItemKind:=fItemKind;
+   Previous:=gItemPtr;
+end;
+
+procedure @? ItemObj.Pop;
+begin
+   DisplayLine(CurPos.Line,ErrorNbr);
+end;
+
+destructor @? ItemObj.Done;
+begin
+   DisplayLine(CurPos.Line,ErrorNbr);
+   gItemPtr:=ItemPtr(Previous);
+end;
+
+@ Creating an expression in an item is handled with this method.
+
+@<Item object implementation@>=
+procedure @? ItemObj.CreateExpression(fExpKind:ExpKind);
+begin
+   gExpPtr:=new(ExpressionPtr, Init(fExpKind));
+end;
+
+@ \node{Abstract methods.} The methods of the \\{Item} class can be
+partitioned into two groups: those which will be implemented by a
+subclass, and those which will remain ``empty'' (i.e., whose body is
+just |begin end|).
+
+@<Methods overriden by extended Item class@>=
+         procedure StartSentence; virtual; @t\2@> @#
+         
+         procedure StartAttributes; virtual; @t\2@>
+         procedure FinishAntecedent; virtual; @t\2@>
+         procedure FinishConsequent; virtual; @t\2@>
+         procedure FinishClusterTerm; virtual; @t\2@> @#
+
+         procedure StartFuncIdentify; virtual; @t\2@>
+         procedure ProcessFuncIdentify; virtual; @t\2@>
+         procedure CompleteFuncIdentify; virtual; @t\2@>
+         procedure ProcessLeftLocus; virtual; @t\2@>
+         procedure ProcessRightLocus; virtual; @t\2@> @#
+
+         procedure StartFuncReduction; virtual; @t\2@>
+         procedure ProcessFuncReduction; virtual; @t\2@> @#
+
+         procedure FinishPrivateConstant; virtual; @t\2@>
+         procedure StartFixedVariables; virtual; @t\2@>
+         procedure ProcessFixedVariable; virtual; @t\2@>
+         procedure ProcessBeing; virtual; @t\2@>
+         procedure StartFixedSegment; virtual; @t\2@>
+         procedure FinishFixedSegment; virtual; @t\2@>
+         procedure FinishFixedVariables; virtual; @t\2@>
+         procedure StartAssumption; virtual; @t\2@>
+         procedure StartCollectiveAssumption; virtual; @t\2@>
+         procedure ProcessMeans; virtual; @t\2@>
+         procedure FinishOtherwise; virtual; @t\2@>
+         procedure StartDefiniens; virtual; @t\2@>
+         procedure FinishDefiniens; virtual; @t\2@>
+         procedure StartGuard; virtual; @t\2@>
+         procedure FinishGuard; virtual; @t\2@>
+         procedure ProcessEquals; virtual; @t\2@> @#
+
+         procedure StartExpansion; virtual; @t\2@>
+         procedure FinishSpecification; virtual; @t\2@>
+         procedure StartConstructionType; virtual; @t\2@>
+         procedure FinishConstructionType; virtual; @t\2@>
+         procedure StartAttributePattern; virtual; @t\2@>
+         procedure FinishAttributePattern; virtual; @t\2@>
+         procedure FinishSethoodProperties; virtual; @t\2@>
+         procedure StartModePattern; virtual; @t\2@>
+         procedure FinishModePattern; virtual; @t\2@>
+         procedure StartPredicatePattern; virtual; @t\2@>
+         procedure ProcessPredicateSymbol; virtual; @t\2@>
+         procedure FinishPredicatePattern; virtual; @t\2@>
+         procedure StartFunctorPattern; virtual; @t\2@>
+         procedure ProcessFunctorSymbol; virtual; @t\2@>
+         procedure FinishFunctorPattern; virtual; @t\2@> @#
+         
+         procedure ProcessAttrAntonym; virtual; @t\2@>
+         procedure ProcessAttrSynonym; virtual; @t\2@>
+         procedure ProcessPredAntonym; virtual; @t\2@>
+         procedure ProcessPredSynonym; virtual; @t\2@>
+         procedure ProcessFuncSynonym; virtual; @t\2@>
+         procedure ProcessModeSynonym; virtual; @t\2@> @#
+
+         procedure StartVisible; virtual; @t\2@>
+         procedure ProcessVisible; virtual; @t\2@>
+         procedure FinishPrefix; virtual; @t\2@>
+         procedure ProcessStructureSymbol; virtual; @t\2@>
+         procedure StartFields; virtual; @t\2@>
+         procedure FinishFields; virtual; @t\2@>
+         procedure StartAggrPattSegment; virtual; @t\2@>
+         procedure ProcessField; virtual; @t\2@>
+         procedure FinishAggrPattSegment; virtual; @t\2@>
+         procedure ProcessSchemeName; virtual; @t\2@>
+         procedure StartSchemeSegment; virtual; @t\2@>
+         procedure StartSchemeQualification; virtual; @t\2@>
+         procedure FinishSchemeQualification; virtual; @t\2@>
+         procedure ProcessSchemeVariable; virtual; @t\2@>
+         procedure FinishSchemeSegment; virtual; @t\2@>
+         procedure FinishSchemeThesis; virtual; @t\2@>
+         procedure FinishSchemePremise; virtual; @t\2@> @#
+         
+         procedure StartReservationSegment; virtual; @t\2@>
+         procedure ProcessReservedIdentifier; virtual; @t\2@>
+         procedure FinishReservationSegment; virtual; @t\2@>
+         procedure StartPrivateDefiniendum; virtual; @t\2@>
+         procedure FinishLocusType; virtual; @t\2@> @#
+         
+         procedure CreateExpression(fExpKind:ExpKind); virtual; @t\2@> @#
+
+         procedure StartPrivateConstant; virtual; @t\2@>
+         procedure StartPrivateDefiniens; virtual; @t\2@>
+         procedure FinishPrivateFuncDefinienition; virtual; @t\2@>
+         procedure FinishPrivatePredDefinienition; virtual; @t\2@>
+         procedure ProcessReconsideredVariable; virtual; @t\2@>
+         procedure FinishReconsideredTerm; virtual; @t\2@>
+         procedure FinishDefaultTerm; virtual; @t\2@>
+         procedure FinishCondition; virtual; @t\2@>
+         procedure FinishHypothesis; virtual; @t\2@>
+         procedure ProcessExemplifyingVariable; virtual; @t\2@>
+         procedure FinishExemplifyingVariable; virtual; @t\2@>
+         procedure StartExemplifyingTerm; virtual; @t\2@>
+         procedure FinishExemplifyingTerm; virtual; @t\2@>
+         procedure ProcessCorrectness; virtual; @t\2@>
+         procedure ProcessLabel; virtual; @t\2@>
+         procedure StartRegularStatement; virtual; @t\2@>
+         procedure ProcessDefiniensLabel; virtual; @t\2@>
+         procedure FinishCompactStatement; virtual; @t\2@>
+         procedure StartIterativeStep; virtual; @t\2@>
+         procedure FinishIterativeStep; virtual; @t\2@> @#
+
+         {{\it Justification}}
+
+         procedure ProcessSchemeReference; virtual; @t\2@>
+         procedure ProcessPrivateReference; virtual; @t\2@>
+         procedure StartLibraryReferences; virtual; @t\2@>
+         procedure StartSchemeLibraryReference; virtual; @t\2@>
+         procedure ProcessDef; virtual; @t\2@>
+         procedure ProcessTheoremNumber; virtual; @t\2@>
+         procedure ProcessSchemeNumber; virtual; @t\2@>
+         procedure StartJustification; virtual; @t\2@>
+         procedure StartSimpleJustification; virtual; @t\2@>
+         procedure FinishSimpleJustification; virtual; @t\2@> @#
+
+@ @<Method declarations for Item object@>=
+         @<Methods overriden by extended Item class@>
+         procedure FinishClusterType; virtual; @t\2@>
+         procedure FinishSentence; virtual; @t\2@>
+         procedure FinishReconsidering; virtual; @t\2@>
+         procedure StartNewType; virtual; @t\2@>
+         procedure StartCondition; virtual; @t\2@>
+         procedure FinishChoice; virtual; @t\2@>
+         procedure FinishAssumption; virtual; @t\2@> @#
+
+         procedure StartEquals; virtual; @t\2@>
+         procedure StartOtherwise; virtual; @t\2@>
+         procedure StartSpecification; virtual; @t\2@>
+         procedure ProcessAttributePattern; virtual; @t\2@>
+         procedure StartDefPredicate; virtual; @t\2@> @#
+
+         procedure CompletePredAntonymByAttr; virtual; @t\2@>
+         procedure CompletePredSynonymByAttr; virtual; @t\2@> @#
+
+         procedure StartPredIdentify; virtual; @t\2@>
+         procedure ProcessPredIdentify; virtual; @t\2@>
+         procedure CompleteAttrIdentify; virtual; @t\2@>
+         procedure StartAttrIdentify; virtual; @t\2@>
+         procedure ProcessAttrIdentify; virtual; @t\2@>
+         procedure CompletePredIdentify; virtual; @t\2@> @#
+
+         procedure FinishFuncReduction; virtual; @t\2@> @#
+
+         procedure StartSethoodProperties; virtual; @t\2@> @#
+         
+         procedure ProcessModePattern; virtual; @t\2@>
+         procedure StartPrefix; virtual; @t\2@>
+         procedure FinishVisible; virtual; @t\2@>
+         procedure FinishSchemeHeading; virtual; @t\2@>
+         procedure FinishSchemeDeclaration; virtual; @t\2@>
+         procedure StartSchemePremise; virtual; @t\2@>
+         procedure StartTheoremBody; virtual; @t\2@>
+         procedure FinishTheoremBody; virtual; @t\2@>
+         procedure FinishTheorem; virtual; @t\2@>
+         procedure FinishReservation; virtual; @t\2@>
+         procedure ProcessIterativeStep; virtual; @t\2@> @#
+         
+         {{\it Justification}}
+
+         procedure StartSchemeReference; virtual; @t\2@>
+         procedure StartReferences; virtual; @t\2@>
+         procedure ProcessSch; virtual; @t\2@>
+         procedure FinishTheLibraryReferences; virtual; @t\2@>
+         procedure FinishSchLibraryReferences; virtual; @t\2@>
+         procedure FinishReferences; virtual; @t\2@>
+         procedure FinishSchemeReference; virtual; @t\2@>
+         procedure FinishJustification; virtual; @t\2@>
+
+@t\2\2\2@>
+
+@ @<Item object implementation@>=
+procedure @? ItemObj.StartAttributes; begin end;
+
+procedure @? ItemObj.FinishAntecedent; begin end;
+
+procedure @? ItemObj.FinishConsequent; begin end;
+
+procedure @? ItemObj.FinishClusterTerm; begin end;
+
+procedure @? ItemObj.FinishClusterType; begin end;
+
+procedure @? ItemObj.StartSentence; begin end;
+
+procedure @? ItemObj.FinishSentence; begin end;
+
+procedure @? ItemObj.FinishPrivateConstant; begin end;
+
+procedure @? ItemObj.StartPrivateConstant; begin end;
+
+procedure @? ItemObj.ProcessReconsideredVariable; begin end;
+
+procedure @? ItemObj.FinishReconsidering; begin end;
+
+procedure @? ItemObj.FinishReconsideredTerm; begin end;
+
+procedure @? ItemObj.FinishDefaultTerm; begin end;
+
+procedure @? ItemObj.StartNewType; begin end;
+
+procedure @? ItemObj.StartCondition; begin end;
+
+procedure @? ItemObj.FinishCondition; begin end;
+
+procedure @? ItemObj.FinishChoice; begin end;
+
+procedure @? ItemObj.StartFixedVariables; begin end;
+
+procedure @? ItemObj.StartFixedSegment; begin end;
+
+procedure @? ItemObj.ProcessFixedVariable; begin end;
+
+procedure @? ItemObj.ProcessBeing; begin end;
+
+procedure @? ItemObj.FinishFixedSegment; begin end;
+
+procedure @? ItemObj.FinishFixedVariables; begin end;
+
+procedure @? ItemObj.StartAssumption; begin end;
+
+procedure @? ItemObj.StartCollectiveAssumption; begin end;
+
+procedure @? ItemObj.FinishHypothesis; begin end;
+
+procedure @? ItemObj.FinishAssumption; begin end;
+
+procedure @? ItemObj.ProcessExemplifyingVariable; begin end;
+
+procedure @? ItemObj.FinishExemplifyingVariable; begin end;
+
+procedure @? ItemObj.StartExemplifyingTerm; begin end;
+
+procedure @? ItemObj.FinishExemplifyingTerm; begin end;
+
+procedure @? ItemObj.ProcessMeans; begin end;
+
+procedure @? ItemObj.FinishOtherwise; begin end;
+
+procedure @? ItemObj.StartDefiniens; begin end;
+
+procedure @? ItemObj.FinishDefiniens; begin end;
+
+procedure @? ItemObj.StartGuard; begin end;
+
+procedure @? ItemObj.FinishGuard; begin end;
+
+procedure @? ItemObj.StartOtherwise; begin end;
+
+procedure @? ItemObj.ProcessEquals; begin end;
+
+procedure @? ItemObj.StartEquals; begin end;
+
+procedure @? ItemObj.ProcessCorrectness; begin end;
+
+procedure @? ItemObj.FinishSpecification; begin end;
+
+procedure @? ItemObj.FinishConstructionType; begin end;
+
+procedure @? ItemObj.StartSpecification; begin end;
+
+procedure @? ItemObj.StartExpansion; begin end;
+
+procedure @? ItemObj.StartConstructionType; begin end;
+
+procedure @? ItemObj.StartPredicatePattern; begin end;
+
+procedure @? ItemObj.ProcessPredicateSymbol; begin end;
+
+procedure @? ItemObj.FinishPredicatePattern; begin end;
+
+procedure @? ItemObj.StartFunctorPattern; begin end;
+
+procedure @? ItemObj.ProcessFunctorSymbol; begin end;
+
+procedure @? ItemObj.FinishFunctorPattern; begin end;
+
+procedure @? ItemObj.ProcessAttrAntonym; begin end;
+
+procedure @? ItemObj.ProcessAttrSynonym; begin end;
+
+procedure @? ItemObj.ProcessPredAntonym; begin end;
+
+procedure @? ItemObj.ProcessPredSynonym; begin end;
+
+procedure @? ItemObj.ProcessFuncSynonym; begin end;
+
+procedure @? ItemObj.CompletePredSynonymByAttr; begin end;
+
+procedure @? ItemObj.CompletePredAntonymByAttr; begin end;
+
+procedure @? ItemObj.ProcessModeSynonym; begin end;
+
+procedure @? ItemObj.StartFuncIdentify;  begin end;
+
+procedure @? ItemObj.ProcessFuncIdentify;  begin end;
+
+procedure @? ItemObj.CompleteFuncIdentify;  begin end;
+
+procedure @? ItemObj.StartPredIdentify;  begin end;
+
+procedure @? ItemObj.ProcessPredIdentify;  begin end;
+
+procedure @? ItemObj.CompletePredIdentify;  begin end;
+
+procedure @? ItemObj.StartAttrIdentify;  begin end;
+
+procedure @? ItemObj.ProcessAttrIdentify;  begin end;
+
+procedure @? ItemObj.CompleteAttrIdentify;  begin end;
+
+procedure @? ItemObj.ProcessLeftLocus;  begin end;
+
+procedure @? ItemObj.ProcessRightLocus;  begin end;
+
+procedure @? ItemObj.StartFuncReduction;  begin end;
+
+procedure @? ItemObj.ProcessFuncReduction;  begin end;
+
+procedure @? ItemObj.FinishFuncReduction;  begin end;
+
+procedure @? ItemObj.StartSethoodProperties;  begin end;
+
+procedure @? ItemObj.FinishSethoodProperties;  begin end;
+
+procedure @? ItemObj.StartModePattern; begin end;
+
+procedure @? ItemObj.ProcessModePattern; begin end;
+
+procedure @? ItemObj.FinishModePattern; begin end;
+
+procedure @? ItemObj.StartAttributePattern; begin end;
+
+procedure @? ItemObj.ProcessAttributePattern; begin end;
+
+procedure @? ItemObj.FinishAttributePattern; begin end;
+
+procedure @? ItemObj.StartDefPredicate; begin end;
+
+procedure @? ItemObj.StartVisible; begin end;
+
+procedure @? ItemObj.ProcessVisible; begin end;
+
+procedure @? ItemObj.FinishVisible; begin end;
+
+procedure @? ItemObj.StartPrefix; begin end;
+
+procedure @? ItemObj.FinishPrefix; begin end;
+
+procedure @? ItemObj.ProcessStructureSymbol; begin end;
+
+procedure @? ItemObj.StartFields; begin end;
+
+procedure @? ItemObj.FinishFields; begin end;
+
+procedure @? ItemObj.StartAggrPattSegment; begin end;
+
+procedure @? ItemObj.ProcessField; begin end;
+
+procedure @? ItemObj.FinishAggrPattSegment; begin end;
+
+procedure @? ItemObj.ProcessSchemeName; begin end;
+
+procedure @? ItemObj.StartSchemeSegment; begin end;
+
+procedure @? ItemObj.ProcessSchemeVariable; begin end;
+
+procedure @? ItemObj.StartSchemeQualification; begin end;
+
+procedure @? ItemObj.FinishSchemeQualification; begin end;
+
+procedure @? ItemObj.FinishSchemeSegment; begin end;
+
+procedure @? ItemObj.FinishSchemeHeading; begin end;
+
+procedure @? ItemObj.FinishSchemeDeclaration; begin end;
+
+procedure @? ItemObj.FinishSchemeThesis; begin end;
+
+procedure @? ItemObj.StartSchemePremise; begin end;
+
+procedure @? ItemObj.FinishSchemePremise; begin end;
+
+procedure @? ItemObj.StartTheoremBody; begin end;
+
+procedure @? ItemObj.FinishTheoremBody; begin end;
+
+procedure @? ItemObj.FinishTheorem; begin end;
+
+procedure @? ItemObj.StartReservationSegment; begin end;
+
+procedure @? ItemObj.ProcessReservedIdentifier; begin end;
+
+procedure @? ItemObj.FinishReservationSegment; begin end;
+
+procedure @? ItemObj.FinishReservation; begin end;
+
+procedure @? ItemObj.StartPrivateDefiniendum; begin end;
+
+procedure @? ItemObj.FinishLocusType; begin end;
+
+procedure @? ItemObj.StartPrivateDefiniens; begin end;
+
+procedure @? ItemObj.FinishPrivateFuncDefinienition; begin end;
+
+procedure @? ItemObj.FinishPrivatePredDefinienition; begin end;
+
+procedure @? ItemObj.ProcessLabel; begin end;
+
+procedure @? ItemObj.StartRegularStatement; begin end;
+
+procedure @? ItemObj.ProcessDefiniensLabel; begin end;
+
+procedure @? ItemObj.ProcessSchemeReference; begin end;
+
+procedure @? ItemObj.StartSchemeReference; begin end;
+
+procedure @? ItemObj.StartReferences; begin end;
+
+procedure @? ItemObj.ProcessPrivateReference; begin end;
+
+procedure @? ItemObj.StartLibraryReferences; begin end;
+
+procedure @? ItemObj.StartSchemeLibraryReference; begin end;
+
+procedure @? ItemObj.ProcessDef; begin end;
+
+procedure @? ItemObj.ProcessSch; begin end;
+
+procedure @? ItemObj.ProcessTheoremNumber; begin end;
+
+procedure @? ItemObj.ProcessSchemeNumber; begin end;
+
+procedure @? ItemObj.FinishTheLibraryReferences; begin end;
+
+procedure @? ItemObj.FinishSchLibraryReferences; begin end;
+
+procedure @? ItemObj.FinishReferences; begin end;
+
+procedure @? ItemObj.FinishSchemeReference; begin end;
+
+procedure @? ItemObj.StartJustification;  begin end;
+
+procedure @? ItemObj.FinishJustification;  begin end;
+
+procedure @? ItemObj.StartSimpleJustification; begin end;
+
+procedure @? ItemObj.FinishSimpleJustification; begin end;
+
+procedure @? ItemObj.FinishCompactStatement;  begin end;
+
+procedure @? ItemObj.StartIterativeStep; begin end;
+
+procedure @? ItemObj.ProcessIterativeStep; begin end;
+
+procedure @? ItemObj.FinishIterativeStep; begin end;
+
+@* [S] Expressions.
+
+
+@<ExpKinds (\texttt{syntax.pas})@>=
+   ExpKind = (exNull, exType, exTerm, exFormula, exResType, exAdjectiveCluster );
+
+@ @<Expression class declaration@>=
+   ExpressionPtr = ^ExpressionObj; @/
+   ExpressionObj =
+      object(MObject) @t\1@> @/
+         nExpKind: ExpKind;
+         constructor Init(fExpKind:ExpKind); @t\2@>
+         procedure CreateSubexpression; virtual; @t\2\2\2@>
+      end
+
+@ \node{Constructor.}
+\label{ExpressionObj.Init}
+
+@<Expression constructor@>=
+constructor ExpressionObj.Init(fExpKind:ExpKind);
+begin
+   nExpKind:=fExpKind;
+end;
+
+@ Observe that creating a subexpression (1) allocates a
+new \\{SubexpPtr} on the heap, and (2) mutates the \\{gSubexpPtr}
+global variable.
+
+\label{ExpressionObj.CreateSubexpression}
+
+@<Create a subexpression for an expression@>=
+procedure ExpressionObj.CreateSubexpression;
+begin
+   gSubexpPtr:=new(SubexpPtr, Init);
+end;
+
+@* [S] Subexpressions.
+
+@<Subexpression object class@>=
+   SubexpPtr = ^SubexpObj; @/
+   SubexpObj =
+      object(StackedObj) @t\1@>
+         constructor Init; @t\2@>
+         destructor Done; virtual;@|@/ @t\2@>
+  @t\4\4@>       @<Empty method declarations for |SubexpObj|@>@t\2\2@>@;
+      end
+
+@ \node{Constructor.} Importantly, constructing a new \\{Subexp}
+object will initialize its \\{Previous} field to point to the
+global \\{gSubexpPtr} object. 
+
+@<Subexpression constructor@>=
+constructor SubexpObj.Init;
+begin
+   Previous:=gSubexpPtr;
+end;
+
+@ \node{Destructor.}
+
+@<Subexpression destructor@>=
+destructor SubexpObj.Done;
+begin
+   gSubexpPtr:=SubexpPtr(Previous);
+end;
+
+@
+The remaining methods for subexpression objects are empty.
+
+@<Methods implemented by subclasses of |SubexpObj|@>=
+         procedure ProcessSimpleTerm; virtual; @t\2@>
+         procedure StartFraenkelTerm; virtual; @t\2@>
+         procedure StartPostqualification; virtual; @t\2@>
+         procedure StartPostqualifyingSegment; virtual; @t\2@>
+         procedure ProcessPostqualifiedVariable; virtual; @t\2@>
+         procedure StartPostqualificationSpecyfication; virtual; @t\2@>
+         procedure FinishPostqualifyingSegment; virtual; @t\2@>
+         procedure FinishFraenkelTerm; virtual; @t\2@>
+         procedure StartSimpleFraenkelTerm; virtual; @t\2@>
+         procedure FinishSimpleFraenkelTerm; virtual; @t\2@>
+         procedure ProcessThesis; virtual; @t\2@>
+         procedure StartPrivateTerm; virtual; @t\2@>
+         procedure FinishPrivateTerm; virtual; @t\2@>
+         procedure StartBracketedTerm; virtual; @t\2@>
+         procedure FinishBracketedTerm; virtual; @t\2@>
+         procedure StartAggregateTerm; virtual; @t\2@>
+         procedure FinishAggregateTerm; virtual; @t\2@>
+         procedure StartSelectorTerm; virtual; @t\2@>
+         procedure FinishSelectorTerm; virtual; @t\2@>
+         procedure StartForgetfulTerm; virtual; @t\2@>
+         procedure FinishForgetfulTerm; virtual; @t\2@>
+         procedure StartChoiceTerm;  virtual; @t\2@>
+         procedure FinishChoiceTerm;  virtual; @t\2@>
+         procedure ProcessNumeralTerm; virtual; @t\2@>
+         procedure ProcessItTerm; virtual; @t\2@>
+         procedure ProcessLocusTerm; virtual; @t\2@>
+         procedure ProcessQua; virtual; @t\2@>
+         procedure FinishQualifiedTerm; virtual; @t\2@>
+         procedure ProcessExactly; virtual; @t\2@>
+         procedure StartLongTerm; virtual; @t\2@>
+         procedure ProcessFunctorSymbol; virtual; @t\2@>
+         procedure FinishArgList; virtual; @t\2@>
+         procedure FinishLongTerm; virtual; @t\2@>
+         procedure FinishArgument; virtual; @t\2@>
+         procedure FinishTerm; virtual; @t\2@>
+         procedure StartType; virtual; @t\2@>
+         procedure ProcessModeSymbol; virtual; @t\2@>
+         procedure FinishType; virtual; @t\2@>
+         procedure CompleteType; virtual; @t\2@> {+}
+         procedure ProcessAtomicFormula; virtual; @t\2@>
+         procedure ProcessPredicateSymbol; virtual; @t\2@>
+         procedure ProcessRightSideOfPredicateSymbol; virtual; @t\2@>
+         procedure FinishPredicativeFormula; virtual; @t\2@>
+         procedure FinishRightSideOfPredicativeFormula; virtual; @t\2@>
+         procedure StartMultiPredicativeFormula; virtual; @t\2@>
+         procedure FinishMultiPredicativeFormula; virtual; @t\2@>
+         procedure StartPrivateFormula; virtual; @t\2@> {+}
+         procedure FinishPrivateFormula; virtual; @t\2@>
+         procedure ProcessContradiction; virtual; @t\2@> @#
+         procedure ProcessNegative; virtual; @t\2@> @#
+
+         { This is a temporary solution, the generation of ExpNodes is
+         such that it is not possible to handle negation uniformly. }
+         { Jest to tymczasowe rozwiazanie, generowanie ExpNode'ow jest takie,
+           ze nie ma mozliwosci obsluzenia jednolicie negacji.
+         }
+         procedure ProcessNegation; virtual; @t\2@>
+         procedure FinishQualifyingFormula; virtual; @t\2@>
+         procedure FinishAttributiveFormula; virtual; @t\2@>
+         procedure ProcessBinaryConnective; virtual; @t\2@> {+}
+         procedure ProcessFlexDisjunction; virtual; @t\2@>
+         procedure ProcessFlexConjunction; virtual; @t\2@>
+         procedure StartRestriction; virtual; @t\2@>
+         procedure FinishRestriction; virtual; @t\2@>
+         procedure FinishBinaryFormula; virtual; @t\2@>
+         procedure FinishFlexDisjunction; virtual; @t\2@>
+         procedure FinishFlexConjunction; virtual; @t\2@>
+         procedure StartExistential; virtual; @t\2@>
+         procedure FinishExistential; virtual; @t\2@>
+         procedure StartUniversal; virtual; @t\2@>
+         procedure FinishUniversal; virtual; @t\2@> {+}
+         procedure StartQualifiedSegment; virtual; @t\2@>
+         procedure StartQualifyingType; virtual; @t\2@>
+         procedure FinishQualifiedSegment; virtual; @t\2@>
+         procedure ProcessVariable; virtual; @t\2@>
+         procedure StartAttributes; virtual; @t\2@> @#
+         procedure ProcessNon; virtual; @t\2@> {+}
+         procedure ProcessAttribute; virtual; @t\2@> {+}
+         procedure StartAttributeArguments; virtual; @t\2@> {+}
+         procedure CompleteAttributeArguments; virtual; @t\2@> {+}
+         procedure FinishAttributeArguments; virtual; @t\2@> {+}
+         procedure CompleteAdjectiveCluster; virtual; @t\2@> {+}
+         procedure CompleteClusterTerm; virtual; @t\2@> @#
+         
+         {{\it Errors Recovery}}
+
+         procedure InsertIncorrTerm; virtual; @t\2@>
+         procedure InsertIncorrType; virtual; @t\2@>
+         procedure InsertIncorrBasic; virtual; @t\2@>
+         procedure InsertIncorrFormula; virtual;
+
+@ @<Empty method declarations for |SubexpObj|@>=
+         @<Methods implemented by subclasses of |SubexpObj|@>@;@#
+         procedure FinishSample; virtual; @t\2@>
+         procedure ProcessThe; virtual; @t\2@>
+         procedure StartArgument; virtual; @t\2@>
+         procedure ProcessLeftParenthesis; virtual; @t\2@>
+         procedure ProcessRightParenthesis; virtual; @t\2@>
+         procedure StartAtomicFormula; virtual; @t\2@> @#
+         
+         procedure ProcessHolds; virtual; @t\2@>
+         procedure FinishQuantified; virtual; @t\2@> @#
+         
+         procedure ProcessNot; virtual; @t\2@>
+         procedure ProcessDoesNot; virtual; @t\2@> @#
+
+         procedure StartAdjectiveCluster; virtual; @t\2@>
+         procedure FinishAdjectiveCluster; virtual; @t\2@> @#
+
+         procedure FinishAttributes; virtual; @t\2@>
+         procedure CompleteAttributes; virtual; @t\2@>
+         procedure CompleteClusterType; virtual; @t\2@>
+         procedure FinishEquality; virtual; @t\2@>@#
+
+@
+\label{SubexpObj.abstract-methods}
+
+@<Subexpression procedures@>=
+procedure SubexpObj.StartAttributes; begin end;
+
+procedure SubexpObj.StartAdjectiveCluster; begin end;
+
+procedure SubexpObj.FinishAdjectiveCluster; begin end;
+
+procedure SubexpObj.ProcessNon; begin end;
+
+procedure SubexpObj.ProcessAttribute; begin end;
+
+procedure SubexpObj.FinishAttributes; begin end;
+
+procedure SubexpObj.CompleteAttributes; begin end;
+
+procedure SubexpObj.StartAttributeArguments; begin end;
+
+procedure SubexpObj.CompleteAttributeArguments; begin end;
+
+procedure SubexpObj.FinishAttributeArguments; begin end;
+
+procedure SubexpObj.CompleteAdjectiveCluster; begin end;
+
+procedure SubexpObj.CompleteClusterTerm; begin end;
+
+procedure SubexpObj.CompleteClusterType; begin end;
+
+procedure SubexpObj.ProcessSimpleTerm; begin end;
+
+procedure SubexpObj.ProcessQua; begin end;
+
+procedure SubexpObj.FinishQualifiedTerm; begin end;
+
+procedure SubexpObj.ProcessExactly; begin end;
+
+procedure SubexpObj.StartArgument; begin end;
+
+procedure SubexpObj.FinishArgument; begin end;
+
+procedure SubexpObj.FinishTerm; begin end;
+
+procedure SubexpObj.StartType; begin end;
+
+procedure SubexpObj.ProcessModeSymbol; begin end;
+
+procedure SubexpObj.FinishType; begin end;
+
+procedure SubexpObj.CompleteType; begin end;
+
+procedure SubexpObj.StartLongTerm; begin end;
+
+procedure SubexpObj.FinishLongTerm; begin end;
+
+procedure SubexpObj.FinishArgList; begin end;
+
+procedure SubexpObj.ProcessFunctorSymbol; begin end;
+
+procedure SubexpObj.StartFraenkelTerm; begin end;
+
+procedure SubexpObj.FinishSample; begin end;
+
+procedure SubexpObj.StartPostqualification; begin end;
+
+procedure SubexpObj.StartPostqualificationSpecyfication; begin end;
+
+procedure SubexpObj.StartPostqualifyingSegment; begin end;
+
+procedure SubexpObj.ProcessPostqualifiedVariable; begin end;
+
+procedure SubexpObj.FinishPostqualifyingSegment; begin end;
+
+procedure SubexpObj.FinishFraenkelTerm; begin end;
+
+procedure SubexpObj.StartSimpleFraenkelTerm; begin end;
+
+procedure SubexpObj.FinishSimpleFraenkelTerm; begin end;
+
+procedure SubexpObj.StartPrivateTerm; begin end;
+
+procedure SubexpObj.FinishPrivateTerm; begin end;
+
+procedure SubexpObj.StartBracketedTerm; begin end;
+
+procedure SubexpObj.FinishBracketedTerm; begin end;
+
+procedure SubexpObj.StartAggregateTerm; begin end;
+
+procedure SubexpObj.FinishAggregateTerm; begin end;
+
+procedure SubexpObj.ProcessThe; begin end;
+
+procedure SubexpObj.StartSelectorTerm; begin end;
+
+procedure SubexpObj.FinishSelectorTerm; begin end;
+
+procedure SubexpObj.StartForgetfulTerm; begin end;
+
+procedure SubexpObj.FinishForgetfulTerm; begin end;
+
+procedure SubexpObj.StartChoiceTerm; begin end;
+
+procedure SubexpObj.FinishChoiceTerm; begin end;
+
+procedure SubexpObj.ProcessNumeralTerm; begin end;
+
+procedure SubexpObj.ProcessItTerm; begin end;
+
+procedure SubexpObj.ProcessLocusTerm; begin end;
+
+procedure SubexpObj.ProcessThesis; begin end;
+
+procedure SubexpObj.StartAtomicFormula; begin end;
+
+procedure SubexpObj.ProcessAtomicFormula; begin end;
+
+procedure SubexpObj.ProcessPredicateSymbol; begin end;
+
+procedure SubexpObj.ProcessRightSideOfPredicateSymbol; begin end;
+
+procedure SubexpObj.FinishPredicativeFormula; begin end;
+
+procedure SubexpObj.FinishRightSideOfPredicativeFormula; begin end;
+
+procedure SubexpObj.StartMultiPredicativeFormula; begin end;
+
+procedure SubexpObj.FinishMultiPredicativeFormula; begin end;
+
+procedure SubexpObj.FinishQualifyingFormula; begin end;
+
+procedure SubexpObj.FinishAttributiveFormula; begin end;
+
+procedure SubexpObj.StartPrivateFormula; begin end;
+
+procedure SubexpObj.FinishPrivateFormula; begin end;
+
+procedure SubexpObj.ProcessContradiction; begin end;
+
+procedure SubexpObj.ProcessNot; begin end;
+
+procedure SubexpObj.ProcessDoesNot; begin end;
+
+procedure SubexpObj.ProcessNegative; begin end;
+
+procedure SubexpObj.ProcessNegation; begin end;
+
+procedure SubexpObj.StartRestriction; begin end;
+
+procedure SubexpObj.FinishRestriction; begin end;
+
+procedure SubexpObj.ProcessHolds; begin end;
+
+procedure SubexpObj.ProcessBinaryConnective; begin end;
+
+procedure SubexpObj.FinishBinaryFormula; begin end;
+
+procedure SubexpObj.ProcessFlexDisjunction; begin end;
+
+procedure SubexpObj.ProcessFlexConjunction; begin end;
+
+procedure SubexpObj.FinishFlexDisjunction; begin end;
+
+procedure SubexpObj.FinishFlexConjunction; begin end;
+
+procedure SubexpObj.StartQualifiedSegment; begin end;
+
+procedure SubexpObj.StartQualifyingType; begin end;
+
+procedure SubexpObj.FinishQualifiedSegment; begin end;
+
+procedure SubexpObj.FinishQuantified; begin end;
+
+procedure SubexpObj.ProcessVariable; begin end;
+
+procedure SubexpObj.StartExistential; begin end;
+
+procedure SubexpObj.FinishExistential; begin end;
+
+procedure SubexpObj.StartUniversal; begin end;
+
+procedure SubexpObj.FinishUniversal; begin end;
+
+procedure SubexpObj.ProcessLeftParenthesis; begin end;
+
+procedure SubexpObj.ProcessRightParenthesis; begin end;
+
+procedure SubexpObj.InsertIncorrType; begin end;
+
+procedure SubexpObj.InsertIncorrTerm; begin end;
+
+procedure SubexpObj.InsertIncorrBasic; begin end;
+
+procedure SubexpObj.InsertIncorrFormula; begin end;
+
+procedure SubexpObj.FinishEquality; begin end;
+

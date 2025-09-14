@@ -19,13 +19,8 @@ draft of the `parser.web` file.
 
 # Plans
 
-**Short-term goal:** Right now, I am trying to annotate and transcribe the files
-needed for the Parser.
-
-I have transcribed most of the files (I believe I need to finish transcribing
-`base/wsmarticle.pas`).
-
-I am in the process of annotating the `parser.pas` file.
+**Short-term goal:** Right now, I am reviewing the transcription and
+annotation for the Parser-related code.
 
 **Long-term goal:** A question lurking in the back of my mind is,
 "What does the Mizar system do which is not covered in the
@@ -39,6 +34,22 @@ variables are global, etc.). Consequently it does not adequately index
 Object Pascal. If I do this seriously, I may need to hack Weave to
 support the adjustments needed. (As it stands, I should add a script
 to strip out common types like `integer` and `boolean` from the index...)
+
+## Milestones
+
+- [ ] Parser module
+  - [x] Transcribed the Parser module
+  - [x] Annotated the Parser module
+  - [ ] Review the transcription and annotations for errors and
+        consistency
+- [ ] Accommodator module
+  - [ ] Transcribe the Accommodator module
+  - [ ] Annotate the Accommodator module
+  - [ ] Review the transcription and annotation
+- [ ] MSM
+- [ ] Analyzer
+- [ ] Checker
+- [ ] Exporter
 
 # Observations
 

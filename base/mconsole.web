@@ -1,0 +1,469 @@
+
+@* [F] Mizar Console.
+The Mizar Console unit is used for interacting with the command line.
+
+@<mconsole.pas@>=
+@<GNU License@>
+
+unit mconsole;
+
+interface
+
+@<Interface for mconsole.pas@>
+
+implementation
+@|@#
+@<Import units for \texttt{mconsole.pas}@>
+@#
+@<Implementation for mconsole.pas@>
+
+@t\2@>end
+
+@ We import two modules, |pcmizver| (which we have yet to see), and
+|mizenv| (which we have already introduced).
+
+@<Import units for \texttt{mconsole.pas}@>=
+uses pcmizver,mizenv;
+
+@ The interface contains the publicly available functions, as well as
+some specific variables for the state of the analyzer, etc.
+
+@<Interface for mconsole.pas@>=
+@<Report results to command line@>@;
+
+@<Constants for common error messages reported to console@>@;
+
+@<Interface for accommodator command line options@>@;
+
+@<Interface for |MakeEnv| command line options@>@;
+
+@<Interface for transfer-specific command line options@>@;
+
+@<Interface for other command line options@>
+
+@ @<Report results to command line@>= 
+procedure @? InitDisplayLine(const aComment:String); @t\2@>
+procedure @? NoDisplayLine(fLine,fErrNbr: integer); @t\2@> @#
+
+@<|DisplayLine| global constant@>@; @#
+
+procedure @? DrawMizarScreen(const aApplicationName:String); @t\2@>
+procedure @? DrawArticleName(const fName:String); @t\2@> @#
+
+procedure @? DrawStr(const aStr:String); @t\2@>
+procedure @? FinishDrawing;
+
+@ @<|DisplayLine| global constant@>=
+const@+DisplayLine:@+procedure(fLine,fErrNbr: integer) = NoDisplayLine; @t\2@>
+
+
+@ Common routines for ``drawing'' output to the console.
+
+\interface
+@<Report results to command line@>=
+procedure @? EmptyParameterList;
+procedure @? Noise;
+procedure @? DrawPass(const aName: String);
+procedure @? DrawTime(const aTime: String);
+procedure @? DrawVerifierExit(const aTime: String); @#
+
+procedure @? DrawMessage(const Msg1,Msg2:String);
+procedure @? BugInProcessor;
+procedure @? DrawIOResult(const FileName:String; @+ I:byte);
+procedure @? DrawErrorsMsg(aErrorNbr: integer); @#
+
+procedure @? DisplayLineInCurPos(fLine,fErrNbr: integer);
+@ \endinterface
+We also have a constant for error messages commonly encountered.
+
+@<Constants for common error messages reported to console@>=
+const
+  ErrMsg: array[1..6] of String[20] = @/
+       ('', @/
+        'File not found', @/
+        'Path not found', @/
+        'Too many open files', @/
+        'Disk read error', @/
+        'Disk write error'
+       );
+@ Now, we have accommodator specific options.
+
+@<Interface for accommodator command line options@>=
+{Accommodator specific options:}
+
+var
+ InsertHiddenFiles,
+ VocabulariesProcessing,FormatsProcessing,NotationsProcessing,
+ SignatureProcessing,
+ ConstructorsProcessing,
+ ClustersProcessing,IdentifyProcessing,ReductionProcessing,PropertiesProcessing,
+ DefinitionsProcessing,EqualitiesProcessing,ExpansionsProcessing,
+ TheoremsProcessing,SchemesProcessing,TheoremListsProcessing,SchemeListsProcessing:boolean;
+
+procedure @? InitAccOptions; @t\2@>
+procedure @? GetAccOptions;
+@ @<Interface for |MakeEnv| command line options@>=
+{MakeEnv specific options:}
+
+var Accomodation : boolean = false;
+    NewAccom : boolean = false;
+
+procedure @? GetMEOptions;
+
+@ @<Interface for transfer-specific command line options@>=
+{Transfer specific options:}
+
+var PublicLibr: boolean;
+
+procedure @? GetTransfOptions;
+
+@ @<Interface for other command line options@>=
+{Other options:}
+
+var
+ CtrlCPressed : boolean = false;
+ LongLines : boolean = false;
+ QuietMode : boolean = false;
+ StopOnError: boolean = false;
+
+ FinishingPass: boolean = false;
+ ParserOnly : boolean = false;
+ AnalyzerOnly : boolean = false;
+ CheckerOnly : boolean = false;
+ SwitchOffUnifier: boolean = false;
+
+ AxiomsAllowed: boolean = false;
+
+procedure @? GetOptions;
+
+@ \endinterface
+The implementation begins by initializing the Accommodator specific options.
+
+@<Implementation for mconsole.pas@>=
+procedure InitAccOptions;
+begin
+ InsertHiddenFiles:=true;
+ VocabulariesProcessing:=true;
+ FormatsProcessing:=true;
+ NotationsProcessing:=true;
+ SignatureProcessing:=true;
+ ConstructorsProcessing:=true;
+ ClustersProcessing:=true;
+ IdentifyProcessing:=true;
+ ReductionProcessing:=true;
+ PropertiesProcessing:=true;
+ DefinitionsProcessing:=true;
+ EqualitiesProcessing:=true;
+ ExpansionsProcessing:=true;
+ TheoremsProcessing:=true;
+ SchemesProcessing:=true;
+ TheoremListsProcessing:=false;
+ SchemeListsProcessing:=false;
+end;
+
+@ Similarly, we want to be able to \emph{reset} the configuration for
+the accommodator to the default (initial) values.
+
+@p
+procedure ResetAccOptions;
+begin
+ InsertHiddenFiles:=true;
+ VocabulariesProcessing:=false;
+ FormatsProcessing:=false;
+ NotationsProcessing:=false;
+ SignatureProcessing:=false;
+ ConstructorsProcessing:=false;
+ ClustersProcessing:=false;
+ IdentifyProcessing:=false;
+ ReductionProcessing:=false;
+ PropertiesProcessing:=false;
+ DefinitionsProcessing:=false;
+ EqualitiesProcessing:=false;
+ ExpansionsProcessing:=false;
+ TheoremsProcessing:=false;
+ SchemesProcessing:=false;
+ TheoremListsProcessing:=false;
+ SchemeListsProcessing:=false;
+end;
+
+@ \node{Accommodator options.}%
+We will get options for the accommodator passed in from the command
+line. Broadly, these are:
+
+\item{$\bullet$} \texttt{-v} resets the accommodator options, and then toggles
+|VocabulariesProcessing| to true
+
+\item{$\bullet$} \texttt{-f}, \texttt{-p} resets the accommodator
+options, and then toggles |VocabulariesProcessing| to true (so far
+like \texttt{-v}), and then toggles |FormatsProcessing| to true.
+
+\item{$\bullet$} \texttt{-P} resets the accommodator options, and then toggles
+|VocabulariesProcessing| to true (so far like \texttt{-v}), and then
+toggles |FormatsProcessing| to true (so far like \texttt{-f}
+and \texttt{-p}), then toggles |TheoremListsProcessing| and
+|SchemeListsProcessing| to both be true.
+
+\item{$\bullet$} \texttt{-e} will do everything \texttt{-f} does, and
+then toggles |ConstructorsProcessing|, |SignatureProcessing|,\hfill\break
+|ClustersProcessing|, and |NotationsProcessing| to all be true.
+
+\item{$\bullet$} \texttt{-h} will set |InsertHiddenFalse| to false
+(presumably preventing Mizar from loading the ``hidden'' article,
+i.e., the primitive notions
+of \texttt{object}, \texttt{set}, \texttt{in}, \texttt{=}, and
+inequality will not be loaded).
+
+\item{$\bullet$} \texttt{-l} will toggle |LongLines| to true (allowing
+lines with more than 80 characters)
+
+\item{$\bullet$} \texttt{-q} will toggle |QuietMode| to true
+
+\item{$\bullet$} \texttt{-s} will toggle |StopOnError| to true
+
+\medbreak
+Note this processes \emph{all} command line options \emph{in order}.
+So \texttt{-e -v} will produce the same results as \texttt{-v} alone.
+
+@p
+procedure GetAccOptions;
+ var i,j: integer;
+begin
+ InitAccOptions;
+ for j:=1 to ParamCount do
+  if ParamStr(j)[1]='-' then
+   for i:=2 to length(ParamStr(j)) do
+    case ParamStr(j)[i] of
+     'v': begin ResetAccOptions; VocabulariesProcessing:=true end;
+     'f','p':
+      begin
+       ResetAccOptions;
+       VocabulariesProcessing:=true;
+       FormatsProcessing:=true;
+      end;
+     'P':
+      begin
+       ResetAccOptions;
+       VocabulariesProcessing:=true;
+       FormatsProcessing:=true;
+       TheoremListsProcessing:=true;
+       SchemeListsProcessing:=true;
+      end;
+     'e':
+      begin
+       ResetAccOptions;
+       VocabulariesProcessing:=true;
+       FormatsProcessing:=true;
+       ConstructorsProcessing:=true;
+       SignatureProcessing:=true;
+       ClustersProcessing:=true;
+       NotationsProcessing:=true;
+      end;
+     'h': begin InsertHiddenFiles:=false; @+ end;
+     'l': LongLines:=true;
+     'q': QuietMode:=true;
+     's': StopOnError:=true;
+    endcases;
+end;
+
+@ Similarly, we have |MakeEnv| specific options parsed from the
+command line flags.
+
+@p
+procedure GetMEOptions;
+ var i,j: integer;
+begin
+ for j:=1 to ParamCount do
+  if ParamStr(j)[1]='-' then
+   for i:=2 to length(ParamStr(j)) do
+    case ParamStr(j)[i] of
+     'n': NewAccom:=true;
+     'a': Accomodation:=true;
+     'l': LongLines:=true;
+     'q': QuietMode:=true;
+     's': StopOnError:=true;
+    endcases;
+end;
+
+@ The ``other'' options.
+
+Notably, there is a feature to allow axioms,@^Axioms@> which is completely
+undocumented (and probably for good reason!). The axioms must appear
+in ``\texttt{.axm}'' files.
+
+@p
+procedure GetOptions;
+ var i,j: integer;
+begin
+ for j:=1 to ParamCount do
+  if ParamStr(j)[1]='-' then
+   for i:=2 to length(ParamStr(j)) do
+    case ParamStr(j)[i] of
+     'q': QuietMode:=true;
+     'p': ParserOnly:=true;
+     'a': AnalyzerOnly:=true;
+     'c': CheckerOnly:=true;
+     'l': LongLines:=true;
+     's': StopOnError:=true;
+     'u': SwitchOffUnifier:=true;
+     'x': AxiomsAllowed:=true;
+      othercases break;
+    endcases;
+ if ArticleExt = '.axm' then
+   AxiomsAllowed:=true;
+end;
+
+@ Transfer specific options.
+
+@p
+procedure GetTransfOptions;
+ var lOption: String;
+begin
+ PublicLibr:=false;
+ if ParamCount>=2 then
+  begin lOption:=ParamStr(2);
+   if (length(lOption) = 2) and (lOption[1] in ['/','-']) then
+    PublicLibr:=UpCase(lOption[2]) = 'P';
+  end
+end;
+
+@ We have a number of functions useful for ``drawing'', i.e.,
+reporting progress and results (and so on).
+
+@p
+var gComment: String = '';
+@#
+disable_io_checking;
+@#
+procedure NoDisplayLine(fLine,fErrNbr: integer);
+begin
+end;
+@#
+procedure InitDisplayLine(const aComment:String);
+begin
+ gComment:=aComment;
+ WriteLn;
+ write(aComment);
+ DisplayLine:=DisplayLineInCurPos
+end;
+@#
+procedure DrawStr(const aStr:String);
+begin write(aStr) @+ end;
+@#
+procedure FinishDrawing;
+begin WriteLn; end;
+@#
+procedure DrawTPass(const fPassName:String);
+begin write(fPassName) @+ end;
+@#
+procedure DrawMizarScreen(const aApplicationName:String);
+begin
+ WriteLn(aApplicationName,', ',PCMizarVersionStr,' (',PlatformNameStr,')');
+ WriteLn(Copyright);
+end;
+@#
+procedure Noise; @t\2@>
+begin @|@/
+  if_not_def(WIN32)
+  write(^G^G^G);
+  endif;
+end;
+@#
+procedure EmptyParameterList;
+begin
+ Noise;
+ WriteLn; WriteLn('****  Empty Parameter List ? ****');
+ halt(2);
+end;
+
+@ More such procedures, reporting the article processed, the time, etc.
+
+@p
+procedure DrawArticleName(const fName:String);
+begin
+ WriteLn('Processing: ',fName); @+
+end;
+@#
+procedure DrawPass(const aName: String);
+begin
+ WriteLn;
+ write(aName); @+
+end;
+@#
+procedure DrawTime(const aTime: String);
+begin
+ write(aTime); @+
+end;
+@#
+procedure DrawVerifierExit(const aTime: String);
+begin
+ WriteLn;
+ WriteLn('Time of mizaring:',aTime);
+end;
+
+@ @p
+procedure DisplayLineInCurPos(fLine,fErrNbr: integer);
+begin
+ if (not CtrlCPressed) and (not QuietMode)then
+  begin
+   write(^M+gComment+' [',fLine:4);
+   if fErrNbr>0 then write(' *',fErrNbr);  
+   write(']' );
+  end; 
+ if FinishingPass then
+  begin
+   write(' [',fLine:4);
+   if fErrNbr>0 then write(' *',fErrNbr);  
+   write(']' );
+  end; 
+end;
+
+@ \label{mconsole:drawmessage}
+
+@p
+procedure DrawMessage(const Msg1,Msg2:String);
+ var Lh: byte;
+begin
+  Noise;
+  WriteLn;
+  write('**** ',Msg1);
+  Lh:=length(Msg1);
+  if length(Msg2)>Lh then Lh:=length(Msg2);
+  if Lh > length(Msg1) then write(' ':Lh-length(Msg1));
+  WriteLn(' ****');
+  if Msg2<>'' then
+   begin write('**** ',Msg2);
+     if Lh > length(Msg2) then write(' ':Lh-length(Msg2));
+     WriteLn(' ****');
+   end;
+end;
+@ \label{mconsole:drawioresult}
+
+@p
+procedure BugInProcessor;
+begin
+  DrawMessage('Internal Error',''); @+
+end;
+@#
+procedure DrawIOResult(const FileName:String; I:byte);
+begin
+ if I in [2..6,12,100] then
+   begin
+     if I=12 then I:=7 else if I=100 then I:=8;
+     DrawMessage(ErrMsg[I],'Can''t open '' '+FileName+' ''')
+   end
+  else DrawMessage('Can''t open '' '+FileName+' ''','');
+ halt(1);
+end;
+
+@ @p
+procedure DrawErrorsMSg(aErrorNbr: integer);
+begin
+  if aErrorNbr > 0 then
+  begin
+    WriteLn;
+    if aErrorNbr = 1 then
+      WriteLn('**** 1 error detected')
+    else
+      WriteLn('**** ', aErrorNbr, ' errors detected');
+  end;
+end;

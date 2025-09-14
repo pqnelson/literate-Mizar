@@ -1,0 +1,493 @@
+
+@* [F] Mizar environment.
+We will need some basic library of functions. For example, trimming
+whitespace from a String.
+
+@<mizenv.pas@>=
+@<GNU License@>
+
+unit mizenv;
+
+interface @| @/
+
+@<interface for mizenv.pas@> @; @#
+
+implementation @|@/
+
+@<Modules used by \texttt{mizenv.pas}@> @; @/
+
+@<implementation of mizenv.pas@> @t\2@> 
+
+end.
+
+@ The interface contains all the variables for the unit, and the
+public facing functions and procedures.
+
+\label{mizenv-global-vars}
+
+@<interface for mizenv.pas@>=
+var MizFileName, EnvFileName, ArticleName, ArticleID, ArticleExt: String;
+
+procedure @? SetStringLength(var aString: String; aLength: integer);
+
+@ The implementation begins with various ``uses''.
+
+@<Modules used by \texttt{mizenv.pas}@>=
+uses {compiler dependent imports}@/
+if_def(DELPHI)
+  IOUtils,SysUtils,windows, @+
+endif
+if_def(FPC)
+  dos,SysUtils, @+
+endif @/
+  mconsole; {the only Mizar module \texttt{mizenv.pas} uses}
+
+@ As far as setting the String length, this is a straightforward
+implementation. When the desired \\{aLength} is less than the actual
+length of \\{aString}, simply delete all characters after \\{aLength}.
+
+Otherwise, \\{aString} has \textit{fewer} characters than desired, so we
+pad it on the right with however many spaces until the String is as
+long as \\{aLength}.
+
+@<implementation of mizenv.pas@>=
+procedure SetStringLength(var aString: String; aLength: integer);
+var I, L: integer;
+begin
+  L := length(aString);
+  if aLength <= L then
+    Delete(aString, aLength + 1, L - aLength)
+  else
+    for I := 1 to aLength - L do aString := aString + ' ';
+end;
+
+@ We have publicly available functions trimming whitespace from functions.
+
+@<interface for mizenv.pas@>=
+function @? TrimStringLeft(aString: String): String; @t\2@>
+function @? TrimStringRight(aString: String): String; @t\2@>
+function @? TrimString(const aString: String): String;
+
+@ Trimming the left String will repeatedly delete any leading
+whitespace, until the String is empty or has no leading whitespace.
+
+Similarly, trimming the right String will repeatedly delete the \textit{last}
+character until it is no longer whitespace (or until the String becomes empty).
+
+@<implementation of mizenv.pas@>=
+function TrimStringLeft(aString: String): String;
+begin
+  while (length(aString) > 0) and (aString[1] = ' ') do Delete(aString, 1, 1);
+  TrimStringLeft := aString;
+end;
+@#
+function TrimStringRight(aString: String): String;
+begin
+  while (length(aString) > 0) and (aString[length(aString)] = ' ') do Delete(aString, length(aString), 1);
+  TrimStringRight := aString;
+end;
+
+@ Trimming a String amounts to trimming it on the left and right.
+
+@p
+function TrimString(const aString: String): String;
+begin
+  TrimString := TrimStringRight(TrimStringLeft(aString));
+end;
+
+@ We have a few more String manipulation functions for changing case,
+and turning an integer into a String.
+
+@<interface for mizenv.pas@>=
+function @? UpperCase(const aStr:String): String; @t\2@>
+function @? MizLoCase(aChar: char): char; @t\2@>
+function @? LowerCase(const aStr: String): String; @t\2@>
+function @? IntToStr(aInt: integer): String;
+
+@ Now, uppercase letters.
+
+@<implementation of mizenv.pas@>=
+function UpperCase(const aStr:String): String;
+ var k: integer; {index ranging over |aStr|}
+  lStr: String;  {the uppercased String being built and returned}
+begin
+ lStr:=aStr;
+ for k:=1 to length(aStr) do lStr[k]:=UpCase(aStr[k]);
+ UpperCase:=lStr;
+end;
+@ Lowercasing a String can be done by iteratively replacing each
+character with its lowercase version. This ``lowercase a single
+character'' function is precisely |MizLoCase|.
+
+@p
+function MizLoCase(aChar: char): char;
+begin
+ if aChar in ['A'..'Z'] then
+   MizLoCase := Chr(Ord('a') + Ord(aChar) - Ord('A'))
+ else
+   MizLoCase := aChar;
+end;
+@#
+
+function LowerCase(const aStr: String): String;
+ var i: integer;  {index ranging over |aStr|'s length}
+     lStr: String; {result being built up}
+begin
+  lStr:=aStr;
+  for i:=1 to length(aStr) do lStr[i]:=MizLoCase(aStr[i]);
+  LowerCase:=lStr;
+end;
+@ We also want to convert an integer to a String.
+
+@p
+function IntToStr(aInt: integer): String;
+ var lStr: String;
+begin
+ Str(aInt,lStr);
+ IntToStr:=lStr;
+end;
+
+@ {\bf File name manipulation.} We will want to test if a file exists,
+or split a path (represented as a String) into a directory and a filename.
+
+\interface
+@<interface for mizenv.pas@>=
+function @? MFileExists(const aFileName : String) : boolean;
+procedure @? EraseFile(const aFileName:String);
+procedure @? RenameFile(const aName1,aName2:String);
+function @? GetFileTime(aFileName: String): Longint;
+procedure @? SplitFileName(@+const aFileName: String; @/
+@t\hskip10pc@>@+ var aDir, aName, aExt: String);
+function @? TruncDir(const aFileName: String): String;
+function @? TruncExt(const aFileName: String): String;
+function @? ExtractFileDir(const aFileName: String): String;
+function @? ExtractFileName(const aFileName: String): String;
+function @? ExtractFileExt(const aFileName: String): String;
+function @? ChangeFileExt(const aFileName,aFileExt: String): String;
+@ \endinterface
+Testing if a file exists uses the Free Pascal's primitive |FileExists|
+function.
+
+Similarly, |EraseFile| is just relying on Free Pascal's |SysUtils.DeleteFile|
+function.
+
+\label{MFileExists}
+
+@<implementation of mizenv.pas@>=
+function MFileExists(const aFileName : String) : boolean;
+begin
+ MFileExists:=FileExists(aFileName); @+
+end;
+@#
+procedure EraseFile(const aFileName:String);
+begin
+ SysUtils.DeleteFile(aFileName); @+
+end;
+@ We will destructively rename a file. If a file with the name already
+exists, we delete it.
+
+@p
+procedure RenameFile(const aName1,aName2:String);
+begin
+ if MFileExists(aName1) then
+   EraseFile(aName2);
+ SysUtils.RenameFile(aName1,aName2);
+end;
+
+@ Again, relying on Free Pascal's |FileAge| function.
+
+\label{GetFileTime}
+
+@p
+function GetFileTime(aFileName: String): Longint;
+begin
+ GetFileTime := FileAge(aFileName); @+
+end;
+
+@ Split a file name into components, namely (1) the directory, (2) the
+file name, (3) its extension.
+For example, \texttt{/path/to/my/file.exe} will be split
+into \texttt{/path/to/my/}, \texttt{file}, and \texttt{exe}.
+
+This implementation depends on the compiler used (Delphi or Free Pascal).
+
+@p
+procedure SplitFileName(@+const aFileName: String; {input} @/
+@t\hskip9.25pc@>@+  var aDir, aName, aExt: String) @t\2@>; {output}
+begin@|@/
+if_def(FPC) @/
+ aDir := SysUtils.ExtractFilePath(aFileName); @/
+ aName := SysUtils.ExtractFileName(aFileName); @/
+ aExt := SysUtils.ExtractFileExt(aFileName);
+endif@;
+if_def(DELPHI) @/
+ aDir := TPath.GetDirectoryName(aFileName); @/
+ aName := TPath.GetFileName(aFileName); @/
+ aExt := TPath.GetExtension(aFileName);
+endif@;
+end;
+
+@ ``Truncating a directory'' means ``throw away the directory part of
+the  path'' so we end up with just a filename and the file extension.
+
+@p
+function TruncDir(const aFileName: String): String;
+var
+  Dir, lName, Ext: String;
+begin
+  SplitFileName(aFileName, Dir, lName, Ext);
+  TruncDir := lName + Ext;
+end;
+
+@ ``Truncating the extension'' means throwing away the extension part
+of a path.
+
+@p
+function TruncExt(const aFileName: String): String;
+var
+  Dir, lName, Ext: String;
+begin
+  SplitFileName(aFileName, Dir, lName, Ext);
+  TruncExt := Dir + lName;
+end;
+
+@ Extracting the file directory will return \textit{just} the directory
+part of a path.
+
+@p
+function ExtractFileDir(const aFileName: String): String;
+ var
+   Dir, lName, Ext: String;
+begin
+  SplitFileName(aFileName, Dir, lName, Ext);
+  ExtractFileDir := Dir;
+end;
+
+@ Extracting the file name will throw away both the directory and
+extension.
+
+@p
+function ExtractFileName(const aFileName: String): String;
+var
+  Dir, lName, Ext: String;
+begin
+  SplitFileName(aFileName, Dir, lName, Ext);
+  ExtractFileName := lName;
+end;
+@#
+function ExtractFileExt(const aFileName: String): String;
+var
+  Dir, lName, Ext: String;
+begin
+  SplitFileName(aFileName, Dir, lName, Ext);
+  ExtractFileExt := Ext;
+end;
+
+@ Changing a file name's extension. See:
+
+\texttt{https://www.freepascal.org/docs-html/rtl/sysutils/changefileext.html}
+
+@p
+function ChangeFileExt(const aFileName,aFileExt: String): String;
+begin
+ ChangeFileExt:=SysUtils.ChangeFileExt(aFileName,aFileExt); @+
+end;
+
+@ Getting an environmental variable.
+
+@p
+function GetEnvStr(aEnvName: String): String; @/
+if_def(FPC) 
+begin
+ GetEnvStr:=GetEnv(aEnvname); @+
+end; @/
+endif 
+if_def(DELPHI) 
+@<Get environment variable, Delphi-compatible mode@>
+endif 
+
+@ The Delphi-compatible version of obtaining an environment variable
+is rather involved, so let us study it in silent meditation.
+
+@<Get environment variable, Delphi-compatible mode@>=
+ const cchBuffer=255;
+ var lName,lpszTempPath: array[0..cchBuffer] of char;
+     i: integer;
+     lStr: String;
+begin
+ lStr:='';
+ for i:=1 to length(aEnvname) do
+  lName[i-1]:=aEnvname[i];
+ lName[length(aEnvname)]:=#0;
+
+ if GetEnvironmentVariable(lName,lpszTempPath,cchBuffer) > 0 then
+  begin
+   for i:=0 to cchBuffer do
+    begin
+     if lpszTempPath[i]=#0 then break;
+     lStr:=lStr+lpszTempPath[i];
+    end;
+  end;
+ GetEnvStr:=lStr;
+end; @/
+{restored for DELPHI4 compatibility ;-(
+begin
+ GetEnvStr:=GetEnvironmentVariable(aEnvname);
+end;}
+
+@ The |DrawMessage| and |DrawIOResult| are procedures
+in \texttt{mconsole.pas} (see \section\xref{mconsole:drawmessage}\ETs\section\xref{mconsole:drawioresult}).
+
+@<implementation of mizenv.pas@>=
+procedure FileExam(const aFileName: String);
+ var Source: file; I: byte;
+begin
+  if aFileName = '' then
+    begin DrawMessage('Can''t open '' .miz ''','');
+     halt(1);
+    end;
+  FileMode:=0;
+  Assign(Source,aFileName); without_io_checking(Reset(Source));
+  I:=ioresult;
+  if I<>0 then DrawIOResult(aFileName,I);
+  close(Source);
+  FileMode:=2;
+end;
+
+@ We test if a file exists with the |EnvFileExam| procedure. It will
+notify the user if the file does not exist, otherwise it is
+silent. %(From \section\xref{mconsole:drawmessage}.)
+
+Again, |DrawMessage| comes from \texttt{mconsole.pas} (\section\xref{mconsole:drawmessage}).
+
+@p
+procedure EnvFileExam(const aFileExt:String);
+begin
+  if not MFileExists(EnvFileName+aFileExt) then
+   begin
+     DrawMessage('Can''t open '' '+EnvFileName+aFileExt+' ''','');
+     Halt(1);
+   end;
+end;
+
+@ The \\{ParamCount} is \PASCAL/'s way of counting the command-line
+parameters passed to the program.
+
+@p
+procedure GetFileName(ParamNr:byte; DefaultExt:String; var aFileName:String);
+ var  lFileExt: String;
+begin
+ if ParamNr <= ParamCount then
+  begin aFileName:=ParamStr(ParamNr);
+    lFileExt:=ExtractFileExt(aFileName);
+    if lFileExt='' then aFileName:=ChangeFileExt(aFileName,DefaultExt);
+    exit
+  end;
+ aFileName:='';
+end;
+
+@ This procedure will take the |Nr| command line argument. If it lacks
+a file extension, then it will append the |DefaultExt| to it. At the
+end, this will populate |aFileName| and |aFileExt| based on the
+command line.
+
+The |ParamStr(Nr)| returns the ${\it Nr}^{th}$ parameter as a String (it's
+a \PASCAL/ primitive).
+
+@p
+procedure GetFileExtName(Nr:byte; DefaultExt:String;
+                      var aFileName:String; var aFileExt:String);
+begin
+ if Nr <= ParamCount then
+  begin aFileName:=ParamStr(Nr);
+    aFileExt:=ExtractFileExt(aFileName);
+    if aFileExt='' then aFileExt:=DefaultExt
+    else aFileName:=ChangeFileExt(aFileName,'');
+    exit
+  end;
+ aFileName:=''; aFileExt:='';
+end;
+
+@ We need to find the first command-line argument which resembles a
+Mizar article name. Note that Mizar articles have several files
+associated with it (the article's contents in a \texttt{.miz} file,
+the vocabulary in a \texttt{.voc} file, and \XML/ related intermediate
+representation in \texttt{.xml} files, as well as \texttt{.evl} files).
+
+Command line flags prefixed with a dash (``\texttt{-}'') will not be
+interpreted as the name of a Mizar article.
+
+@p
+procedure GetMizFileName(aFileExt:String);
+var i:integer;
+begin
+ MizFileName:=''; ArticleName:=''; ArticleExt:=''; EnvFileName:='';
+ for i:=1 to ParamCount do
+  if ParamStr(i)[1]<>'-' then
+   begin
+    MizFileName:=ParamStr(i);
+    GetFileExtName(i,aFileExt,MizFileName,ArticleExt);
+    ArticleName:=ExtractFileName(MizFileName);
+    ArticleID:=UpperCase(ArticleName);
+    if not IsMMLIdentifier(ArticleName) then
+     begin
+      DrawMessage('Only letters, numbers and _ allowed in Mizar file names','');
+      halt(1);
+     end;
+    EnvFileName:=MizFileName;
+    exit;
+   end;
+end;
+
+@ We will provide a standard way to refer to the article.
+
+@p
+procedure GetArticleName;
+begin
+ GetMizFileName('.miz');
+end;
+
+@ The |EnvFileName| is populated here provided |MizFileName| is blank. 
+
+@p
+procedure GetEnvironName;
+var i,c:integer;
+begin
+ if MizFileName = '' then GetArticleName;
+ EnvFileName:=MizFileName;
+ c:=0;
+ for i:=1 to ParamCount do
+  if (ParamStr(i)[1]<>'-') then
+   begin
+    inc(c);
+    if c=2 then EnvFileName:=ParamStr(i);
+   end;
+end;
+
+@ The valid characters which can appear in a Mizar article name (an
+``MML Identifier'') are uppercase Latin letters (\texttt{A-Z}), lowercase Latin
+letters (\texttt{a-z}), decimal digits (\texttt{0-9}), and underscores
+(\texttt{\_}). 
+
+@p
+function IsMMLIdentifier(const aID: String): boolean;
+ const Allowed: array[chr(0)..chr(255)] of byte =
+   (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,
+    0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1,
+    0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+ var i: integer;
+begin
+  for i:=1 to length(aID) do
+   if Allowed[aID[i]] = 0 then
+    begin
+     IsMMLIdentifier:=false;
+     exit; @+
+    end;
+ @t\quad @>  IsMMLIdentifier:=true;
+end;
+

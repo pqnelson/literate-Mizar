@@ -1,0 +1,78 @@
+
+@* [F] Info file handling.
+I don't think this is actually used anywhere, but I am including it
+for completeness.
+
+@<info.pas@>=
+  @<GNU License@>
+
+unit info;
+
+interface
+
+uses errhan;
+
+var InfoFile: text; @#
+
+procedure InfoChar (C: char); @t\2@>
+procedure InfoInt (I: integer); @t\2@>
+procedure InfoWord (C: char; I: integer); @t\2@>
+procedure InfoNewLine; @t\2@>
+procedure InfoString (S: string); @t\2@>
+procedure InfoPos (Pos: Position); @t\2@>
+procedure InfoCurPos; @t\2@> @#
+
+procedure OpenInfoFile; @t\2@>
+procedure CloseInfofile; @t\2@> @#
+
+implementation @|@#
+
+uses mizenv,mconsole; @#
+
+procedure InfoChar (C: char);
+begin write(InfoFile,C) end; @#
+
+procedure InfoInt (I: integer);
+begin write(InfoFile,I,' ') end; @#
+
+procedure InfoWord (C: char; I: integer);
+begin write(InfoFile,C,I,' ') end; @#
+
+procedure InfoNewLine;
+begin WriteLn(InfoFile) end; @#
+
+procedure InfoString (S: string);
+begin write(InfoFile,S) end; @#
+
+procedure InfoPos (Pos: Position);
+begin with Pos do write(InfoFile,Line,' ',Col,' ') end; @#
+
+procedure InfoCurPos;
+begin with CurPos do write(InfoFile,Line,' ',Col,' ') end;
+
+@ There are a few helper functions which is more than ``Write
+$\langle$data type$\rangle$ to info file''.
+
+@p
+var _InfoExitProc:pointer;
+
+procedure InfoExitProc;
+begin
+   CloseInfoFile;
+   ExitProc:=_InfoExitProc;
+end; @#
+
+procedure OpenInfoFile;
+begin
+   Assign(InfoFile,MizFileName+'.inf');
+   Rewrite(InfoFile);
+   WriteLn(InfoFile,'Mizared article: "',MizFileName,'"');
+   _InfoExitProc := ExitProc;
+   ExitProc:=@@InfoExitProc;
+end; @#
+
+procedure CloseInfofile;
+begin close(InfoFile) end; @#
+
+end.
+
