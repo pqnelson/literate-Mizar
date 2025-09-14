@@ -14,8 +14,10 @@ To build the PDF, simply do the following:
 ```
 
 This will run Metapost (and mptopdf) on the relevant files in the
-`img/` subdirectory, then run produce a 466 page PDF from the current
-draft of the `parser.web` file.
+`img/` subdirectory, then run produce a 628 page PDF from the current
+draft of the `parser.web` file (which is assembled by concatenating
+all the relevant files in `base/`, with the leading `intro.web` and
+trailing `index.web`).
 
 # Plans
 
@@ -64,8 +66,8 @@ statement `if A and B` where `B` is always false, I listed it as a bug).
 # Progress
 
 So far I have transcribed and annotated about 18549 lines of code. These
-are in 1662 numbered "chunks" spanning 553 pages (with an additional
-63 pages of backmatter), for a total of 616 pages.
+are in 1767 numbered "chunks" spanning 563 pages (with an additional
+65 pages of backmatter), for a total of 628 pages.
 
 This is not even considering the `kernel` directory, which contains
 40244 lines of code in 54 files.
