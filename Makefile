@@ -2,9 +2,9 @@ FILE=parser
 TEX=pdftex
 GALLEY=galley
 
-all: extract images labels pdf
+all: images pdf
 
-pdf: labels
+pdf: extract labels
 	weave -p $(FILE) - $(FILE)
 	bash cleanindex.sh
 	$(TEX) $(FILE)
@@ -12,7 +12,7 @@ pdf: labels
 	cp labels.tex labels2.tex
 
 extract:
-	cat intro.web base/mizenv.web base/mconsole.web base/pcmizver.web base/mstate.web base/monitor.web base/errhan.web base/mtime.web base/numbers.web base/mobjects.web base/xml_dict.web base/librenv.web base/librenv.web base/info.web base/xml_parser.web base/xml_inout.web  base/dicthan.web base/scanner.web base/_format.web base/syntax.web base/mscanner.web base/abstract_syntax.web base/wsmarticle.web base/pragmas.web base/parseraddition.web base/parser.web index.web > parser.web
+	cat intro.web base/mizenv.web base/pcmizver.web base/mconsole.web base/errhan.web base/info.web base/monitor.web base/mtime.web base/mstate.web base/numbers.web base/mobjects.web base/xml_dict.web base/librenv.web base/xml_parser.web base/xml_inout.web  base/dicthan.web base/scanner.web base/_format.web base/syntax.web base/mscanner.web base/abstract_syntax.web base/wsmarticle.web base/pragmas.web base/parseraddition.web base/parser.web index.web > parser.web
 
 # Transcribe one file at a time, then append the results to "esmprocessor.web"
 galley: labels next

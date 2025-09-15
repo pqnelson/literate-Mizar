@@ -3689,35 +3689,35 @@ var i: integer;
 begin
    case aFrm^.nFormulaSort of
       wsNegatedFormula:
-         @<Emit XML for negated formula (WSM)@>;
+         @<Emit \XML/ for negated formula (WSM)@>;
       wsConjunctiveFormula:
-         @<Emit XML for conjunction (WSM)@>;
+         @<Emit \XML/ for conjunction (WSM)@>;
       wsDisjunctiveFormula:
-         @<Emit XML for disjunction (WSM)@>;
+         @<Emit \XML/ for disjunction (WSM)@>;
       wsConditionalFormula:
-         @<Emit XML for conditional formula (WSM)@>;
+         @<Emit \XML/ for conditional formula (WSM)@>;
       wsBiconditionalFormula:
-         @<Emit XML for biconditional formula (WSM)@>;
+         @<Emit \XML/ for biconditional formula (WSM)@>;
       wsFlexaryConjunctiveFormula:
-         @<Emit XML for flexary-conjunction (WSM)@>;
+         @<Emit \XML/ for flexary-conjunction (WSM)@>;
       wsFlexaryDisjunctiveFormula:
-         @<Emit XML for flexary-disjunction (WSM)@>;
+         @<Emit \XML/ for flexary-disjunction (WSM)@>;
       wsPredicativeFormula:
-         @<Emit XML for predicative formula (WSM)@>;
+         @<Emit \XML/ for predicative formula (WSM)@>;
       wsRightSideOfPredicativeFormula:
-         @<Emit XML for right-side of predicative formula (WSM)@>;
+         @<Emit \XML/ for right-side of predicative formula (WSM)@>;
       wsMultiPredicativeFormula:
-         @<Emit XML for multi-predicative formula (WSM)@>;
+         @<Emit \XML/ for multi-predicative formula (WSM)@>;
       wsPrivatePredicateFormula:
          Out_PrivatePredicativeFormula(PrivatePredicativeFormulaPtr(aFrm));
       wsAttributiveFormula:
-         @<Emit XML for attributive formula (WSM)@>;
+         @<Emit \XML/ for attributive formula (WSM)@>;
       wsQualifyingFormula:
-         @<Emit XML for qualifying formula (WSM)@>;
+         @<Emit \XML/ for qualifying formula (WSM)@>;
       wsUniversalFormula:
-         @<Emit XML for universal formula (WSM)@>;
+         @<Emit \XML/ for universal formula (WSM)@>;
       wsExistentialFormula:
-         @<Emit XML for existential formula (WSM)@>;
+         @<Emit \XML/ for existential formula (WSM)@>;
       wsContradiction:
          begin
             Out_XElWithPos(FormulaName[wsContradiction],aFrm^.nFormulaPos);
@@ -3743,7 +3743,7 @@ NegatedFormula = element Negated-Formula \LB
 \quad Formula
 \RB\par}
 
-@<Emit XML for negated formula (WSM)@>=
+@<Emit \XML/ for negated formula (WSM)@>=
          begin
             Out_XElStart(FormulaName[wsNegatedFormula]);
             Out_PosAsAttrs(aFrm^.nFormulaPos);
@@ -3763,7 +3763,7 @@ ConjunctiveFormula = element Conjunctive-Formula \LB
 \RB
 \par}
 
-@<Emit XML for conjunction (WSM)@>=
+@<Emit \XML/ for conjunction (WSM)@>=
          begin
             Out_XElStart( FormulaName[wsConjunctiveFormula]);
             Out_PosAsAttrs(aFrm^.nFormulaPos);
@@ -3784,7 +3784,7 @@ DisjunctiveFormula = element Disjunctive-Formula \LB
 \RB
 \par}
 
-@<Emit XML for disjunction (WSM)@>=
+@<Emit \XML/ for disjunction (WSM)@>=
          begin
             Out_XElStart( FormulaName[wsDisjunctiveFormula]);
             Out_PosAsAttrs(aFrm^.nFormulaPos);
@@ -3805,7 +3805,7 @@ ConditionalFormula = element Conditional-Formula \LB
 \RB
 \par}
 
-@<Emit XML for conditional formula (WSM)@>=
+@<Emit \XML/ for conditional formula (WSM)@>=
          begin
             Out_XElStart( FormulaName[wsConditionalFormula]);
             Out_PosAsAttrs(aFrm^.nFormulaPos);
@@ -3825,7 +3825,7 @@ BiconditionalFormula = element Biconditional-Formula \LB
 \RB
 \par}
 
-@<Emit XML for biconditional formula (WSM)@>=
+@<Emit \XML/ for biconditional formula (WSM)@>=
          begin
             Out_XElStart( FormulaName[wsBiconditionalFormula]);
             Out_PosAsAttrs(aFrm^.nFormulaPos);
@@ -3845,7 +3845,7 @@ FlexaryConjunctiveFormula = element FlexaryConjunctive-Formula \LB
 \RB
 \par}
 
-@<Emit XML for flexary-conjunction (WSM)@>=
+@<Emit \XML/ for flexary-conjunction (WSM)@>=
          begin
             Out_XElStart( FormulaName[wsFlexaryConjunctiveFormula]);
             Out_PosAsAttrs(aFrm^.nFormulaPos);
@@ -3866,7 +3866,7 @@ FlexaryDisjunctiveFormula = element FlexaryDisjunctive-Formula \LB
 \RB
 \par}
 
-@<Emit XML for flexary-disjunction (WSM)@>=
+@<Emit \XML/ for flexary-disjunction (WSM)@>=
          begin
             Out_XElStart( FormulaName[wsFlexaryDisjunctiveFormula]);
             Out_PosAsAttrs(aFrm^.nFormulaPos);
@@ -3890,7 +3890,7 @@ Predicative-Formula = element Predicative-Formula \LB
 \RB
 \par}
 
-@<Emit XML for predicative formula (WSM)@>=
+@<Emit \XML/ for predicative formula (WSM)@>=
          with PredicativeFormulaPtr(aFrm)^ do
       begin
          Out_XElStart(FormulaName[wsPredicativeFormula]);
@@ -3930,7 +3930,7 @@ RightSideOf-Predicative-Formula = element RightSideOf-Predicative-Formula \LB
 \RB
 \par}
 
-@<Emit XML for right-side of predicative formula (WSM)@>=
+@<Emit \XML/ for right-side of predicative formula (WSM)@>=
          with RightSideOfPredicativeFormulaPtr(aFrm)^ do
       begin
          Out_XElStart(FormulaName[wsRightSideOfPredicativeFormula]);
@@ -3960,7 +3960,7 @@ Multi-Predicative-Formula = element Multi-Predicative-Formula \LB
 
 \par}
 
-@<Emit XML for multi-predicative formula (WSM)@>=
+@<Emit \XML/ for multi-predicative formula (WSM)@>=
          with MultiPredicativeFormulaPtr(aFrm)^ do
       begin
          Out_XElStart( FormulaName[wsMultiPredicativeFormula]);
@@ -3981,7 +3981,7 @@ Attributive-Formula = element Attributive-Formula \LB
 \quad Adjective-Cluster.element
 \RB\par}
 
-@<Emit XML for attributive formula (WSM)@>=
+@<Emit \XML/ for attributive formula (WSM)@>=
          with AttributiveFormulaPtr(aFrm)^ do
       begin
          Out_XElStart(FormulaName[wsAttributiveFormula]);
@@ -4003,7 +4003,7 @@ Qualifying-Formula = element Qualifying-Formula \LB
 \quad Formula
 \RB\par}
 
-@<Emit XML for qualifying formula (WSM)@>=
+@<Emit \XML/ for qualifying formula (WSM)@>=
          with QualifyingFormulaPtr(aFrm)^ do
       begin
          Out_XElStart(FormulaName[wsQualifyingFormula]);
@@ -4024,7 +4024,7 @@ Universal-Quantifier-Formula = element Universal-Quantifier-Formula \LB
 \quad Formula
 \RB\par}
 
-@<Emit XML for universal formula (WSM)@>=
+@<Emit \XML/ for universal formula (WSM)@>=
          with QuantifiedFormulaPtr( aFrm)^ do
       begin
          Out_XElStart(FormulaName[wsUniversalFormula]);
@@ -4045,7 +4045,7 @@ Existential-Quantifier-Formula = element Existential-Quantifier-Formula \LB
 \quad Formula
 \RB\par}
 
-@<Emit XML for existential formula (WSM)@>=
+@<Emit \XML/ for existential formula (WSM)@>=
          with QuantifiedFormulaPtr( aFrm)^ do
       begin
          Out_XElStart(FormulaName[wsExistentialFormula]);
@@ -4159,7 +4159,7 @@ var i: integer;
 begin
    case aTrm^.nTermSort of
       wsPlaceholderTerm:
-         @<Emit XML for placeholder (WSM)@>;
+         @<Emit \XML/ for placeholder (WSM)@>;
       wsSimpleTerm:
          Out_SimpleTerm(SimpleTermPtr(aTrm));
       wsNumeralTerm:
@@ -4170,31 +4170,31 @@ begin
             Out_XElEnd0;
          end;
       wsInfixTerm:
-         @<Emit XML for infix term (WSM)@>;
+         @<Emit \XML/ for infix term (WSM)@>;
       wsCircumfixTerm:
-         @<Emit XML for circumfix term (WSM)@>;
+         @<Emit \XML/ for circumfix term (WSM)@>;
       wsPrivateFunctorTerm:
          Out_PrivateFunctorTerm(PrivateFunctorTermPtr(aTrm));
       wsAggregateTerm:
-         @<Emit XML for aggregate term (WSM)@>;
+         @<Emit \XML/ for aggregate term (WSM)@>;
       wsSelectorTerm:
-         @<Emit XML for selector term (WSM)@>;
+         @<Emit \XML/ for selector term (WSM)@>;
       wsInternalSelectorTerm:
          Out_InternalSelectorTerm(InternalSelectorTermPtr(aTrm));
       wsForgetfulFunctorTerm:
-         @<Emit XML for forgetful functor (WSM)@>;
+         @<Emit \XML/ for forgetful functor (WSM)@>;
       wsInternalForgetfulFunctorTerm:
-         @<Emit XML for internal forgetful functor (WSM)@>;
+         @<Emit \XML/ for internal forgetful functor (WSM)@>;
       wsFraenkelTerm:
-         @<Emit XML for Fraenkel term (WSM)@>;
+         @<Emit \XML/ for Fraenkel term (WSM)@>;
       wsSimpleFraenkelTerm:
-         @<Emit XML for simple Fraenkel term (WSM)@>;
+         @<Emit \XML/ for simple Fraenkel term (WSM)@>;
       wsQualificationTerm:
-         @<Emit XML for qualification term (WSM)@>;
+         @<Emit \XML/ for qualification term (WSM)@>;
       wsExactlyTerm:
-         @<Emit XML for exactly qualification term (WSM)@>;
+         @<Emit \XML/ for exactly qualification term (WSM)@>;
       wsGlobalChoiceTerm:
-         @<Emit XML for global choice term (WSM)@>;
+         @<Emit \XML/ for global choice term (WSM)@>;
       wsItTerm:
          Out_XElWithPos(TermName[wsItTerm],aTrm^.nTermPos);
       wsErrorTerm:
@@ -4212,7 +4212,7 @@ Term \pipe= element Placeholder-Term \LB
 \pos{\quad}
 \RB\par}
 
-@<Emit XML for placeholder (WSM)@>=
+@<Emit \XML/ for placeholder (WSM)@>=
          begin
             Out_XElStart( TermName[wsPlaceholderTerm]);
             Out_XIntAttr( XMLAttrName[atNr], PlaceholderTermPtr(aTrm)^.nLocusNr);
@@ -4234,7 +4234,7 @@ Term \pipe= element Infix-Term \LB
 \quad element Arguments \LB\ Term-List? \RB
 \RB\par}
 
-@<Emit XML for infix term (WSM)@>=
+@<Emit \XML/ for infix term (WSM)@>=
          with InfixTermPtr(aTrm)^ do
       begin
          Out_XElStart(TermName[wsInfixTerm]);
@@ -4278,7 +4278,7 @@ Term \pipe= element Circumfix-Term \LB
 \quad element Arguments \LB\ Term-List? \RB
 \RB\par}
 
-@<Emit XML for circumfix term (WSM)@>=
+@<Emit \XML/ for circumfix term (WSM)@>=
          with CircumfixTermPtr(aTrm)^ do
       begin
          Out_XElStart(TermName[wsCircumfixTerm]);
@@ -4308,7 +4308,7 @@ Term \pipe= element Aggregate-Term \LB
 \quad element Arguments \LB\ Term-List \RB?
 \RB\par}
 
-@<Emit XML for aggregate term (WSM)@>=
+@<Emit \XML/ for aggregate term (WSM)@>=
          with AggregateTermPtr(aTrm)^ do
       begin
          Out_XElStart(TermName[wsAggregateTerm]);
@@ -4335,7 +4335,7 @@ Term \pipe= element Selector-Term \LB
 \quad Term
 \RB\par}
 
-@<Emit XML for selector term (WSM)@>=
+@<Emit \XML/ for selector term (WSM)@>=
          with SelectorTermPtr(aTrm)^ do
       begin
          Out_XElStart(TermName[wsSelectorTerm]);
@@ -4359,7 +4359,7 @@ Term \pipe= element Forgetful-Functor-Term \LB
 \quad Term
 \RB\par}
 
-@<Emit XML for forgetful functor (WSM)@>=
+@<Emit \XML/ for forgetful functor (WSM)@>=
          with ForgetfulFunctorTermPtr(aTrm)^ do
       begin
          Out_XElStart(TermName[wsForgetfulFunctorTerm]);
@@ -4382,7 +4382,7 @@ Term \pipe= element Internal-Forgetful-Functor-Term \LB
 \pos{\quad},
 \RB\par}
 
-@<Emit XML for internal forgetful functor (WSM)@>=
+@<Emit \XML/ for internal forgetful functor (WSM)@>=
          with InternalForgetfulFunctorTermPtr(aTrm)^ do
       begin
          Out_XElStart(TermName[wsInternalForgetfulFunctorTerm]);
@@ -4404,7 +4404,7 @@ Term \pipe= element Fraenkel-Term \LB
 
 @^Fraenkel term@>
 
-@<Emit XML for Fraenkel term (WSM)@>=
+@<Emit \XML/ for Fraenkel term (WSM)@>=
          with FraenkelTermPtr(aTrm)^ do
       begin
          Out_XElStart( TermName[wsFraenkelTerm]);
@@ -4427,7 +4427,7 @@ Term \pipe= element Simple-Fraenkel-Term \LB
 \quad Term
 \RB\par}
 
-@<Emit XML for simple Fraenkel term (WSM)@>=
+@<Emit \XML/ for simple Fraenkel term (WSM)@>=
          with SimpleFraenkelTermPtr(aTrm)^ do
       begin
          Out_XElStart( TermName[wsSimpleFraenkelTerm]);
@@ -4449,7 +4449,7 @@ Term \pipe= element Qualification-Term \LB
 \quad Type
 \RB\par}
 
-@<Emit XML for qualification term (WSM)@>=
+@<Emit \XML/ for qualification term (WSM)@>=
          with QualifiedTermPtr(aTrm)^ do
       begin
          Out_XElStart( TermName[wsQualificationTerm]);
@@ -4469,7 +4469,7 @@ Term \pipe= element Exactly-Qualification-Term \LB
 \quad Term
 \RB\par}
 
-@<Emit XML for exactly qualification term (WSM)@>=
+@<Emit \XML/ for exactly qualification term (WSM)@>=
          with ExactlyTermPtr(aTrm)^ do
       begin
          Out_XElStart( TermName[wsQualificationTerm]);
@@ -4490,7 +4490,7 @@ Term \pipe= element Global-Choice-Term \LB
 
 @^Choice operator@>
 
-@<Emit XML for global choice term (WSM)@>=
+@<Emit \XML/ for global choice term (WSM)@>=
          begin
             Out_XElStart(TermName[wsGlobalChoiceTerm]);
             Out_PosAsAttrs(aTrm^.nTermPos);
@@ -4572,21 +4572,21 @@ procedure OutWSMizFileObj.Out_Pattern(aPattern: PatternPtr);
 begin
    case aPattern^.nPatternSort of
       itDefPred:
-         @<Emit XML for predicate pattern (WSM)@>;
+         @<Emit \XML/ for predicate pattern (WSM)@>;
       itDefFunc:
          begin
             case FunctorPatternPtr(aPattern)^.nFunctKind of
                InfixFunctor:
-                  @<Emit XML for infix functor pattern (WSM)@>;
+                  @<Emit \XML/ for infix functor pattern (WSM)@>;
                CircumfixFunctor:
-                  @<Emit XML for bracket functor pattern (WSM)@>;
+                  @<Emit \XML/ for bracket functor pattern (WSM)@>;
             endcases;
          end;
       itDefMode:
-         @<Emit XML for mode pattern (WSM)@>;
+         @<Emit \XML/ for mode pattern (WSM)@>;
       end;
       itDefAttr:
-         @<Emit XML for attribute pattern (WSM)@>;
+         @<Emit \XML/ for attribute pattern (WSM)@>;
    endcases;
 end;
 
@@ -4603,7 +4603,7 @@ Predicate-Pattern = element Predicate-Pattern \LB
 \RB
 \par}
 
-@<Emit XML for predicate pattern (WSM)@>=
+@<Emit \XML/ for predicate pattern (WSM)@>=
          with PredicatePatternPtr(aPattern)^ do
       begin
          Out_XElStart(DefPatternName[itDefPred]);
@@ -4629,7 +4629,7 @@ Operation-Functor-Pattern = element Operation-Functor-Pattern \LB
 \RB
 \par}
 
-@<Emit XML for infix functor pattern (WSM)@>=
+@<Emit \XML/ for infix functor pattern (WSM)@>=
                   with InfixFunctorPatternPtr(aPattern)^ do
                begin
                   Out_XElStart(FunctorPatternName[InfixFunctor]);
@@ -4659,7 +4659,7 @@ Bracket-Functor-Pattern = element Bracket-Functor-Pattern \LB
 \RB
 \par}
 
-@<Emit XML for bracket functor pattern (WSM)@>=
+@<Emit \XML/ for bracket functor pattern (WSM)@>=
                   with CircumfixFunctorPatternPtr(aPattern)^ do
                begin
                   Out_XElStart(FunctorPatternName[CircumfixFunctor]);
@@ -4690,7 +4690,7 @@ Mode-Pattern = element Mode-Pattern \LB
 \RB
 \par}
 
-@<Emit XML for mode pattern (WSM)@>=
+@<Emit \XML/ for mode pattern (WSM)@>=
          with ModePatternPtr(aPattern)^ do
       begin
          Out_XElStart(DefPatternName[itDefMode]);
@@ -4717,7 +4717,7 @@ Attribute-Pattern = element Attribute-Pattern \LB
 \RB
 \par}
 
-@<Emit XML for attribute pattern (WSM)@>=
+@<Emit \XML/ for attribute pattern (WSM)@>=
          with AttributePatternPtr(aPattern)^ do
       begin
          Out_XElStart(DefPatternName[itDefAttr]);
@@ -5193,7 +5193,7 @@ begin
          itSchemeBlock:
             Out_Block(nBlock);
          itSchemeHead:
-            @<Emit XML for schema (WSM)@>;
+            @<Emit \XML/ for schema (WSM)@>;
          itTheorem:
             Out_CompactStatement(CompactStatementPtr(nContent),nBlock);
          itAxiom:
@@ -5207,10 +5207,10 @@ begin
          itRegularStatement:
             Out_RegularStatement(RegularStatementPtr(nContent),nBlock);
          itChoice:
-            @<Emit XML for \texttt{consider} contents (WSM)@>;
+            @<Emit \XML/ for \texttt{consider} contents (WSM)@>;
          itReconsider:
-            @<Emit XML for \texttt{reconsider} contents (WSM)@>; @#
-@t\4@>         @<Emit XML for definition-related items (WSM)@>; @#
+            @<Emit \XML/ for \texttt{reconsider} contents (WSM)@>; @#
+@t\4@>         @<Emit \XML/ for definition-related items (WSM)@>; @#
          itPredSynonym, itPredAntonym, itFuncNotation, itModeNotation,
          itAttrSynonym, itAttrAntonym:
             with NotationDeclarationPtr(nContent)^ do
@@ -5218,7 +5218,7 @@ begin
             Out_Pattern(nOriginPattern);
             Out_Pattern(nNewPattern);
          end;
-@t\4@>         @<Emit XML for registration-related items (WSM)@>; @#
+@t\4@>         @<Emit \XML/ for registration-related items (WSM)@>; @#
          itPragma: ;
          itIncorrItem:;
       end;
@@ -5250,7 +5250,7 @@ Scheme-contents = element Scheme \LB
 \RB
 \par}
 
-@<Emit XML for schema (WSM)@>=
+@<Emit \XML/ for schema (WSM)@>=
             with SchemePtr(nContent)^ do
          begin
             Out_XElStart( XMLElemName[elScheme]);
@@ -5311,7 +5311,7 @@ Consider-Statement-contents =
 \quad Justification
 )\par}
 
-@<Emit XML for \texttt{consider} contents (WSM)@>=
+@<Emit \XML/ for \texttt{consider} contents (WSM)@>=
             with ChoiceStatementPtr(nContent)^ do
          begin
             for i:= 0 to  nQualVars^.Count-1 do
@@ -5335,7 +5335,7 @@ Type-Changing-Statement-contents =
 \ Type)
 \par}
 
-@<Emit XML for \texttt{reconsider} contents (WSM)@>=
+@<Emit \XML/ for \texttt{reconsider} contents (WSM)@>=
             with TypeChangingStatementPtr(nContent)^ do
          begin
             for i:=0 to nTypeChangeList^.Count-1 do
@@ -5368,7 +5368,7 @@ Item-contents \pipe=
 \pipe\ Variable-Segment \hphantom{st, Terms } \# {\rm loci}
 \par}
 
-@<Emit XML for definition-related items (WSM)@>=
+@<Emit \XML/ for definition-related items (WSM)@>=
          itPrivFuncDefinition:
             with PrivateFunctorDefinitionPtr(nContent)^ do
          begin
@@ -5394,7 +5394,7 @@ Item-contents \pipe=
             Out_VariableSegment( QualifiedSegmentPtr(nContent));
          itCaseHead,itSupposeHead,
          itAssumption:
-            @<Emit XML for assumptions item (WSM)@>;
+            @<Emit \XML/ for assumptions item (WSM)@>;
 @
 
 \medbreak
@@ -5404,7 +5404,7 @@ Item-contents \pipe=
 \quad element Conditions \LB\ Proposition* \RB\ )
 \par}
 
-@<Emit XML for definition-related items (WSM)@>=
+@<Emit \XML/ for definition-related items (WSM)@>=
          itExistentialAssumption:
             with ExistentialAssumptionPtr(nContent)^ do
          begin
@@ -5424,7 +5424,7 @@ Item-contents \pipe= (\ Variable?, Term? ) \# {\rm Exemplification}
 \qquad\qquad\qquad\qquad\pipe\ Block\qquad\qquad\qquad\quad\ \# \rlap{\rm case\ block}
 \par}
 
-@<Emit XML for definition-related items (WSM)@>=
+@<Emit \XML/ for definition-related items (WSM)@>=
          itExemplification:
             with ExamplePtr(nContent)^ do
          begin
@@ -5450,7 +5450,7 @@ Item-contents \pipe=
 \pipe Justification \# {\rm Property}
 \par}
 
-@<Emit XML for definition-related items (WSM)@>=
+@<Emit \XML/ for definition-related items (WSM)@>=
          itCorrectness:
             begin
                Out_XElStart0( XMLElemName[elCorrectnessConditions]);
@@ -5479,7 +5479,7 @@ Item-contents \pipe=
 \qquad \RB)
 \par}
 
-@<Emit XML for definition-related items (WSM)@>=
+@<Emit \XML/ for definition-related items (WSM)@>=
          itDefMode:
             with ModeDefinitionPtr(nContent)^ do
          begin
@@ -5518,7 +5518,7 @@ Item-contents \pipe=
 \ Definiens)
 \par}
 
-@<Emit XML for definition-related items (WSM)@>=
+@<Emit \XML/ for definition-related items (WSM)@>=
          itDefAttr:
             with AttributeDefinitionPtr(nContent)^ do
          begin
@@ -5546,7 +5546,7 @@ Item-contents \pipe=
  Definiens)
 \par}
 
-@<Emit XML for definition-related items (WSM)@>=
+@<Emit \XML/ for definition-related items (WSM)@>=
          itDefFunc:
             with FunctorDefinitionPtr(nContent)^ do
          begin
@@ -5584,7 +5584,7 @@ Item-contents \pipe=
 
 \par}
 
-@<Emit XML for definition-related items (WSM)@>=
+@<Emit \XML/ for definition-related items (WSM)@>=
          itDefStruct:
             with StructureDefinitionPtr(nContent)^ do
          begin
@@ -5633,7 +5633,7 @@ Item-contents \pipe= (element Single-Assumption \LB
 \quad element Conditions \LB\ Proposition* \RB
 \RB)\par}
 
-@<Emit XML for assumptions item (WSM)@>=
+@<Emit \XML/ for assumptions item (WSM)@>=
             case AssumptionPtr(nContent)^.nAssumptionSort of
                SingleAssumption:
                   begin
@@ -5679,7 +5679,7 @@ Functorial-Registration-content = element Functorial-Registration \LB
 \RB
 \par}
 
-@<Emit XML for registration-related items (WSM)@>=
+@<Emit \XML/ for registration-related items (WSM)@>=
          itCluster:
             case ClusterPtr(nContent)^.nClusterKind of
                ExistentialRegistration :
@@ -5731,7 +5731,7 @@ Sethood-Registration-content = (Type, Justification)
 Reduction-Registration-content = (Term, Term)
 \par}
 
-@<Emit XML for registration-related items (WSM)@>=
+@<Emit \XML/ for registration-related items (WSM)@>=
          itIdentify:
             with IdentifyRegistrationPtr(nContent)^ do
          begin

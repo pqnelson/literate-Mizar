@@ -1,6 +1,6 @@
 
 @* [F] XML Dictionary.
-We have several types declared in the \texttt{xml\_dict.parse} file.
+We have several types declared in the \texttt{xml\_dict.pas} file.
 These are enumerated types, and string constants for their names.
 
 \label{XMLDictionary}

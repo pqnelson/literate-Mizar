@@ -8,13 +8,39 @@ unit pcmizver;
 
 interface @|@#
 
-const  @/
+const  @<Constants for \texttt{pcmizver.pas}@>@;
+
+@<Public functions for \texttt{pcmizver.pas}@>@;
+
+implementation @|@#
+
+@<Implementation for \texttt{pcmizver.pas}@>  @t\2@> @; @#
+
+end.
+
+@
+Note the slight variant of terminology compared to semantic versioning
+``Major.Minor.Patch'', Mizar uses ``Release.Version.Variant''. This
+appears to be just a minor difference in vocabulary.
+
+@<Constants for \texttt{pcmizver.pas}@>=
    PCMizarReleaseNbr = 8; @/
    PCMizarVersionNbr = 1; @/
-   PCMizarVariantNbr = 14; @#
+   PCMizarVariantNbr = 14;
 
+@ The current year could probably be determined from the \PASCAL/
+system utilities, but it is hardcoded to 2025. The \\{CurrentYear} is
+only used in one procedure in this module, so we could easily replace
+it with (the possibly non-portable) |FormatDateTime('YYYY',Now)|.
+
+@<Constants for \texttt{pcmizver.pas}@>=
    CurrentYear = 2025; @#
 
+@ The directory separator for the file system supports Windows
+and \UNIX/-like file systems. So Classic \macOS/ and \QNX/ users would
+have to request this changed. 
+
+@<Constants for \texttt{pcmizver.pas}@>=
 @{@&$IFDEF WIN32@}
    DirSeparator = '\'; @/
 @{@&$ELSE@}
@@ -24,27 +50,27 @@ const  @/
 @ There are only four functions provided by this module.
 
 \interface
-@p
-function @? PCMizarVersionStr: String;
-function @? VersionStr: String;
-function @? PlatformNameStr: String;
-function @? Copyright : String;
+@<Public functions for \texttt{pcmizver.pas}@>=
+function @? PCMizarVersionStr: string;
+function @? VersionStr: string;
+function @? PlatformNameStr: string;
+function @? Copyright : string;
 @ \endinterface
 Their implementation is relativiely straightforward: just print the
 appropriate constants to the screen.
 
-@p
-implementation @|@#
-function Copyright : String;
-var s:String;
+
+@<Implementation for \texttt{pcmizver.pas}@>=
+function Copyright : string;
+var s:string;
 begin
  Str(CurrentYear,s);
  Copyright:='Copyright (c) 1990-'+s+' Association of Mizar Users';
 end;
 
-@ @p
-function  VersionStr: String;
- var lRel,lVer,lVar: String[2]; lStr:String;
+@ @<Implementation for \texttt{pcmizver.pas}@>=
+function  VersionStr: string;
+ var lRel,lVer,lVar: string[2]; lStr:string;
 begin
  Str(PCMizarReleaseNbr,lRel);
  Str(PCMizarVersionNbr,lVer);
@@ -68,9 +94,10 @@ platforms are predefined for FreePascal, consult:
 display ``generic \UNIX/'' (and even ``generic \BSD/''), as well as
 ``generic Windows''.
 
-@p
-function  PlatformNameStr: String;
-var lStr: String;
+
+@<Implementation for \texttt{pcmizver.pas}@>=
+function  PlatformNameStr: string;
+var lStr: string;
 begin
    lStr:=''; @#
    
@@ -87,13 +114,10 @@ begin
 end;
 
 @ The last function in the \texttt{pcmizver.pas} file provides a
-String for the Mizar version.
+string for the Mizar version.
 
-@p
-function  PCMizarVersionStr: String;
+@<Implementation for \texttt{pcmizver.pas}@>=
+function  PCMizarVersionStr: string;
 begin
  PCMizarVersionStr:='Mizar Ver. '+VersionStr;
 end;
-@t\2@>
-
-end.

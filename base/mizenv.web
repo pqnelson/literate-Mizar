@@ -1,6 +1,8 @@
 
 @* [F] Mizar environment.
-We will need some basic library of functions. For example, trimming
+We want to abstract away all the system dependent code, and provide a
+set of common functions Mizar will use to interact with the file
+system. This will include some helper functions for trimming
 whitespace from a String.
 
 @<mizenv.pas@>=
@@ -20,17 +22,41 @@ implementation @|@/
 
 end.
 
-@ The interface contains all the variables for the unit, and the
-public facing functions and procedures.
+@ There are a few common ``global variables'' used by the rest of
+Mizar. Specifically, Mizar will be processing a file (``article'').
+The file may be an absolute path
+(e.g., \texttt{/path/to/article.miz}), a relative path (\texttt{../article.miz}), or just the
+filename (\texttt{article.miz}). In any event, we will want to refer
+to the filename (\texttt{article.miz}) as well as what Mizar calls the
+``article ID'' (in this case, ``\texttt{ARTICLE}'' --- the filename
+without the file extension, transformed to all capital letters).
+
+Modern programmers may find discomfort working with global variables
+(and for good reason!). We remind such readers that it was common
+practice, until very recently, for compilers and interpreters to use
+global variables to describe the state of the compiler (or
+interpreter). We will freely refer to these global variables as
+``state variables'', since that captures the role they play more accurately.
+
+@^State variable@>
+@^Variable, global@>
+@^Variable, state@>
+@^Global variable@>
 
 \label{mizenv-global-vars}
 
 @<interface for mizenv.pas@>=
-var MizFileName, EnvFileName, ArticleName, ArticleID, ArticleExt: String;
+var MizFileName : string; { the article ``\texttt{article.miz}'' }
+  ArticleName : string; { the ``\texttt{article}'' without the ``\texttt{.miz}''}
+  ArticleID : string; { ``\texttt{ARTICLE}'' in screaming snake case}
+  ArticleExt : string; { ``\texttt{.miz}'' from the |MizFileName| }
+  EnvFileName : string; { the file name given to Mizar as a command-line argument } @#
 
-procedure @? SetStringLength(var aString: String; aLength: integer);
+procedure @? SetStringLength(var aString: string; aLength: integer);
 
-@ The implementation begins with various ``uses''.
+@ The implementation begins with various ``uses''. Depending on
+the \PASCAL/ compiler and operating system, different libraries need
+to be loaded.
 
 @<Modules used by \texttt{mizenv.pas}@>=
 uses {compiler dependent imports}@/
@@ -51,7 +77,7 @@ pad it on the right with however many spaces until the String is as
 long as \\{aLength}.
 
 @<implementation of mizenv.pas@>=
-procedure SetStringLength(var aString: String; aLength: integer);
+procedure SetStringLength(var aString: string; aLength: integer);
 var I, L: integer;
 begin
   L := length(aString);
@@ -61,27 +87,29 @@ begin
     for I := 1 to aLength - L do aString := aString + ' ';
 end;
 
-@ We have publicly available functions trimming whitespace from functions.
-
-@<interface for mizenv.pas@>=
-function @? TrimStringLeft(aString: String): String; @t\2@>
-function @? TrimStringRight(aString: String): String; @t\2@>
-function @? TrimString(const aString: String): String;
-
-@ Trimming the left String will repeatedly delete any leading
+@ \node{Trimming whitespace.}
+Trimming the left String will repeatedly delete any leading
 whitespace, until the String is empty or has no leading whitespace.
 
 Similarly, trimming the right String will repeatedly delete the \textit{last}
 character until it is no longer whitespace (or until the String becomes empty).
 
-@<implementation of mizenv.pas@>=
-function TrimStringLeft(aString: String): String;
+Remember, \PASCAL/ is call-by-value, so the string arguments are
+copied when these functions are invoked. We are mutating the copy of
+the argument, and returning them to the user.
+
+@<interface for mizenv.pas@>=
+function @? TrimStringLeft(aString: string): string; @t\2@>
+function @? TrimStringRight(aString: string): string;
+
+@ @<implementation of mizenv.pas@>=
+function TrimStringLeft(aString: string): string;
 begin
   while (length(aString) > 0) and (aString[1] = ' ') do Delete(aString, 1, 1);
   TrimStringLeft := aString;
 end;
 @#
-function TrimStringRight(aString: String): String;
+function TrimStringRight(aString: string): string;
 begin
   while (length(aString) > 0) and (aString[length(aString)] = ' ') do Delete(aString, length(aString), 1);
   TrimStringRight := aString;
@@ -89,35 +117,43 @@ end;
 
 @ Trimming a String amounts to trimming it on the left and right.
 
-@p
-function TrimString(const aString: String): String;
+@<interface for mizenv.pas@>=
+function @? TrimString(const aString: string): string;
+
+@ @<implementation of mizenv.pas@>=
+function TrimString(const aString: string): string;
 begin
   TrimString := TrimStringRight(TrimStringLeft(aString));
 end;
 
-@ We have a few more String manipulation functions for changing case,
+@ \node{Uppercase and lowercase strings.}
+We have a few more String manipulation functions for changing case,
 and turning an integer into a String.
 
 @<interface for mizenv.pas@>=
-function @? UpperCase(const aStr:String): String; @t\2@>
+function @? UpperCase(const aStr:string): string; @t\2@>
 function @? MizLoCase(aChar: char): char; @t\2@>
-function @? LowerCase(const aStr: String): String; @t\2@>
-function @? IntToStr(aInt: integer): String;
+function @? LowerCase(const aStr: string): string; @t\2@>
+function @? IntToStr(aInt: integer): string;
 
-@ Now, uppercase letters.
+@ Now, uppercase strings are obtained by uppercasing each character.
 
 @<implementation of mizenv.pas@>=
-function UpperCase(const aStr:String): String;
+function UpperCase(const aStr:string): string;
  var k: integer; {index ranging over |aStr|}
-  lStr: String;  {the uppercased String being built and returned}
+  lStr: string;  {the uppercased String being built and returned}
 begin
  lStr:=aStr;
  for k:=1 to length(aStr) do lStr[k]:=UpCase(aStr[k]);
  UpperCase:=lStr;
 end;
+
 @ Lowercasing a String can be done by iteratively replacing each
 character with its lowercase version. This ``lowercase a single
 character'' function is precisely |MizLoCase|.
+
+If the reader wished for a \UTF8 version of Mizar, then this function
+would require thinking very hard about how to generalize.
 
 @p
 function MizLoCase(aChar: char): char;
@@ -129,7 +165,7 @@ begin
 end;
 @#
 
-function LowerCase(const aStr: String): String;
+function LowerCase(const aStr: string): string;
  var i: integer;  {index ranging over |aStr|'s length}
      lStr: String; {result being built up}
 begin
@@ -137,11 +173,13 @@ begin
   for i:=1 to length(aStr) do lStr[i]:=MizLoCase(aStr[i]);
   LowerCase:=lStr;
 end;
-@ We also want to convert an integer to a String.
+
+@ We also want a \emph{funtion} to convert an integer to a
+String. \PASCAL/ provides us with a \emph{procedure}.
 
 @p
-function IntToStr(aInt: integer): String;
- var lStr: String;
+function IntToStr(aInt: integer): string;
+ var lStr: string;
 begin
  Str(aInt,lStr);
  IntToStr:=lStr;
@@ -150,21 +188,6 @@ end;
 @ {\bf File name manipulation.} We will want to test if a file exists,
 or split a path (represented as a String) into a directory and a filename.
 
-\interface
-@<interface for mizenv.pas@>=
-function @? MFileExists(const aFileName : String) : boolean;
-procedure @? EraseFile(const aFileName:String);
-procedure @? RenameFile(const aName1,aName2:String);
-function @? GetFileTime(aFileName: String): Longint;
-procedure @? SplitFileName(@+const aFileName: String; @/
-@t\hskip10pc@>@+ var aDir, aName, aExt: String);
-function @? TruncDir(const aFileName: String): String;
-function @? TruncExt(const aFileName: String): String;
-function @? ExtractFileDir(const aFileName: String): String;
-function @? ExtractFileName(const aFileName: String): String;
-function @? ExtractFileExt(const aFileName: String): String;
-function @? ChangeFileExt(const aFileName,aFileExt: String): String;
-@ \endinterface
 Testing if a file exists uses the Free Pascal's primitive |FileExists|
 function.
 
@@ -173,8 +196,12 @@ function.
 
 \label{MFileExists}
 
-@<implementation of mizenv.pas@>=
-function MFileExists(const aFileName : String) : boolean;
+@<interface for mizenv.pas@>=
+function @? MFileExists(const aFileName : string) : Boolean; @t\2@>
+procedure @? EraseFile(const aFileName:string);
+
+@ @<implementation of mizenv.pas@>=
+function MFileExists(const aFileName : String) : Boolean;
 begin
  MFileExists:=FileExists(aFileName); @+
 end;
@@ -183,22 +210,34 @@ procedure EraseFile(const aFileName:String);
 begin
  SysUtils.DeleteFile(aFileName); @+
 end;
-@ We will destructively rename a file. If a file with the name already
-exists, we delete it.
 
-@p
-procedure RenameFile(const aName1,aName2:String);
+@ We will destructively rename a file. If a file with the name already
+exists, we delete it. \CAUTION/: This function is not used anywhere,
+and it appears to be buggy (the file is deleted and then renamed,
+which begs the question---why is it deleted?).
+
+@<interface for mizenv.pas@>=
+procedure @? RenameFile(const aName1,aName2:string);
+
+@ @<implementation of mizenv.pas@>=
+procedure RenameFile(const aName1,aName2:String); {unused}
 begin
  if MFileExists(aName1) then
    EraseFile(aName2);
  SysUtils.RenameFile(aName1,aName2);
 end;
 
-@ Again, relying on Free Pascal's |FileAge| function.
+@ Again, relying on Free Pascal's |FileAge| function, which returns
+the modification time of the file. \CAUTION/: this will return a
+signed 32-bit integer, which will run into problems after 03:14:07~UTC on 19 January 2038
+because that's $2^{31}-1$ seconds since the \UNIX/ epoch.
 
 \label{GetFileTime}
 
-@p
+@<interface for mizenv.pas@>=
+function @? GetFileTime(aFileName: string): Longint;
+
+@ @<implementation of mizenv.pas@>=
 function GetFileTime(aFileName: String): Longint;
 begin
  GetFileTime := FileAge(aFileName); @+
@@ -211,9 +250,13 @@ into \texttt{/path/to/my/}, \texttt{file}, and \texttt{exe}.
 
 This implementation depends on the compiler used (Delphi or Free Pascal).
 
-@p
-procedure SplitFileName(@+const aFileName: String; {input} @/
-@t\hskip9.25pc@>@+  var aDir, aName, aExt: String) @t\2@>; {output}
+@<interface for mizenv.pas@>=
+procedure @? SplitFileName(@t\hskip-0.5em@>@+const aFileName: string; @/
+@t\hskip8.75pc@>@+ var aDir, aName, aExt: string);
+
+@ @<implementation of mizenv.pas@>=
+procedure SplitFileName(@t\hskip-0.5em@>@+const aFileName: string; {input} @/
+@t\hskip8.75pc@>@+  var aDir, aName, aExt: string) @t\2@>; {output}
 begin@|@/
 if_def(FPC) @/
  aDir := SysUtils.ExtractFilePath(aFileName); @/
@@ -230,10 +273,13 @@ end;
 @ ``Truncating a directory'' means ``throw away the directory part of
 the  path'' so we end up with just a filename and the file extension.
 
-@p
-function TruncDir(const aFileName: String): String;
+@<interface for mizenv.pas@>=
+function @? TruncDir(const aFileName: string): string;
+
+@ @<implementation of mizenv.pas@>=
+function TruncDir(const aFileName: string): string;
 var
-  Dir, lName, Ext: String;
+  Dir, lName, Ext: string;
 begin
   SplitFileName(aFileName, Dir, lName, Ext);
   TruncDir := lName + Ext;
@@ -242,10 +288,12 @@ end;
 @ ``Truncating the extension'' means throwing away the extension part
 of a path.
 
-@p
-function TruncExt(const aFileName: String): String;
+@<interface for mizenv.pas@>=
+function @? TruncExt(const aFileName: string): string;
+@ @<implementation of mizenv.pas@>=
+function TruncExt(const aFileName: string): string;
 var
-  Dir, lName, Ext: String;
+  Dir, lName, Ext: string;
 begin
   SplitFileName(aFileName, Dir, lName, Ext);
   TruncExt := Dir + lName;
@@ -254,30 +302,39 @@ end;
 @ Extracting the file directory will return \textit{just} the directory
 part of a path.
 
-@p
-function ExtractFileDir(const aFileName: String): String;
+@<interface for mizenv.pas@>=
+function @? ExtractFileDir(const aFileName: string): string;
+
+@ @<implementation of mizenv.pas@>=
+function ExtractFileDir(const aFileName: string): string;
  var
-   Dir, lName, Ext: String;
+   Dir, lName, Ext: string;
 begin
   SplitFileName(aFileName, Dir, lName, Ext);
   ExtractFileDir := Dir;
 end;
 
 @ Extracting the file name will throw away both the directory and
-extension.
+extension. For example, extracting the file name from the path
+``\texttt{/path/to/file.ext}'' gives us ``\texttt{file}''. Extracting
+the file extension from the same path gives us ``\texttt{.ext}''.
 
-@p
-function ExtractFileName(const aFileName: String): String;
+@<interface for mizenv.pas@>=
+function @? ExtractFileName(const aFileName: string): string; @t\2@>
+function @? ExtractFileExt(const aFileName: string): string;
+
+@ @<implementation of mizenv.pas@>=
+function ExtractFileName(const aFileName: string): string;
 var
-  Dir, lName, Ext: String;
+  Dir, lName, Ext: string;
 begin
   SplitFileName(aFileName, Dir, lName, Ext);
   ExtractFileName := lName;
 end;
 @#
-function ExtractFileExt(const aFileName: String): String;
+function ExtractFileExt(const aFileName: string): string;
 var
-  Dir, lName, Ext: String;
+  Dir, lName, Ext: string;
 begin
   SplitFileName(aFileName, Dir, lName, Ext);
   ExtractFileExt := Ext;
@@ -285,18 +342,36 @@ end;
 
 @ Changing a file name's extension. See:
 
-\texttt{https://www.freepascal.org/docs-html/rtl/sysutils/changefileext.html}
+\href{https://www.freepascal.org/docs-html/rtl/sysutils/changefileext.html}{{\tt freepascal.org/docs-html/rtl/sysutils/changefileext.html}}
 
-@p
-function ChangeFileExt(const aFileName,aFileExt: String): String;
+\noindent Note this does not actually change the filename in the file
+system, it just changes it \emph{as a string}.
+
+@<interface for mizenv.pas@>=
+function @? ChangeFileExt(const aFileName,aFileExt: string): string;
+
+@ @<implementation of mizenv.pas@>=
+function ChangeFileExt(const aFileName,aFileExt: string): string;
 begin
  ChangeFileExt:=SysUtils.ChangeFileExt(aFileName,aFileExt); @+
 end;
 
-@ Getting an environmental variable.
+@ \node{Environment variables.}
+Getting an environment variable. The reader wishing to learn more
+about what \POSIX/ says about environmental variables may consult
+the \POSIX/ standard, Volume~1 Chapter~8:
 
-@p
-function GetEnvStr(aEnvName: String): String; @/
+\smallbreak
+\href{https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap08.html}{{\tt pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap08.html}}
+\smallbreak\noindent%
+The Free \PASCAL/ compiler handles this situation far friendlier than
+Delphi. 
+
+@<interface for mizenv.pas@>=
+function GetEnvStr(aEnvName: string): string;
+
+@ @<implementation of mizenv.pas@>=
+function GetEnvStr(aEnvName: string): string; @/
 if_def(FPC) 
 begin
  GetEnvStr:=GetEnv(aEnvname); @+
@@ -307,75 +382,100 @@ if_def(DELPHI)
 endif 
 
 @ The Delphi-compatible version of obtaining an environment variable
-is rather involved, so let us study it in silent meditation.
+is rather involved: copy the string, make it null terminated, look up
+the value.
 
 @<Get environment variable, Delphi-compatible mode@>=
- const cchBuffer=255;
- var lName,lpszTempPath: array[0..cchBuffer] of char;
+const cchBuffer=255;
+var lName,lpszTempPath: array[0..cchBuffer] of char;
      i: integer;
-     lStr: String;
+     lStr: string; @t\2@>
 begin
- lStr:='';
- for i:=1 to length(aEnvname) do
-  lName[i-1]:=aEnvname[i];
- lName[length(aEnvname)]:=#0;
+ @<Copy the variable name as a null-terminated string@>;
 
  if GetEnvironmentVariable(lName,lpszTempPath,cchBuffer) > 0 then
   begin
+   @<Copy environment variable's value into |lStr| until we find null character@>;
+  end;
+ GetEnvStr:=lStr;
+end;
+
+@ @<Copy the variable name as a null-terminated string@>=
+ lStr:='';
+ for i:=1 to length(aEnvname) do
+  lName[i-1]:=aEnvname[i];
+ lName[length(aEnvname)]:=#0
+
+@ @<Copy environment variable's value into |lStr| until we find null character@>=
    for i:=0 to cchBuffer do
     begin
      if lpszTempPath[i]=#0 then break;
      lStr:=lStr+lpszTempPath[i];
-    end;
-  end;
- GetEnvStr:=lStr;
-end; @/
-{restored for DELPHI4 compatibility ;-(
-begin
- GetEnvStr:=GetEnvironmentVariable(aEnvname);
-end;}
+    end
 
-@ The |DrawMessage| and |DrawIOResult| are procedures
-in \texttt{mconsole.pas} (see \section\xref{mconsole:drawmessage}\ETs\section\xref{mconsole:drawioresult}).
+@ \node{Common printing routines.}
+Examining a file amounts to testing if we can open the file. We close
+the file after opening it (because we don't want to actually want to
+do anything with it).
+
+We should tweak how \WEB/ formats a file to make it resemble the other
+types, rather than leave it as a ``type opertor'' like \&{array}
+(which is the default due to Knuth).
+
+@f file==integer;
 
 @<implementation of mizenv.pas@>=
-procedure FileExam(const aFileName: String);
- var Source: file; I: byte;
+procedure FileExam(const aFileName: string);
+var Source: file; {the file named |aFileName|}
+I: byte; {|IOResult| from trying to open the file}
 begin
-  if aFileName = '' then
-    begin DrawMessage('Can''t open '' .miz ''','');
-     halt(1);
-    end;
+  if aFileName = '' then @<Halt: we can't open the file@>;
   FileMode:=0;
   Assign(Source,aFileName); without_io_checking(Reset(Source));
-  I:=ioresult;
-  if I<>0 then DrawIOResult(aFileName,I);
+  I:=IOResult;
+  if I<>0 then DrawIOResult(aFileName,I); {(\section\xref{mconsole:drawioresult})}
   close(Source);
   FileMode:=2;
 end;
 
-@ We test if a file exists with the |EnvFileExam| procedure. It will
-notify the user if the file does not exist, otherwise it is
-silent. %(From \section\xref{mconsole:drawmessage}.)
+@ @<Halt: we can't open the file@>=
+    begin DrawMessage('Can''t open '' .miz ''',''); @t\hskip-1em@> {(\section\xref{mconsole:drawmessage})}@+
+     halt(1);
+    end
+
+@ The user provides a file to Mizar as the command line argument. This
+typically looks like a relative path ``\texttt{tex/article}'' without
+any file extension. Before even trying to open ``\texttt{tex/article.miz}'', or any of the
+related autogenerated intermediate files, we should test the file exists.
+
+This procedure will notify the user if the file does not exist,
+otherwise it is silent.
 
 Again, |DrawMessage| comes from \texttt{mconsole.pas} (\section\xref{mconsole:drawmessage}).
 
-@p
-procedure EnvFileExam(const aFileExt:String);
+@<implementation of mizenv.pas@>=
+procedure EnvFileExam(const aFileExt: string);
 begin
   if not MFileExists(EnvFileName+aFileExt) then
    begin
      DrawMessage('Can''t open '' '+EnvFileName+aFileExt+' ''','');
      Halt(1);
    end;
-end;
+end; 
 
-@ The \\{ParamCount} is \PASCAL/'s way of counting the command-line
+@ This function isn't used anywhere in Mizar. It's also misnamed: we
+are not ``getting'' the file name, we are \emph{updating} the file
+extension if the file lacks one. A better name might be ``populate
+missing file extension''. Further, this does not test if the |Nr|
+command line argument is actually a file name or not, which is a
+possible source of bugs.
+
+Remember, the \\{ParamCount} is \PASCAL/'s way of counting the command-line
 parameters passed to the program.
 
-@p
-procedure GetFileName(ParamNr:byte; DefaultExt:String; var aFileName:String);
- var  lFileExt: String;
+@<implementation of mizenv.pas@>=
+procedure GetFileName(ParamNr:byte; DefaultExt:string; var aFileName:string);
+ var  lFileExt: string;
 begin
  if ParamNr <= ParamCount then
   begin aFileName:=ParamStr(ParamNr);
@@ -389,14 +489,15 @@ end;
 @ This procedure will take the |Nr| command line argument. If it lacks
 a file extension, then it will append the |DefaultExt| to it. At the
 end, this will populate |aFileName| and |aFileExt| based on the
-command line.
+command line. It's only used in the |GetMizFileName| procedure, and
+nowhere else in Mizar.
 
 The |ParamStr(Nr)| returns the ${\it Nr}^{th}$ parameter as a String (it's
 a \PASCAL/ primitive).
 
-@p
-procedure GetFileExtName(Nr:byte; DefaultExt:String;
-                      var aFileName:String; var aFileExt:String);
+@<implementation of mizenv.pas@>=
+procedure GetFileExtName(Nr:byte; DefaultExt: string;
+                      var aFileName: string; var aFileExt:s tring);
 begin
  if Nr <= ParamCount then
   begin aFileName:=ParamStr(Nr);
@@ -408,7 +509,8 @@ begin
  aFileName:=''; aFileExt:='';
 end;
 
-@ We need to find the first command-line argument which resembles a
+@ \node{Populate the state variables using the command-line arguments.}
+We need to find the first command-line argument which resembles a
 Mizar article name. Note that Mizar articles have several files
 associated with it (the article's contents in a \texttt{.miz} file,
 the vocabulary in a \texttt{.voc} file, and \XML/ related intermediate
@@ -417,7 +519,16 @@ representation in \texttt{.xml} files, as well as \texttt{.evl} files).
 Command line flags prefixed with a dash (``\texttt{-}'') will not be
 interpreted as the name of a Mizar article.
 
-@p
+If there are multiple articles passed to Mizar as command-line
+arguments, then this function finds the first one (and uses it to
+populate the state variables).
+
+A possible bug: if there are multiple files passed to Mizar and the
+first file passed is not a ``\texttt{.miz}'' file, then Mizar will
+halt as a failure instead of continuing looking for the needle in the
+haystack. 
+
+@<implementation of mizenv.pas@>=
 procedure GetMizFileName(aFileExt:String);
 var i:integer;
 begin
@@ -430,26 +541,31 @@ begin
     ArticleName:=ExtractFileName(MizFileName);
     ArticleID:=UpperCase(ArticleName);
     if not IsMMLIdentifier(ArticleName) then
-     begin
-      DrawMessage('Only letters, numbers and _ allowed in Mizar file names','');
-      halt(1);
-     end;
+    @<Halt: invalid article name@>;
     EnvFileName:=MizFileName;
     exit;
    end;
 end;
 
-@ We will provide a standard way to refer to the article.
+@ @<Halt: invalid article name@>=
+     begin
+      DrawMessage('Only letters, numbers and _ allowed in Mizar file names','');
+      halt(1);
+     end
 
-@p
+@ We will provide a standard way to populate the global variables.
+
+@<implementation of mizenv.pas@>=
 procedure GetArticleName;
 begin
  GetMizFileName('.miz');
 end;
 
-@ The |EnvFileName| is populated here provided |MizFileName| is blank. 
+@ The second file provided to Mizar is treated as the |EnvFileName|.
+We need to populate the global variables if they have not been
+extracted from the command-line arguments already.
 
-@p
+@<implementation of mizenv.pas@>=
 procedure GetEnvironName;
 var i,c:integer;
 begin
@@ -470,15 +586,15 @@ letters (\texttt{a-z}), decimal digits (\texttt{0-9}), and underscores
 (\texttt{\_}). 
 
 @p
-function IsMMLIdentifier(const aID: String): boolean;
+function IsMMLIdentifier(const aID: String): Boolean;
  const Allowed: array[chr(0)..chr(255)] of byte =
-   (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,
-    0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1,
-    0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+   (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, @/
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0, {\texttt{0}--\texttt{9}}
+    0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1, {\texttt{A}--\texttt{Z}, ``\texttt{\_}''}
+    0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0, {\texttt{a}--\texttt{z}}
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, @/
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, @/
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, @/
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
  var i: integer;
 begin

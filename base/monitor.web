@@ -8,19 +8,11 @@ unit monitor;
 
 interface @;@|@/
 
-procedure @? InitExitProc;
+procedure @? InitExitProc; @t\2@>
 
 implementation @; @|@/
 
-uses @|@/
-@{@&$IFDEF FPC@} @/
- @t\quad @> @{@&$IFNDEF WIN32@} @/
-   baseunix, @/
- @t\quad @> @{@&$ENDIF@} @/
-@{@&$ENDIF@} @/
-mizenv,errhan,mconsole @/
-@{@&$IFDEF WIN32@} @+ ,windows @{@&$ENDIF@}
-mdebug @+ ,info @+ end_mdebug @+@+;@#
+@<Units used by \texttt{monitor.pas}@>;@#
 
 var
    _ExitProc: pointer;
@@ -30,6 +22,22 @@ var
 
 @t\2@>
 end
+
+@ The monitor is used for reporting errors, which is heavily system
+dependent. The modules used by it are\dots wonky. We need
+the \\{baseunix} unit for \UNIX/ systems, and the \\{windows} unit for
+Windows-based systems.
+
+@<Units used by \texttt{monitor.pas}@>=
+uses @|@/
+@{@&$IFDEF FPC@} @/
+ @t\quad @> @{@&$IFNDEF WIN32@} @/
+   baseunix, @/
+ @t\quad @> @{@&$ENDIF@} @/
+@{@&$ENDIF@} @/
+mizenv,errhan,mconsole @/
+@{@&$IFDEF WIN32@} @+ ,windows @{@&$ENDIF@}
+mdebug @+ ,info @+ end_mdebug
 
 @ There are a few private helper functions in this module.
 

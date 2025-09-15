@@ -9,12 +9,12 @@ compilation. Perhaps this ``goes against the spirit'' of literate
 programming, but it makes the most sense to understand what is going
 on for programmers. 
 
-We will begin with the \texttt{esmprocessor.pas} file, and all the
+We will begin with the ``Parser module'' (\texttt{base/parser.pas}), and all the
 dependencies needed to compile it. For clarity (or at least ease of
-reference) each ``section'' appearing in the table of contents
+reference) each ``chapter'' appearing in the table of contents
 corresponds to a different file.
 
-This discusses Mizar's source code as of Git commit \texttt{9e814a9568cfb44253d677e5209c360390fe6437}
+We are studying Mizar's source code as of Git commit \texttt{9e814a9568cfb44253d677e5209c360390fe6437}
 (dated 2023 October 11).
 
 @ \node{Files are chapters.}
@@ -45,7 +45,7 @@ numbers associated with each entry. And even though I just used the
 term ``paragraph number'', they really group several paragraphs into a
 unit of writing.
 
-Numbers are paragraphed \emph{independently} of chapter, section,
+Paragraphs are numbered \emph{independently} of chapter, section,
 subsection. This is a quirk of \WEB/. This was how Mathematicians
 wrote texts back in Euler's day. We will refer to a paragraph by
 writing (\section$n$) to refer to paragraph $n$. Again, this was the
@@ -55,13 +55,15 @@ Each paragraph consists of three parts: the ``text part'' (informal
 prose written in English), the ``macros part'' (which introduces
 macros written in the \WEB/ language), and the ``code part'' (which
 contains a pretty-printed snippet of \PASCAL/ code). A paragraph may
-omit any of these parts. Thus far, all our numbered paragraphs have
-consisted of ``text parts'' only. The ``code part'' can have a name in
-angled brackets. If the name is missing, then it continues the
-previous chunk of code from the previous numbered paragraph.
+omit any of these parts but has at least one of them. Thus far, all
+our numbered paragraphs have consisted of ``text parts'' only. The
+``code part'' can optionally have a name in angled brackets. If the name is
+missing, then it continues the previous chunk of code from the
+previous numbered paragraph. 
 
 @ The Mizar program is released under the GNU license. So let us place
-this license in one place early on.
+this license in one place early on. (This is an example of a numbered
+paragraph with a ``named code part''.)
 
 @<GNU License@>=
 {
@@ -69,6 +71,15 @@ this license in one place early on.
    Copyright (c) Association of Mizar Users.
    License terms: GNU General Public License Version 3 or any later version.
 }
+
+@ \node{Asides and opinions.} Some paragraphs will be labeled as
+``asides'' which are tangential remarks not directly relevant to
+understanding the code, but will enrich the reader's life. \Ithink{The author
+will offer opinions about the design and implementation of Mizar
+in parenthetic sentences like this one, surrounded by double brackets.}
+If the reader is unsatisfied by the arbitrary opinions of a random
+programmer, then they can disable the asides by redefining
+the \texttt{\BS Ithink} macro to have an empty body.
 
 @ \node{Aside: Typography of ``Modern'' Pascal.}%
 We will be following the typographical style as found in Niklaus
@@ -80,19 +91,15 @@ not have \emph{object} or inheritence (or \emph{unit} modules).
 
 First, we need to know that ``modern \PASCAL/'' differs from
 the \PASCAL/ Knuth worked with, in several ways. Mizar uses ``units''
-which are modules. We will need to format them for \WEAVE/. Note
-that \section42 of \WEAVE/ introduces the ``ilk'' of various syntactic
-classes (array-like, case-like, for-like, etc.) and \section64 of \WEAVE/
-explicitly initializes all the reserved words for \PASCAL/.
-
-The reserved words which \WEAVE/ highlights and/or pretty prints:
-\texttt{and}, \texttt{array}, \texttt{begin}, \texttt{case}, \texttt{const}, \texttt{div}, \texttt{do}, \texttt{downto}, \texttt{else}, \texttt{end}, \texttt{file}, \texttt{for}, \texttt{function}, \texttt{goto}, \texttt{if}, \texttt{in}, \texttt{label}, \texttt{mod}, \texttt{nil}, \texttt{not}, \texttt{of}, \texttt{or}, \texttt{packed}, \texttt{procedure}, \texttt{program}, \texttt{record}, \texttt{repeat}, \texttt{set}, \texttt{then}, \texttt{to}, \texttt{type}, \texttt{until}, \texttt{var}, \texttt{while}, \texttt{with}, \texttt{xclause}.
-These are then grouped into 20 ``ilk'' classes (see \section42 of \WEAVE/).
+which are a module system introduced by UCSD \PASCAL/
+(\textit{c{.}}~1977). We will need to format them for \WEAVE/.
 
 Documentation and tutorials frequently compare \textbf{unit} to |program|, so
 we should probably typeset it as such. The big question is whether the
 \texttt{interface}, \texttt{implementation}, and \texttt{uses}
-keywords are |var|-like or |const|-like. I ultimately decided for the latter.
+keywords are |var|-like or |const|-like. I ultimately decided for the
+latter (since \&{var}-like typography would have them appear in the
+index underlined).
 
 We will treat |implementation| typographically \emph{as if} it were a
 |const| because the |end| will not be indented properly otherwise.
@@ -149,7 +156,6 @@ source code when we invoke \TANGLE/.
 @f else_def == else
 @f endif == end
 @f end_if == end
-@f result == nil
 
 @ \node{Toggling IO Checking.} Another compiler directive enables and
 disables IO checking
@@ -250,7 +256,6 @@ to properly tokenise an article.
 We can look at \texttt{kernel/verfinit.pas} to find the parsing phase
 of the Mizar program is handled by the following lines of code:
 \medbreak
-
 \setbox0=\vbox{
 \Y\P$\\{InitPass}(\.{\'Parser\ \ \'})$;\5
 $\\{FileExam}(\\{EnvFileName}+\.{\'.dct\'})$;\5
@@ -262,9 +267,7 @@ $\\{gFormatsColl}.\\{StoreFormats}(\\{EnvFileName}+\.{\'.frx\'})$;\5
 \\{FinishScanning};\5
 $\\{Write\_WSMizArticle}(\\{gWSTextProper},\39\\{EnvFileName}+\.{\'.wsx\'})$;%
 \par}
-
 \boxblock{\box0}
-
 \medbreak\noindent%
 Our goal is to examine these functions, and understand what is going on.
 We know \\{Parse} is defined in \texttt{base/parse.pas}, it
@@ -276,6 +279,108 @@ The \\{Parse} function continuously invokes \\{ReadToken}
 This phase will be responsible for generating a ``\texttt{.frx}''
 (formats \XML/) and a ``\texttt{.wsx}'' (weakly strict Mizar \XML/) file.
 
+
+@* [s] Map of Mizar.
+It will be useful to provide a summary of the files, to give the
+reader an idea where to find various things. We offer the following
+grouping of files. We will enumerate them by the chapter wherein the file is
+discussed.
+
+@ \node{System-dependent code.}
+\enumerate
+\item \texttt{base/mizenv.pas} provides functions for manipulating
+  strings and file I/O
+\item \texttt{base/pcmizver.pas} contains the major and minor version
+  for Mizar, and data about the build
+\item \texttt{base/mconsole.pas} provides common functions for
+  printing messages to the console and parsing command line optional
+  arguments % needs pcmizver
+\item \texttt{base/errhan.pas} contains the \\{Position} type,
+  functions for reporting errors, writing them in particular files % used by mstate.pas
+\item \texttt{base/info.pas} for debugging purposes, logging to
+  a \texttt{.inf} file % used by monitor.pas
+\item \texttt{base/monitor.pas} code for signal processing, reports errors,
+  and when calamity strikes exit Mizar  % used by mstate.pas
+\item \texttt{base/mtime.pas} uniform framework for timing things% used by mstate.pas
+\item \texttt{base/mstate.pas} code for reset the current position in
+  an article and marking the time \edef\resumecounting{\the\enumi}
+\endenumerate
+
+@ \node{Infrastructure for the rest of Mizar's object-oriented code.}
+\enumerate\enumi=\resumecounting
+\item \texttt{base/numbers.pas} contains code for arbitrary-precision
+  integers, rational numbers, and rational complex numbers
+\item \texttt{base/mobjects.pas} contains the common data structures
+  used in Mizar, things like dynamic arrays and the \\{MObject} base class;
+\edef\resumecounting{\the\enumi}
+\endenumerate
+
+@ \node{XML infrastructure.}
+\enumerate\enumi=\resumecounting
+\item \texttt{base/xml\_dict.pas} contains only constant parameters
+  and enumerated types
+\item \texttt{base/librenv.pas} code for accessing the \texttt{prel/}
+  subdirectories of the current article and of \texttt{\$MIZFILES/}
+  --- this is only here because it defines the \\{MizFiles} global
+  variable which stores the full path of the \texttt{\$MIZFILES/}
+  environmental variable, and \\{MizFiles} is needed in \texttt{xml\_inout.pas};
+  \Ithink{This \\{MizFiles} global variable should be refactored out to an earlier
+  unit, because \texttt{librenv.pas} seems out of place here;}
+\item \texttt{base/xml\_parser.pas} provides an abstract syntax tree
+  for \XML/ and parses \XML/  
+\item \texttt{base/xml\_inout.pas} handles reading from and writing to \XML/
+  files, plus escaping strings, etc.
+\edef\resumecounting{\the\enumi}
+\endenumerate
+
+@ \node{Tokenisation and other ``intermediate file management''.}
+\enumerate\enumi=\resumecounting
+\item \texttt{base/dicthan.pas} loading ``\texttt{.voc}'' files,
+  and transform them into ``\texttt{.vct}'' and \XML/
+  ``\texttt{.vcx}'' files
+\item \texttt{base/scanner.pas} the Tokeniser and Scanner are implemented here
+  (the naming is a little confusing, the \\{Scanner} class \textbf{is}
+  the Tokeniser, and the \\{Tokeniser} class is an ``abstract
+  Tokeniser'' operating on an arbitrary input stream accessed by an
+  abstract \\{GetPhrase} method); also note, if we want to extend
+  Mizar to support \UTF8 character encoding instead of \ASCII/, then
+  this is the file we would modify;
+\item \texttt{base/\_formats.pas} contains the data structures for ``formats''
+  (basically a $\langle$Identifier, Number of arguments to left, Number of arguments to right$\rangle$ triple)
+  used for parsing expressions;
+\edef\resumecounting{\the\enumi}
+\endenumerate
+
+%\par\hang\textindent\item
+@ \node{Abstract syntax tree class hierarchies.}
+\enumerate\enumi=\resumecounting
+\item \texttt{base/syntax.pas} provides ``abstract'' classes \\{Subexpression} and \\{Expression}
+  for expressions, \\{Item} and \\{Block} for statements; the actual
+  subclasses used by the parser are in
+  the \texttt{parseraddition.pas} file;
+\item \texttt{base/mscanner.pas} provides a number of important global
+  variables for the parser, ``\texttt{.prf}'' file management, as well
+  as the \\{gScanner} global variable for the parser;
+\item \texttt{base/abstract\_syntax.pas} provides the abstract syntax
+  tree for terms, types, attributes, formulas, and ``within expressions'';
+\item \texttt{base/wsmarticle.pas} ``weakly strict Mizar'' is the name
+  for the initial internal representation of Mizar, which has its own
+  class hierarchy here, as well as writing a ``weakly strict Mizar'' article
+  to an \XML/ file and reading back from an \XML/ file into a ``weakly strict
+  Mizar'' abstract syntax tree;
+\edef\resumecounting{\the\enumi}
+\endenumerate
+
+@ \node{Parser ``proper''.}
+\enumerate\enumi=\resumecounting
+\item \texttt{base/pragmas.pas} for parsing pragmas like ``\texttt{::\$P-}'',
+  and global variables related to them;
+\item \texttt{base/parseraddition.pas} for subclasses of the syntax
+  tree class hierarchy from \texttt{syntax.pas}, used for constructing a
+  ``weakly strict Mizar'' AST when parsing
+\item \texttt{base/parser.pas} for parsing a token stream into an
+  abstract syntax tree
+\endenumerate
 
 @* [S] Log of todos, bugs, improvements.
 I have a number of observations from transcribing Mizar
@@ -338,6 +443,35 @@ changes to any of its parent (or grandparent) classes?
 \bug The constructor \\{OutWSMizFileObj.OpenFileWithXSL} (\section\xref{OutWSMizFileObj.OpenFileWithXSL})
 expects the \XML/-stylesheet located at \texttt{"file://'+\$MIZFILES+'/wsmiz.xml"},
 but that file is not present in Mizar.
+\bug In \\{extItemObj.FinishFunctorPattern} (\section\xref{extItemObj.FinishFunctorPattern}),
+the default case does not add a new format to the \\{gFormatsColl} dictionary.
+\bug In \\{CreateArgs} (\section\xref{CreateArgs}) in \texttt{parseraddition.pas}, when |aBase <= 0|, this
+will set |TermNbr| to a negative number.
+\bug In the Subexpression class, there is duplicate code
+(\section\xref{extSubexpObj.CompleteAttributeArguments}) ---
+the \\{CompleteAttributeArguments} and \\{FinishAttributeArguments}
+are identical, but only the latter is consistent with the naming
+conventions for the Parser. Or (probably more likely) I am misunderstanding the naming conventions?
+\bug In \\{CompleteArgument}
+(\section\xref{CompleteArgument:parser.pas}), we should also test
+that \\{fParenthCnt} is positive, shouldn't we?
+\bug The \\{CreateSubexpression} method (\section\xref{extExpressionObj.CreateSubexpression}),
+for extended expression objects, may result in a memory leak
+when |gSubexpPtr <> nil| --- that is to say, if \\{KillSubexpression}
+has not been invoked prior to \\{CreateSubexpression}.
+\bug Misnamed variable: \\{gIdenifyEqLociList} should be \\{gIdentifyEqLociList}
+(i.e., ``idenify'' should be ``identify'' --- with a `t'). (This typo
+has been corrected in the literate presentation of the code.)
+\bug As discussed in (\section\xref{extItemObj.StartFixedVariables}),
+there is a mismatch between the documentation and the Parser when it
+comes to parsing loci declarations in a definition
+block. The \texttt{syntax.txt} file is more restrictive than the
+Parser, and should be updated to reflect the Parser.
+\bug The \\{gSuchThat} global variable is never used anywhere (\section\xref{extItemObj.FinishFixedVariables})
+\bug In \\{ATTSubexpression} (\section\xref{ATTSubexpression}), in the
+|else| block when the conditional
+|if lAttrExp or (aExpKind = exAdjectiveCluster)| is executed,
+|aExpKind = exAdjectiveCluster| is never true (so there's no need for it).
 \endbugs
 
 
@@ -402,3 +536,52 @@ When \WEAVE/ extracts the \PASCAL/ code, it will remove all
 underscores from the identifiers and capitalize all letters. So
 instead of ``|screaming_run_on_case|'' (which appears in the PDF), we
 will instead obtain ``\texttt{SCREAMINGRUNONCASE}'', which\dots yeah, that's a hot mess.
+
+@* [S] Review of Pascal.
+Following Wirth's \textit{Systematic Programming: An Introduction}
+(Prentice-Hall, 1973; viz., Chapter~7), we can
+offer the following axiomatic semantics for most of \PASCAL/'s statements.
+@^Wirth, Niklaus@>
+
+Assignment statements: $${{}\over\LB\,P[w/v]\,\RB\ v\K w\ \LB\,P\,\RB}$$
+Compound statements: 
+$${\displaystyle{\LB\,P\,\RB\ S_{1}\ \LB\,Q\,\RB\atop
+\LB\,Q\,\RB\ S_{2}\ \LB\,R\,\RB}\over\LB\,P\,\RB\ S_{1};\ S_{2}\ \LB\,R\,\RB}$$
+Conditional statements:
+$${\displaystyle{\LB\,P\W B\,\RB\ S_{1}\ \LB\,Q\,\RB\atop
+\LB\,P\W\R B\,\RB\ S_{2}\ \LB\,Q\,\RB}\over\LB\,P\,\RB\ \&{if}\ B\ \&{then}\ S_{1}\ \&{else}\ S_{2}\ \LB\,Q\,\RB}$$
+Simpler conditional statements:
+$${\displaystyle{\LB\,P\W B\,\RB\ S\ \LB\,Q\,\RB\atop
+\LB\,P\W\R B\,\RB\implies\LB\,Q\,\RB}\over\LB\,P\,\RB\ \&{if}\ B\ \&{then}\ S\ \LB\,Q\,\RB}$$
+While statements: $${{\LB\,P\W B\,\RB\ S\ \LB\,P\,\RB}\over\LB\,P\,\RB\ \&{while}\ B\ \&{do}\ S\ \LB\,P\W\R B\,\RB}$$
+Repeat statements:
+$${\displaystyle{{\LB\,P\,\RB\ S\ \LB\,Q\,\RB}\atop\LB\,Q\W\R B\,\RB\ S\ \LB\,Q\,\RB}\over\LB\,P\,\RB\ \&{repeat}\ \37S\ \&{until}\ B\ \LB\,Q\W B\,\RB}$$
+Selective statement (and $i=L_{k}$ for some $k$):
+$$\vbox{\halign{\hfil#\hfil\cr
+${\LB\, P\W (i = L_{k})\,\RB\ S_{k}\ \LB\,Q\,\RB\hbox{ for all }k=1,\dots,n}$\cr
+\noalign{\vskip2pt\hrule\vskip2pt}\cr
+%\noalign{\hrule}\cr
+\vbox{\halign{#\hfil\cr
+$\LB\,P\,\RB\ \&{case}\ i\ \&{of}$\cr
+\quad$L_{1}{:}\ S_{1};$\cr
+\quad$L_{2}{:}\ S_{2};$\cr
+\quad$\ \vdots\quad\;\,\vdots$\cr
+\quad$L_{n}{:}\ S_{n};$\cr
+$\&{end};\quad\LB\,Q\,\RB$\cr}}\cr}}$$
+When there is no $k$ such that $i=L_{k}$, the \&{case} statement is
+the same as evaluating $i$.
+
+We can weaken the precondition:
+$${{P_{1}\implies P_{2},\qquad \LB\,P_{2}\,\RB\ S\ \LB\,Q\,\RB}\over\LB\,P_{1}\,\RB\ S\ \LB\,Q\,\RB}$$
+We can strengthen the postcondition (Equation (11.16), page 85, of
+Wirth's book):
+$${{Q_{2}\implies Q_{1},\qquad \LB\,P\,\RB\ S\ \LB\,Q_{2}\,\RB}\over\LB\,P\,\RB\ S\ \LB\,Q_{1}\,\RB}$$
+These rules are justified as \emph{a priori} valid in Chapter~5 of
+Wirth.
+
+For-loops may be derived as:
+$${\displaystyle{\LB\,(V=a)\W P\,\RB\ S\ \LB\,Q(a)\,\RB\atop
+\LB\,Q(\\{pred}(x))\,\RB\ S\ \LB\,Q(x)\,\RB\hbox{ for all }a<x\leq b}\over
+\displaystyle{\LB\,(a\leq b)\W P\,\RB\ \&{for}\ V\K a\ \&{to}\ b\ \&{do}\ S\ \LB\,Q(b)\,\RB\atop
+\LB\,(a>b)\W P\,\RB\ \&{for}\ V\K a\ \&{to}\ b\ \&{do}\ S\ \LB\,P\,\RB}}$$
+

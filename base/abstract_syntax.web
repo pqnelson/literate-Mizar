@@ -1,4 +1,3 @@
-
 @* [F] Abstract Syntax.
 A crucial step in any interpreter, compiler, or proof assistant is to
 transform the concrete syntax into an abstract syntax tree. This
@@ -1804,3 +1803,375 @@ begin
    nFormulaPos:=aPos;
    nformulaSort:=wsErrorFormula;
 end;
+
+
+@* [S] Within expressions (deferred).
+The ``first identification'' process needs to track ``within
+expressions''. You should probably come back to this section when
+you've arrived at the ``first identification'' unit.
+
+@<Class for Within expression@>=
+   biStackedPtr = ^biStackedObj; @/
+   biStackedObj =
+      object(MObject)
+      end; @#
+      
+   WithinExprPtr =  ^WithinExprObj; @/
+   WithinExprObj =
+      object(MObject) @t\1@> @/
+         nExpKind: ExpKind; @/
+         nStackArr: array of  biStackedPtr; @/
+         nStackCnt: integer; @#
+
+         constructor Init(aExpKind:ExpKind); @t\2@>
+         destructor Done; virtual; @t\2@>
+         function CreateExpressionsVariableLevel: biStackedPtr; virtual@t\2@>; {??} 
+
+         procedure Process_Adjective(aAttr:AdjectiveExpressionPtr ); virtual; @t\2@>
+         procedure Process_AdjectiveList(aCluster: PList ); virtual; @t\2@>
+         procedure Process_Variable(var aVar: VariablePtr); virtual; @t\2@>
+         procedure Process_ImplicitlyQualifiedVariable(var aSegm: ImplicitlyQualifiedSegmentPtr); virtual; @t\2@>
+         procedure Process_VariablesSegment(aSegm: QualifiedSegmentPtr); virtual; @t\2@>
+         procedure Process_StartVariableSegment; virtual; @t\2@>
+         procedure Process_FinishVariableSegment; virtual; @t\2@>
+
+         procedure Process_Type (aTyp: TypePtr ); virtual; @t\2@>
+         procedure Process_BinaryFormula (aFrm:BinaryFormulaPtr ); virtual; @t\2@>
+         procedure Process_StartQuantifiedFormula(aFrm:QuantifiedFormulaPtr); virtual; @t\2@>
+         procedure Process_QuantifiedFormula(aFrm:QuantifiedFormulaPtr); virtual; @t\2@>
+         procedure Process_FinishQuantifiedFormula(aFrm:QuantifiedFormulaPtr); virtual; @t\2@>
+         procedure Process_Formula (aFrm:FormulaPtr ); virtual; @t\2@>
+         procedure Process_TermList (aTrmList:PList ); virtual; @t\2@>
+         procedure Process_SimpleTerm (var aTrm: SimpleTermPtr ); virtual; @t\2@>
+         procedure Process_StartFraenkelTerm(aTrm:SimpleFraenkelTermPtr); virtual; @t\2@>
+         procedure Process_FinishFraenkelTerm(var aTrm:SimpleFraenkelTermPtr); virtual; @t\2@>
+         procedure Process_FraenkelTermsScope (var aFrm:FormulaPtr ); virtual; @t\2@>
+         procedure Process_SimpleFraenkelTerm(var aTrm:SimpleFraenkelTermPtr); virtual; @t\2@>
+         procedure Process_Term (var aTrm: TermPtr ); virtual; @t\2\2\2@>
+      end;
+
+@ @<Within expression AST implementation@>=
+constructor WithinExprObj.Init(aExpKind:ExpKind);
+begin
+   setlength(nStackArr,50);
+   nStackCnt:=0;
+   nExpKind:=aExpKind;
+end;
+
+@ @<Within expression AST implementation@>=
+destructor WithinExprObj.Done;
+begin
+   inherited Done;
+end;
+
+@ @<Within expression AST implementation@>=
+function WithinExprObj.CreateExpressionsVariableLevel: biStackedPtr;
+begin
+   result:=new(biStackedPtr, Init);
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_Adjective(aAttr:AdjectiveExpressionPtr);
+begin
+   case aAttr^.nAdjectiveSort of
+      wsAdjective:
+         begin
+            Process_TermList(AdjectivePtr(aAttr)^.nArgs );
+            {nAdjectiveSymbol;}
+         end;
+      wsNegatedAdjective:
+         Process_Adjective(NegatedAdjectivePtr(aAttr)^.nArg );
+   endcases;
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_AdjectiveList(aCluster: PList);
+var i: integer;
+begin
+   with aCluster^ do
+      for i:=0 to Count-1 do
+         Process_Adjective(Items^[i]);
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_Variable(var aVar: VariablePtr);
+begin
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_ImplicitlyQualifiedVariable(var aSegm: ImplicitlyQualifiedSegmentPtr);
+begin
+   Process_Variable(aSegm^.nIdentifier);
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_VariablesSegment(aSegm: QualifiedSegmentPtr);
+var i: integer;
+begin
+   Process_StartVariableSegment;
+   case aSegm^.nSegmentSort of
+      ikImplQualifiedSegm:
+         Process_ImplicitlyQualifiedVariable(ImplicitlyQualifiedSegmentPtr(aSegm));
+      ikExplQualifiedSegm:
+         with ExplicitlyQualifiedSegmentPtr(aSegm)^ do
+      begin
+         for i:=0 to nIdentifiers.Count-1 do
+            Process_Variable(VariablePtr(nIdentifiers.Items^[i]));
+         Process_Type(nType);
+      end;
+   endcases;
+   Process_FinishVariableSegment;
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_StartVariableSegment;
+begin
+end; @#
+
+procedure WithinExprObj.Process_FinishVariableSegment;
+begin
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_TermList (aTrmList:PList );
+var i: integer;
+begin
+   for i:=0 to aTrmList^.Count-1 do
+      Process_Term(TermPtr(aTrmList^.Items^[i]));
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_Type (aTyp: TypePtr);
+begin
+   with aTyp^ do
+   begin
+      case aTyp^.nTypeSort of
+         wsStandardType:
+            with StandardTypePtr(aTyp)^ do
+         begin
+            {nModeSymbol}
+            Process_TermList(nArgs);
+         end;
+         wsStructureType:
+            with StructTypePtr(aTyp)^ do
+         begin
+            {nStructSymbol}
+            Process_TermList(nArgs);
+         end;
+         wsClusteredType:
+            with ClusteredTypePtr(aTyp)^ do
+         begin
+            Process_AdjectiveList(nAdjectiveCluster);
+            Process_Type(nType);
+         end;
+         wsErrorType: ;
+      endcases;
+   end;
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_BinaryFormula (aFrm:BinaryFormulaPtr );
+begin
+   Process_Formula(aFrm^.nLeftArg);
+   Process_Formula(aFrm^.nRightArg);
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_StartQuantifiedFormula(aFrm:QuantifiedFormulaPtr);
+begin
+end; @#
+
+procedure WithinExprObj.Process_FinishQuantifiedFormula(aFrm:QuantifiedFormulaPtr);
+begin
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_QuantifiedFormula (aFrm: QuantifiedFormulaPtr );
+begin
+   Process_VariablesSegment(aFrm^.nSegment);
+   Process_Formula(aFrm^.nScope);
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_Formula (aFrm: FormulaPtr );
+var i: integer;
+begin
+   case aFrm^.nFormulaSort of
+      wsNegatedFormula:
+         Process_Formula(NegativeFormulaPtr(aFrm)^.nArg);
+      wsConjunctiveFormula,wsDisjunctiveFormula,
+      wsConditionalFormula,wsBiconditionalFormula,
+      wsFlexaryConjunctiveFormula,wsFlexaryDisjunctiveFormula:
+         Process_BinaryFormula(BinaryFormulaPtr(aFrm));
+      wsRightSideOfPredicativeFormula:
+         with RightSideOfPredicativeFormulaPtr(aFrm)^ do
+      begin
+         {nPredNr}
+         Process_TermList(nRightArgs);
+      end;
+      wsPredicativeFormula:
+         with PredicativeFormulaPtr(aFrm)^ do
+      begin
+         Process_TermList(nLeftArgs);
+         {nPredNr}
+         Process_TermList(nRightArgs);
+      end;
+      wsMultiPredicativeFormula:
+         with MultiPredicativeFormulaPtr(aFrm)^ do
+      begin
+         for i := 0 to nScraps.Count - 1 do
+            Process_Formula(nScraps.Items^[i]);
+      end;
+      wsPrivatePredicateFormula:
+         with PrivatePredicativeFormulaPtr(aFrm)^ do
+      begin
+         {nPredIdNr}
+         Process_TermList(nArgs);
+      end;
+      wsAttributiveFormula:
+         with AttributiveFormulaPtr(aFrm)^ do
+      begin
+         Process_Term(nSubject);
+         Process_AdjectiveList(nAdjectives);
+      end;
+      wsQualifyingFormula:
+         with QualifyingFormulaPtr(aFrm)^ do
+      begin
+         Process_Term(nSubject);
+         Process_Type(nType);
+      end;
+      wsExistentialFormula, wsUniversalFormula:
+         with QuantifiedFormulaPtr(aFrm)^ do
+      begin
+         inc(nStackCnt);
+         if nStackCnt > length(nStackArr) then
+            setlength(nStackArr,2*length(nStackArr));
+         nStackArr[nStackCnt]:=CreateExpressionsVariableLevel;
+         Process_StartQuantifiedFormula(QuantifiedFormulaPtr(aFrm));
+         Process_QuantifiedFormula(QuantifiedFormulaPtr(aFrm));
+         Process_FinishQuantifiedFormula(QuantifiedFormulaPtr(aFrm));
+         dispose(nStackArr[nStackCnt],Done);
+         dec(nStackCnt);
+      end;
+      wsContradiction: ;
+      wsThesis: ;
+      wsErrorFormula: ;
+   endcases;
+end;
+
+@ There are a few empty ``abstract virtual'' methods.
+
+@<Within expression AST implementation@>=
+procedure WithinExprObj.Process_SimpleTerm (var aTrm: SimpleTermPtr );
+begin
+end; @#
+
+procedure WithinExprObj.Process_StartFraenkelTerm(aTrm:SimpleFraenkelTermPtr);
+begin
+end; @#
+
+procedure WithinExprObj.Process_FinishFraenkelTerm(var aTrm:SimpleFraenkelTermPtr);
+begin
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_FraenkelTermsScope(var aFrm:FormulaPtr );
+begin
+   Process_Formula(aFrm);
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_SimpleFraenkelTerm(var aTrm:SimpleFraenkelTermPtr);
+var i: integer;
+begin
+   with aTrm^ do
+   begin
+      for i := 0 to nPostqualification^.Count - 1 do
+         Process_VariablesSegment(QualifiedSegmentPtr(nPostqualification^.Items^[i]));
+      Process_Term(nSample);
+   end;
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_Term(var aTrm: TermPtr);
+begin
+   case aTrm^.nTermSort of
+      wsPlaceholderTerm: ;
+      {|PlaceholderTermPtr(aTrm)^.nLocusNr|}
+      wsSimpleTerm:
+         Process_SimpleTerm (SimpleTermPtr(aTrm));
+      wsNumeralTerm: ;
+      {|NumeralTermPtr(aTrm)^.nValue|}
+      wsInfixTerm:
+         with InfixTermPtr(aTrm)^ do
+      begin
+         Process_TermList(nLeftArgs);
+         {nFunctorSymbol}
+         Process_TermList(nRightArgs);
+      end;
+      wsCircumfixTerm:
+         with CircumfixTermPtr(aTrm)^ do
+      begin
+         {nLeftBracketSymbol}
+         Process_TermList(nArgs);
+         {nRightBracketSymbol}
+      end;
+      wsPrivateFunctorTerm:
+         with PrivateFunctorTermPtr(aTrm)^ do
+      begin
+         {nFunctorIdent}
+         Process_TermList(nArgs);
+      end;
+      wsAggregateTerm:
+         with AggregateTermPtr(aTrm)^ do
+      begin
+         { nStructSymbol}
+         Process_TermList(nArgs);
+      end;
+      wsSelectorTerm:
+         with SelectorTermPtr(aTrm)^ do
+      begin
+         {nSelectorSymbol}
+         Process_Term(nArg);
+      end;
+      wsInternalSelectorTerm: ;
+      {|InternalSelectorTermPtr(aTrm)^.nSelectorSymbol|}
+      wsForgetfulFunctorTerm:
+         with ForgetfulFunctorTermPtr(aTrm)^ do
+      begin
+         {nStructSymbol}
+         Process_Term(nArg);
+      end;
+      wsInternalForgetfulFunctorTerm: ;
+      {|InternalForgetfulFunctorTermPtr(aTrm)^.nStructSymbol|}
+      wsSimpleFraenkelTerm,wsFraenkelTerm:
+         with FraenkelTermPtr(aTrm)^ do
+      begin
+         inc(nStackCnt);
+         if nStackCnt > length(nStackArr) then
+            setlength(nStackArr,2*length(nStackArr));
+         nStackArr[nStackCnt]:=CreateExpressionsVariableLevel;
+         Process_StartFraenkelTerm(SimpleFraenkelTermPtr(aTrm));
+         Process_SimpleFraenkelTerm(SimpleFraenkelTermPtr(aTrm));
+         if aTrm^.nTermSort = wsFraenkelTerm then
+            Process_FraenkelTermsScope(FraenkelTermPtr(aTrm)^.nFormula);
+         Process_FinishFraenkelTerm(SimpleFraenkelTermPtr(aTrm));
+         dispose(nStackArr[nStackCnt],Done);
+         dec(nStackCnt);
+      end;
+      wsQualificationTerm:
+         with QualifiedTermPtr(aTrm)^ do
+      begin
+         Process_Term(nSubject);
+         Process_Type(nQualification);
+      end;
+      wsExactlyTerm:
+         Process_Term(ExactlyTermPtr(aTrm)^.nSubject);
+      wsGlobalChoiceTerm:
+         Process_Type(ChoiceTermPtr(aTrm)^.nChoiceType);
+      wsItTerm: ;
+      wsErrorTerm: ;
+   endcases;
+end;
+
+
