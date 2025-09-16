@@ -1,6 +1,9 @@
 
 @* [F] Mizar Console.
 The Mizar Console unit is used for interacting with the command line.
+Specifically, this module will be used for printing error messages,
+reporting progress, and parsing command-line arguments for
+configuration options.
 
 @<mconsole.pas@>=
 @<GNU License@>
@@ -8,27 +11,6 @@ The Mizar Console unit is used for interacting with the command line.
 unit mconsole;
 
 interface
-
-@<Interface for mconsole.pas@>
-
-implementation
-@|@#
-@<Import units for \texttt{mconsole.pas}@>
-@#
-@<Implementation for mconsole.pas@>
-
-@t\2@>end
-
-@ We import two modules, |pcmizver| (which we have yet to see), and
-|mizenv| (which we have already introduced).
-
-@<Import units for \texttt{mconsole.pas}@>=
-uses pcmizver,mizenv;
-
-@ The interface contains the publicly available functions, as well as
-some specific variables for the state of the analyzer, etc.
-
-@<Interface for mconsole.pas@>=
 @<Report results to command line@>@;
 
 @<Constants for common error messages reported to console@>@;
@@ -39,107 +21,80 @@ some specific variables for the state of the analyzer, etc.
 
 @<Interface for transfer-specific command line options@>@;
 
-@<Interface for other command line options@>
+@<Interface for other command line options@>@;
 
-@ @<Report results to command line@>= 
-procedure @? InitDisplayLine(const aComment:String); @t\2@>
-procedure @? NoDisplayLine(fLine,fErrNbr: integer); @t\2@> @#
+implementation
+@|@#
+@<Import units for \texttt{mconsole.pas}@>
+@#
+@<Implementation for mconsole.pas@>
 
-@<|DisplayLine| global constant@>@; @#
+@t\2@>end
 
-procedure @? DrawMizarScreen(const aApplicationName:String); @t\2@>
-procedure @? DrawArticleName(const fName:String); @t\2@> @#
+@ We import two modules, \\{pcmizver} and \\{mizenv},
 
-procedure @? DrawStr(const aStr:String); @t\2@>
-procedure @? FinishDrawing;
+@<Import units for \texttt{mconsole.pas}@>=
+uses pcmizver,mizenv;
 
-@ @<|DisplayLine| global constant@>=
+@ We want to have a method which allows us to flag an error
+(\\{fErrNbr}) on a given line of the article being processed. But the
+user may request Mizar to silence these messages. We can facilitate
+this by 
+
+@<|DisplayLine| global constant@>=
 const@+DisplayLine:@+procedure(fLine,fErrNbr: integer) = NoDisplayLine; @t\2@>
 
-
-@ Common routines for ``drawing'' output to the console.
-
-\interface
-@<Report results to command line@>=
-procedure @? EmptyParameterList;
-procedure @? Noise;
-procedure @? DrawPass(const aName: String);
-procedure @? DrawTime(const aTime: String);
-procedure @? DrawVerifierExit(const aTime: String); @#
-
-procedure @? DrawMessage(const Msg1,Msg2:String);
-procedure @? BugInProcessor;
-procedure @? DrawIOResult(const FileName:String; @+ I:byte);
-procedure @? DrawErrorsMsg(aErrorNbr: integer); @#
-
-procedure @? DisplayLineInCurPos(fLine,fErrNbr: integer);
-@ \endinterface
-We also have a constant for error messages commonly encountered.
-
-@<Constants for common error messages reported to console@>=
-const
-  ErrMsg: array[1..6] of String[20] = @/
-       ('', @/
-        'File not found', @/
-        'Path not found', @/
-        'Too many open files', @/
-        'Disk read error', @/
-        'Disk write error'
-       );
 @ Now, we have accommodator specific options.
 
 @<Interface for accommodator command line options@>=
 {Accommodator specific options:}
 
 var
- InsertHiddenFiles,
- VocabulariesProcessing,FormatsProcessing,NotationsProcessing,
- SignatureProcessing,
- ConstructorsProcessing,
- ClustersProcessing,IdentifyProcessing,ReductionProcessing,PropertiesProcessing,
- DefinitionsProcessing,EqualitiesProcessing,ExpansionsProcessing,
- TheoremsProcessing,SchemesProcessing,TheoremListsProcessing,SchemeListsProcessing:boolean;
+ SignatureProcessing, {unused}
+ TheoremListsProcessing, {unused}
+ SchemeListsProcessing, {unused}
+ InsertHiddenFiles, {Include \.{HIDDEN} automatically?}
+ FormatsProcessing:Boolean;
 
-procedure @? InitAccOptions; @t\2@>
-procedure @? GetAccOptions;
-@ @<Interface for |MakeEnv| command line options@>=
-{MakeEnv specific options:}
 
-var Accomodation : boolean = false;
-    NewAccom : boolean = false;
+var {Registrations-related configuration for Accommodator}
+ ClustersProcessing,IdentifyProcessing,ReductionProcessing,PropertiesProcessing: Boolean;
 
-procedure @? GetMEOptions;
+var {The environ-specifical Accommodator options}
+ VocabulariesProcessing, {Accommodator will run \\{ProcessVocabularies}}
+ NotationsProcessing, {Accommodator processes \.{notations} directive}
+ ConstructorsProcessing, {Will the Accommodator determine which constructor to use for identifier?}
+ DefinitionsProcessing,EqualitiesProcessing,ExpansionsProcessing, {Definition environs}
+ TheoremsProcessing,SchemesProcessing: Boolean;
 
-@ @<Interface for transfer-specific command line options@>=
-{Transfer specific options:}
+@ Among the state variables introduced in the \texttt{mconsole} unit,
+there is one for handling \.{SIGINT}, \.{SIGQUIT}, and \.{SIGTERM} signals. \Ithink{The other \UNIX/
+signals should probably be supported, as well.}
 
-var PublicLibr: boolean;
-
-procedure @? GetTransfOptions;
-
-@ @<Interface for other command line options@>=
+@<Interface for other command line options@>=
 {Other options:}
 
 var
- CtrlCPressed : boolean = false;
- LongLines : boolean = false;
- QuietMode : boolean = false;
- StopOnError: boolean = false;
+ CtrlCPressed : Boolean = false; {\.{SIGINT}, \.{SIGQUIT}, or \.{SIGTERM} signal received?}
+ LongLines : Boolean = false; {Allow lines longer than 80 characters}
+ QuietMode : Boolean = false; {Don't print anything to the console?}
+ StopOnError: Boolean = false; @#
 
- FinishingPass: boolean = false;
- ParserOnly : boolean = false;
- AnalyzerOnly : boolean = false;
- CheckerOnly : boolean = false;
- SwitchOffUnifier: boolean = false;
+ FinishingPass: Boolean = false;
+ ParserOnly : Boolean = false; {No analyzing or checking}
+ AnalyzerOnly : Boolean = false; {Analyze, but no parsing or checking}
+ CheckerOnly : Boolean = false; {Check, but do not re-analyze or re-parse}
+ SwitchOffUnifier: Boolean = false; @#
 
- AxiomsAllowed: boolean = false;
-
-procedure @? GetOptions;
+ AxiomsAllowed: Boolean = false;
 
 @ \endinterface
 The implementation begins by initializing the Accommodator specific options.
 
-@<Implementation for mconsole.pas@>=
+@ @<Interface for accommodator command line options@>=
+procedure @? InitAccOptions;
+
+@ @<Implementation for mconsole.pas@>=
 procedure InitAccOptions;
 begin
  InsertHiddenFiles:=true;
@@ -162,9 +117,10 @@ begin
 end;
 
 @ Similarly, we want to be able to \emph{reset} the configuration for
-the accommodator to the default (initial) values.
+the accommodator to the default (initial) values. This is a private
+helper function for other things in the \texttt{mconsole}.
 
-@p
+@ @<Implementation for mconsole.pas@>=
 procedure ResetAccOptions;
 begin
  InsertHiddenFiles:=true;
@@ -210,8 +166,8 @@ then toggles |ConstructorsProcessing|, |SignatureProcessing|,\hfill\break
 \item{$\bullet$} \texttt{-h} will set |InsertHiddenFalse| to false
 (presumably preventing Mizar from loading the ``hidden'' article,
 i.e., the primitive notions
-of \texttt{object}, \texttt{set}, \texttt{in}, \texttt{=}, and
-inequality will not be loaded).
+of ``\texttt{object}'', ``\texttt{<>}'', ``\texttt{in}'', and ``\texttt{strict}'' will
+not be loaded).
 
 \item{$\bullet$} \texttt{-l} will toggle |LongLines| to true (allowing
 lines with more than 80 characters)
@@ -224,7 +180,10 @@ lines with more than 80 characters)
 Note this processes \emph{all} command line options \emph{in order}.
 So \texttt{-e -v} will produce the same results as \texttt{-v} alone.
 
-@p
+@<Interface for accommodator command line options@>=
+procedure @? GetAccOptions;
+
+@ @<Implementation for mconsole.pas@>=
 procedure GetAccOptions;
  var i,j: integer;
 begin
@@ -268,7 +227,16 @@ end;
 @ Similarly, we have |MakeEnv| specific options parsed from the
 command line flags.
 
-@p
+
+@ @<Interface for |MakeEnv| command line options@>=
+{MakeEnv specific options:}
+
+var Accomodation : Boolean = false;
+    NewAccom : Boolean = false;
+
+procedure @? GetMEOptions;
+
+@ @<Implementation for mconsole.pas@>=
 procedure GetMEOptions;
  var i,j: integer;
 begin
@@ -290,7 +258,10 @@ Notably, there is a feature to allow axioms,@^Axioms@> which is completely
 undocumented (and probably for good reason!). The axioms must appear
 in ``\texttt{.axm}'' files.
 
-@p
+@<Interface for other command line options@>=
+procedure @? GetOptions;
+
+@ @<Implementation for mconsole.pas@>=
 procedure GetOptions;
  var i,j: integer;
 begin
@@ -314,9 +285,16 @@ end;
 
 @ Transfer specific options.
 
-@p
+@<Interface for transfer-specific command line options@>=
+{Transfer specific options:}
+
+var PublicLibr: Boolean; {use ``\texttt{prel/}\<Article-name>\texttt{/}'' subdirectory?}
+
+procedure @? GetTransfOptions;
+
+@ @<Implementation for mconsole.pas@>=
 procedure GetTransfOptions;
- var lOption: String;
+ var lOption: string;
 begin
  PublicLibr:=false;
  if ParamCount>=2 then
@@ -329,8 +307,19 @@ end;
 @ We have a number of functions useful for ``drawing'', i.e.,
 reporting progress and results (and so on).
 
-@p
-var gComment: String = '';
+
+@<Report results to command line@>= 
+procedure @? InitDisplayLine(const aComment: string); @t\2@>
+procedure @? NoDisplayLine(fLine,fErrNbr: integer); @t\2@> @#
+
+@t\4@>@<|DisplayLine| global constant@>@; @#
+
+@ The \\{gComment} is used only within this module. Mizar stores the
+name of the pass (parser, MSM, analyzer, checker) in \\{gComment},
+which is used in a helper function to print the progress to the console.
+
+@<Implementation for mconsole.pas@>=
+var gComment: string = ''; {The pass currently being run}
 @#
 disable_io_checking;
 @#
@@ -338,33 +327,51 @@ procedure NoDisplayLine(fLine,fErrNbr: integer);
 begin
 end;
 @#
-procedure InitDisplayLine(const aComment:String);
+procedure InitDisplayLine(const aComment: string);
 begin
  gComment:=aComment;
  WriteLn;
  write(aComment);
  DisplayLine:=DisplayLineInCurPos
 end;
-@#
-procedure DrawStr(const aStr:String);
+
+@ @<Report results to command line@>= 
+procedure @? DrawMizarScreen(const aApplicationName: string); @t\2@>
+procedure @? DrawArticleName(const fName: string); @t\2@> @#
+
+procedure @? DrawStr(const aStr: string); @t\2@>
+procedure @? FinishDrawing;
+
+@ @<Implementation for mconsole.pas@>=
+procedure DrawStr(const aStr: string);
 begin write(aStr) @+ end;
 @#
 procedure FinishDrawing;
 begin WriteLn; end;
 @#
-procedure DrawTPass(const fPassName:String);
+procedure DrawTPass(const fPassName: string);
 begin write(fPassName) @+ end;
 @#
-procedure DrawMizarScreen(const aApplicationName:String);
+procedure DrawMizarScreen(const aApplicationName: string);
 begin
  WriteLn(aApplicationName,', ',PCMizarVersionStr,' (',PlatformNameStr,')');
  WriteLn(Copyright);
 end;
-@#
+
+@ The \\{Noise} parameter rings the bell three times (the |^G| is
+Caret notation ``Ctrl+G'', which is \ASCII/ code 10 \.{BEL}). For
+non-Windows systems, this will write three \.{BEL} characters to the
+standard output stream. Windows will do nothing.
+
+@<Report results to command line@>=
+procedure @? EmptyParameterList; @t\2@>
+procedure @? Noise;
+
+@ @<Implementation for mconsole.pas@>=
 procedure Noise; @t\2@>
 begin @|@/
   if_not_def(WIN32)
-  write(^G^G^G);
+  write(^G^G^G); @+
   endif;
 end;
 @#
@@ -375,32 +382,49 @@ begin
  halt(2);
 end;
 
-@ More such procedures, reporting the article processed, the time, etc.
+@ When the user asks Mizar to verify an article, Mizar will begin by
+writing to the standard output stream ``Processing: \<Article name>''.
 
-@p
-procedure DrawArticleName(const fName:String);
+@<Implementation for mconsole.pas@>=
+procedure DrawArticleName(const fName: string);
 begin
  WriteLn('Processing: ',fName); @+
 end;
-@#
-procedure DrawPass(const aName: String);
+
+@ @<Report results to command line@>=
+procedure @? DrawPass(const aName: string); @t\2@>
+procedure @? DrawTime(const aTime: string); @t\2@>
+procedure @? DrawVerifierExit(const aTime: string);
+
+@ @<Implementation for mconsole.pas@>=
+procedure DrawPass(const aName: string);
 begin
  WriteLn;
  write(aName); @+
 end;
 @#
-procedure DrawTime(const aTime: String);
+procedure DrawTime(const aTime: string);
 begin
  write(aTime); @+
 end;
 @#
-procedure DrawVerifierExit(const aTime: String);
+procedure DrawVerifierExit(const aTime: string);
 begin
  WriteLn;
  WriteLn('Time of mizaring:',aTime);
 end;
 
-@ @p
+@ On non-Windows machines, |^M| is used in \\{write} to add a carriage
+return. Windows machines will require |#13| instead. This is because
+|^M| is ``Ctrl+M'' which has \ASCII/ code 77-64=13 (see, it's the same
+as |#13|).
+
+% https://stackoverflow.com/a/50188627
+
+@<Report results to command line@>=
+procedure @? DisplayLineInCurPos(fLine,fErrNbr: integer);
+
+@<Implementation for mconsole.pas@>=
 procedure DisplayLineInCurPos(fLine,fErrNbr: integer);
 begin
  if (not CtrlCPressed) and (not QuietMode)then
@@ -417,10 +441,18 @@ begin
   end; 
 end;
 
-@ \label{mconsole:drawmessage}
+@ When Mizar needs to notify the user that a critical error has
+occurred, \\{DrawMessage} will be used for communicating it. By
+``critical error'', I mean things like Mizar cannot open the file, or
+there was a stack overflow, or the hard drive exploded.
 
-@p
-procedure DrawMessage(const Msg1,Msg2:String);
+\label{mconsole:drawmessage}
+
+@<Report results to command line@>=
+procedure @? DrawMessage(const Msg1,Msg2: string);
+
+@ @<Implementation for mconsole.pas@>=
+procedure DrawMessage(const Msg1,Msg2: string);
  var Lh: byte;
 begin
   Noise;
@@ -436,15 +468,29 @@ begin
      WriteLn(' ****');
    end;
 end;
-@ \label{mconsole:drawioresult}
 
-@p
+@ The \texttt{monitor.pas} file uses \\{BugInProcessor} when reporting
+errors. It's a logging function for severe situations.
+
+@<Report results to command line@>=
+procedure @? BugInProcessor;
+
+@ @<Implementation for mconsole.pas@>=
 procedure BugInProcessor;
 begin
   DrawMessage('Internal Error',''); @+
 end;
-@#
-procedure DrawIOResult(const FileName:String; I:byte);
+
+@ When \\{reset} (or \\{rewrite}) fails, Mizar will cease. We should
+specifically report the situation to the user, because they can
+address the situation whereas we cannot.
+
+\label{mconsole:drawioresult}
+@<Report results to command line@>=
+procedure @? DrawIOResult(const FileName: string; @+ I:byte);
+
+@ @<Implementation for mconsole.pas@>=
+procedure DrawIOResult(const FileName: string;@+ I:byte);
 begin
  if I in [2..6,12,100] then
    begin
@@ -455,7 +501,24 @@ begin
  halt(1);
 end;
 
-@ @p
+@ We also have a constant for error messages commonly encountered.
+
+@<Constants for common error messages reported to console@>=
+const
+  ErrMsg: array[1..6] of string[20] = @/
+       ('', @/
+        'File not found', @/
+        'Path not found', @/
+        'Too many open files', @/
+        'Disk read error', @/
+        'Disk write error'
+       );
+
+
+@ @<Report results to command line@>=
+procedure @? DrawErrorsMsg(aErrorNbr: integer);
+
+@ @<Implementation for mconsole.pas@>=
 procedure DrawErrorsMSg(aErrorNbr: integer);
 begin
   if aErrorNbr > 0 then

@@ -9,12 +9,12 @@ compilation. Perhaps this ``goes against the spirit'' of literate
 programming, but it makes the most sense to understand what is going
 on for programmers. 
 
-We will begin with the \texttt{esmprocessor.pas} file, and all the
+We will begin with the ``Parser module'' (\texttt{base/parser.pas}), and all the
 dependencies needed to compile it. For clarity (or at least ease of
-reference) each ``section'' appearing in the table of contents
+reference) each ``chapter'' appearing in the table of contents
 corresponds to a different file.
 
-This discusses Mizar's source code as of Git commit \texttt{9e814a9568cfb44253d677e5209c360390fe6437}
+We are studying Mizar's source code as of Git commit \texttt{9e814a9568cfb44253d677e5209c360390fe6437}
 (dated 2023 October 11).
 
 @ \node{Files are chapters.}
@@ -45,7 +45,7 @@ numbers associated with each entry. And even though I just used the
 term ``paragraph number'', they really group several paragraphs into a
 unit of writing.
 
-Numbers are paragraphed \emph{independently} of chapter, section,
+Paragraphs are numbered \emph{independently} of chapter, section,
 subsection. This is a quirk of \WEB/. This was how Mathematicians
 wrote texts back in Euler's day. We will refer to a paragraph by
 writing (\section$n$) to refer to paragraph $n$. Again, this was the
@@ -55,13 +55,15 @@ Each paragraph consists of three parts: the ``text part'' (informal
 prose written in English), the ``macros part'' (which introduces
 macros written in the \WEB/ language), and the ``code part'' (which
 contains a pretty-printed snippet of \PASCAL/ code). A paragraph may
-omit any of these parts. Thus far, all our numbered paragraphs have
-consisted of ``text parts'' only. The ``code part'' can have a name in
-angled brackets. If the name is missing, then it continues the
-previous chunk of code from the previous numbered paragraph.
+omit any of these parts but has at least one of them. Thus far, all
+our numbered paragraphs have consisted of ``text parts'' only. The
+``code part'' can optionally have a name in angled brackets. If the name is
+missing, then it continues the previous chunk of code from the
+previous numbered paragraph. 
 
 @ The Mizar program is released under the GNU license. So let us place
-this license in one place early on.
+this license in one place early on. (This is an example of a numbered
+paragraph with a ``named code part''.)
 
 @<GNU License@>=
 {
@@ -69,6 +71,15 @@ this license in one place early on.
    Copyright (c) Association of Mizar Users.
    License terms: GNU General Public License Version 3 or any later version.
 }
+
+@ \node{Asides and opinions.} Some paragraphs will be labeled as
+``asides'' which are tangential remarks not directly relevant to
+understanding the code, but will enrich the reader's life. \Ithink{The author
+will offer opinions about the design and implementation of Mizar
+in parenthetic sentences like this one, surrounded by double brackets.}
+If the reader is unsatisfied by the arbitrary opinions of a random
+programmer, then they can disable the asides by redefining
+the \texttt{\BS Ithink} macro to have an empty body.
 
 @ \node{Aside: Typography of ``Modern'' Pascal.}%
 We will be following the typographical style as found in Niklaus
@@ -80,19 +91,15 @@ not have \emph{object} or inheritence (or \emph{unit} modules).
 
 First, we need to know that ``modern \PASCAL/'' differs from
 the \PASCAL/ Knuth worked with, in several ways. Mizar uses ``units''
-which are modules. We will need to format them for \WEAVE/. Note
-that \section42 of \WEAVE/ introduces the ``ilk'' of various syntactic
-classes (array-like, case-like, for-like, etc.) and \section64 of \WEAVE/
-explicitly initializes all the reserved words for \PASCAL/.
-
-The reserved words which \WEAVE/ highlights and/or pretty prints:
-\texttt{and}, \texttt{array}, \texttt{begin}, \texttt{case}, \texttt{const}, \texttt{div}, \texttt{do}, \texttt{downto}, \texttt{else}, \texttt{end}, \texttt{file}, \texttt{for}, \texttt{function}, \texttt{goto}, \texttt{if}, \texttt{in}, \texttt{label}, \texttt{mod}, \texttt{nil}, \texttt{not}, \texttt{of}, \texttt{or}, \texttt{packed}, \texttt{procedure}, \texttt{program}, \texttt{record}, \texttt{repeat}, \texttt{set}, \texttt{then}, \texttt{to}, \texttt{type}, \texttt{until}, \texttt{var}, \texttt{while}, \texttt{with}, \texttt{xclause}.
-These are then grouped into 20 ``ilk'' classes (see \section42 of \WEAVE/).
+which are a module system introduced by UCSD \PASCAL/
+(\textit{c{.}}~1977). We will need to format them for \WEAVE/.
 
 Documentation and tutorials frequently compare \textbf{unit} to |program|, so
 we should probably typeset it as such. The big question is whether the
 \texttt{interface}, \texttt{implementation}, and \texttt{uses}
-keywords are |var|-like or |const|-like. I ultimately decided for the latter.
+keywords are |var|-like or |const|-like. I ultimately decided for the
+latter (since \&{var}-like typography would have them appear in the
+index underlined).
 
 We will treat |implementation| typographically \emph{as if} it were a
 |const| because the |end| will not be indented properly otherwise.
@@ -149,7 +156,6 @@ source code when we invoke \TANGLE/.
 @f else_def == else
 @f endif == end
 @f end_if == end
-@f result == nil
 
 @ \node{Toggling IO Checking.} Another compiler directive enables and
 disables IO checking
@@ -250,7 +256,6 @@ to properly tokenise an article.
 We can look at \texttt{kernel/verfinit.pas} to find the parsing phase
 of the Mizar program is handled by the following lines of code:
 \medbreak
-
 \setbox0=\vbox{
 \Y\P$\\{InitPass}(\.{\'Parser\ \ \'})$;\5
 $\\{FileExam}(\\{EnvFileName}+\.{\'.dct\'})$;\5
@@ -262,9 +267,7 @@ $\\{gFormatsColl}.\\{StoreFormats}(\\{EnvFileName}+\.{\'.frx\'})$;\5
 \\{FinishScanning};\5
 $\\{Write\_WSMizArticle}(\\{gWSTextProper},\39\\{EnvFileName}+\.{\'.wsx\'})$;%
 \par}
-
 \boxblock{\box0}
-
 \medbreak\noindent%
 Our goal is to examine these functions, and understand what is going on.
 We know \\{Parse} is defined in \texttt{base/parse.pas}, it
@@ -276,6 +279,108 @@ The \\{Parse} function continuously invokes \\{ReadToken}
 This phase will be responsible for generating a ``\texttt{.frx}''
 (formats \XML/) and a ``\texttt{.wsx}'' (weakly strict Mizar \XML/) file.
 
+
+@* [s] Map of Mizar.
+It will be useful to provide a summary of the files, to give the
+reader an idea where to find various things. We offer the following
+grouping of files. We will enumerate them by the chapter wherein the file is
+discussed.
+
+@ \node{System-dependent code.}
+\enumerate
+\item \texttt{base/mizenv.pas} provides functions for manipulating
+  strings and file I/O
+\item \texttt{base/pcmizver.pas} contains the major and minor version
+  for Mizar, and data about the build
+\item \texttt{base/mconsole.pas} provides common functions for
+  printing messages to the console and parsing command line optional
+  arguments % needs pcmizver
+\item \texttt{base/errhan.pas} contains the \\{Position} type,
+  functions for reporting errors, writing them in particular files % used by mstate.pas
+\item \texttt{base/info.pas} for debugging purposes, logging to
+  a \texttt{.inf} file % used by monitor.pas
+\item \texttt{base/monitor.pas} code for signal processing, reports errors,
+  and when calamity strikes exit Mizar  % used by mstate.pas
+\item \texttt{base/mtime.pas} uniform framework for timing things% used by mstate.pas
+\item \texttt{base/mstate.pas} code for reset the current position in
+  an article and marking the time \edef\resumecounting{\the\enumi}
+\endenumerate
+
+@ \node{Infrastructure for the rest of Mizar's object-oriented code.}
+\enumerate\enumi=\resumecounting
+\item \texttt{base/numbers.pas} contains code for arbitrary-precision
+  integers, rational numbers, and rational complex numbers
+\item \texttt{base/mobjects.pas} contains the common data structures
+  used in Mizar, things like dynamic arrays and the \\{MObject} base class;
+\edef\resumecounting{\the\enumi}
+\endenumerate
+
+@ \node{XML infrastructure.}
+\enumerate\enumi=\resumecounting
+\item \texttt{base/xml\_dict.pas} contains only constant parameters
+  and enumerated types
+\item \texttt{base/librenv.pas} code for accessing the \texttt{prel/}
+  subdirectories of the current article and of \texttt{\$MIZFILES/}
+  --- this is only here because it defines the \\{MizFiles} global
+  variable which stores the full path of the \texttt{\$MIZFILES/}
+  environmental variable, and \\{MizFiles} is needed in \texttt{xml\_inout.pas};
+  \Ithink{This \\{MizFiles} global variable should be refactored out to an earlier
+  unit, because \texttt{librenv.pas} seems out of place here;}
+\item \texttt{base/xml\_parser.pas} provides an abstract syntax tree
+  for \XML/ and parses \XML/  
+\item \texttt{base/xml\_inout.pas} handles reading from and writing to \XML/
+  files, plus escaping strings, etc.
+\edef\resumecounting{\the\enumi}
+\endenumerate
+
+@ \node{Tokenisation and other ``intermediate file management''.}
+\enumerate\enumi=\resumecounting
+\item \texttt{base/dicthan.pas} loading ``\texttt{.voc}'' files,
+  and transform them into ``\texttt{.vct}'' and \XML/
+  ``\texttt{.vcx}'' files
+\item \texttt{base/scanner.pas} the Tokeniser and Scanner are implemented here
+  (the naming is a little confusing, the \\{Scanner} class \textbf{is}
+  the Tokeniser, and the \\{Tokeniser} class is an ``abstract
+  Tokeniser'' operating on an arbitrary input stream accessed by an
+  abstract \\{GetPhrase} method); also note, if we want to extend
+  Mizar to support \UTF8 character encoding instead of \ASCII/, then
+  this is the file we would modify;
+\item \texttt{base/\_formats.pas} contains the data structures for ``formats''
+  (basically a $\langle$Identifier, Number of arguments to left, Number of arguments to right$\rangle$ triple)
+  used for parsing expressions;
+\edef\resumecounting{\the\enumi}
+\endenumerate
+
+%\par\hang\textindent\item
+@ \node{Abstract syntax tree class hierarchies.}
+\enumerate\enumi=\resumecounting
+\item \texttt{base/syntax.pas} provides ``abstract'' classes \\{Subexpression} and \\{Expression}
+  for expressions, \\{Item} and \\{Block} for statements; the actual
+  subclasses used by the parser are in
+  the \texttt{parseraddition.pas} file;
+\item \texttt{base/mscanner.pas} provides a number of important global
+  variables for the parser, ``\texttt{.prf}'' file management, as well
+  as the \\{gScanner} global variable for the parser;
+\item \texttt{base/abstract\_syntax.pas} provides the abstract syntax
+  tree for terms, types, attributes, formulas, and ``within expressions'';
+\item \texttt{base/wsmarticle.pas} ``weakly strict Mizar'' is the name
+  for the initial internal representation of Mizar, which has its own
+  class hierarchy here, as well as writing a ``weakly strict Mizar'' article
+  to an \XML/ file and reading back from an \XML/ file into a ``weakly strict
+  Mizar'' abstract syntax tree;
+\edef\resumecounting{\the\enumi}
+\endenumerate
+
+@ \node{Parser ``proper''.}
+\enumerate\enumi=\resumecounting
+\item \texttt{base/pragmas.pas} for parsing pragmas like ``\texttt{::\$P-}'',
+  and global variables related to them;
+\item \texttt{base/parseraddition.pas} for subclasses of the syntax
+  tree class hierarchy from \texttt{syntax.pas}, used for constructing a
+  ``weakly strict Mizar'' AST when parsing
+\item \texttt{base/parser.pas} for parsing a token stream into an
+  abstract syntax tree
+\endenumerate
 
 @* [S] Log of todos, bugs, improvements.
 I have a number of observations from transcribing Mizar
@@ -338,6 +443,35 @@ changes to any of its parent (or grandparent) classes?
 \bug The constructor \\{OutWSMizFileObj.OpenFileWithXSL} (\section\xref{OutWSMizFileObj.OpenFileWithXSL})
 expects the \XML/-stylesheet located at \texttt{"file://'+\$MIZFILES+'/wsmiz.xml"},
 but that file is not present in Mizar.
+\bug In \\{extItemObj.FinishFunctorPattern} (\section\xref{extItemObj.FinishFunctorPattern}),
+the default case does not add a new format to the \\{gFormatsColl} dictionary.
+\bug In \\{CreateArgs} (\section\xref{CreateArgs}) in \texttt{parseraddition.pas}, when |aBase <= 0|, this
+will set |TermNbr| to a negative number.
+\bug In the Subexpression class, there is duplicate code
+(\section\xref{extSubexpObj.CompleteAttributeArguments}) ---
+the \\{CompleteAttributeArguments} and \\{FinishAttributeArguments}
+are identical, but only the latter is consistent with the naming
+conventions for the Parser. Or (probably more likely) I am misunderstanding the naming conventions?
+\bug In \\{CompleteArgument}
+(\section\xref{CompleteArgument:parser.pas}), we should also test
+that \\{fParenthCnt} is positive, shouldn't we?
+\bug The \\{CreateSubexpression} method (\section\xref{extExpressionObj.CreateSubexpression}),
+for extended expression objects, may result in a memory leak
+when |gSubexpPtr <> nil| --- that is to say, if \\{KillSubexpression}
+has not been invoked prior to \\{CreateSubexpression}.
+\bug Misnamed variable: \\{gIdenifyEqLociList} should be \\{gIdentifyEqLociList}
+(i.e., ``idenify'' should be ``identify'' --- with a `t'). (This typo
+has been corrected in the literate presentation of the code.)
+\bug As discussed in (\section\xref{extItemObj.StartFixedVariables}),
+there is a mismatch between the documentation and the Parser when it
+comes to parsing loci declarations in a definition
+block. The \texttt{syntax.txt} file is more restrictive than the
+Parser, and should be updated to reflect the Parser.
+\bug The \\{gSuchThat} global variable is never used anywhere (\section\xref{extItemObj.FinishFixedVariables})
+\bug In \\{ATTSubexpression} (\section\xref{ATTSubexpression}), in the
+|else| block when the conditional
+|if lAttrExp or (aExpKind = exAdjectiveCluster)| is executed,
+|aExpKind = exAdjectiveCluster| is never true (so there's no need for it).
 \endbugs
 
 
@@ -403,8 +537,59 @@ underscores from the identifiers and capitalize all letters. So
 instead of ``|screaming_run_on_case|'' (which appears in the PDF), we
 will instead obtain ``\texttt{SCREAMINGRUNONCASE}'', which\dots yeah, that's a hot mess.
 
+@* [S] Review of Pascal.
+Following Wirth's \textit{Systematic Programming: An Introduction}
+(Prentice-Hall, 1973; viz., Chapter~7), we can
+offer the following axiomatic semantics for most of \PASCAL/'s statements.
+@^Wirth, Niklaus@>
+
+Assignment statements: $${{}\over\LB\,P[w/v]\,\RB\ v\K w\ \LB\,P\,\RB}$$
+Compound statements: 
+$${\displaystyle{\LB\,P\,\RB\ S_{1}\ \LB\,Q\,\RB\atop
+\LB\,Q\,\RB\ S_{2}\ \LB\,R\,\RB}\over\LB\,P\,\RB\ S_{1};\ S_{2}\ \LB\,R\,\RB}$$
+Conditional statements:
+$${\displaystyle{\LB\,P\W B\,\RB\ S_{1}\ \LB\,Q\,\RB\atop
+\LB\,P\W\R B\,\RB\ S_{2}\ \LB\,Q\,\RB}\over\LB\,P\,\RB\ \&{if}\ B\ \&{then}\ S_{1}\ \&{else}\ S_{2}\ \LB\,Q\,\RB}$$
+Simpler conditional statements:
+$${\displaystyle{\LB\,P\W B\,\RB\ S\ \LB\,Q\,\RB\atop
+\LB\,P\W\R B\,\RB\implies\LB\,Q\,\RB}\over\LB\,P\,\RB\ \&{if}\ B\ \&{then}\ S\ \LB\,Q\,\RB}$$
+While statements: $${{\LB\,P\W B\,\RB\ S\ \LB\,P\,\RB}\over\LB\,P\,\RB\ \&{while}\ B\ \&{do}\ S\ \LB\,P\W\R B\,\RB}$$
+Repeat statements:
+$${\displaystyle{{\LB\,P\,\RB\ S\ \LB\,Q\,\RB}\atop\LB\,Q\W\R B\,\RB\ S\ \LB\,Q\,\RB}\over\LB\,P\,\RB\ \&{repeat}\ \37S\ \&{until}\ B\ \LB\,Q\W B\,\RB}$$
+Selective statement (and $i=L_{k}$ for some $k$):
+$$\vbox{\halign{\hfil#\hfil\cr
+${\LB\, P\W (i = L_{k})\,\RB\ S_{k}\ \LB\,Q\,\RB\hbox{ for all }k=1,\dots,n}$\cr
+\noalign{\vskip2pt\hrule\vskip2pt}\cr
+%\noalign{\hrule}\cr
+\vbox{\halign{#\hfil\cr
+$\LB\,P\,\RB\ \&{case}\ i\ \&{of}$\cr
+\quad$L_{1}{:}\ S_{1};$\cr
+\quad$L_{2}{:}\ S_{2};$\cr
+\quad$\ \vdots\quad\;\,\vdots$\cr
+\quad$L_{n}{:}\ S_{n};$\cr
+$\&{end};\quad\LB\,Q\,\RB$\cr}}\cr}}$$
+When there is no $k$ such that $i=L_{k}$, the \&{case} statement is
+the same as evaluating $i$.
+
+We can weaken the precondition:
+$${{P_{1}\implies P_{2},\qquad \LB\,P_{2}\,\RB\ S\ \LB\,Q\,\RB}\over\LB\,P_{1}\,\RB\ S\ \LB\,Q\,\RB}$$
+We can strengthen the postcondition (Equation (11.16), page 85, of
+Wirth's book):
+$${{Q_{2}\implies Q_{1},\qquad \LB\,P\,\RB\ S\ \LB\,Q_{2}\,\RB}\over\LB\,P\,\RB\ S\ \LB\,Q_{1}\,\RB}$$
+These rules are justified as \emph{a priori} valid in Chapter~5 of
+Wirth.
+
+For-loops may be derived as:
+$${\displaystyle{\LB\,(V=a)\W P\,\RB\ S\ \LB\,Q(a)\,\RB\atop
+\LB\,Q(\\{pred}(x))\,\RB\ S\ \LB\,Q(x)\,\RB\hbox{ for all }a<x\leq b}\over
+\displaystyle{\LB\,(a\leq b)\W P\,\RB\ \&{for}\ V\K a\ \&{to}\ b\ \&{do}\ S\ \LB\,Q(b)\,\RB\atop
+\LB\,(a>b)\W P\,\RB\ \&{for}\ V\K a\ \&{to}\ b\ \&{do}\ S\ \LB\,P\,\RB}}$$
+
+
 @* [F] Mizar environment.
-We will need some basic library of functions. For example, trimming
+We want to abstract away all the system dependent code, and provide a
+set of common functions Mizar will use to interact with the file
+system. This will include some helper functions for trimming
 whitespace from a String.
 
 @<mizenv.pas@>=
@@ -424,17 +609,41 @@ implementation @|@/
 
 end.
 
-@ The interface contains all the variables for the unit, and the
-public facing functions and procedures.
+@ There are a few common ``global variables'' used by the rest of
+Mizar. Specifically, Mizar will be processing a file (``article'').
+The file may be an absolute path
+(e.g., \texttt{/path/to/article.miz}), a relative path (\texttt{../article.miz}), or just the
+filename (\texttt{article.miz}). In any event, we will want to refer
+to the filename (\texttt{article.miz}) as well as what Mizar calls the
+``article ID'' (in this case, ``\texttt{ARTICLE}'' --- the filename
+without the file extension, transformed to all capital letters).
+
+Modern programmers may find discomfort working with global variables
+(and for good reason!). We remind such readers that it was common
+practice, until very recently, for compilers and interpreters to use
+global variables to describe the state of the compiler (or
+interpreter). We will freely refer to these global variables as
+``state variables'', since that captures the role they play more accurately.
+
+@^State variable@>
+@^Variable, global@>
+@^Variable, state@>
+@^Global variable@>
 
 \label{mizenv-global-vars}
 
 @<interface for mizenv.pas@>=
-var MizFileName, EnvFileName, ArticleName, ArticleID, ArticleExt: String;
+var MizFileName : string; { the article ``\texttt{article.miz}'' }
+  ArticleName : string; { the ``\texttt{article}'' without the ``\texttt{.miz}''}
+  ArticleID : string; { ``\texttt{ARTICLE}'' in screaming snake case}
+  ArticleExt : string; { ``\texttt{.miz}'' from the |MizFileName| }
+  EnvFileName : string; { the file name given to Mizar as a command-line argument } @#
 
-procedure @? SetStringLength(var aString: String; aLength: integer);
+procedure @? SetStringLength(var aString: string; aLength: integer);
 
-@ The implementation begins with various ``uses''.
+@ The implementation begins with various ``uses''. Depending on
+the \PASCAL/ compiler and operating system, different libraries need
+to be loaded.
 
 @<Modules used by \texttt{mizenv.pas}@>=
 uses {compiler dependent imports}@/
@@ -455,7 +664,7 @@ pad it on the right with however many spaces until the String is as
 long as \\{aLength}.
 
 @<implementation of mizenv.pas@>=
-procedure SetStringLength(var aString: String; aLength: integer);
+procedure SetStringLength(var aString: string; aLength: integer);
 var I, L: integer;
 begin
   L := length(aString);
@@ -465,27 +674,29 @@ begin
     for I := 1 to aLength - L do aString := aString + ' ';
 end;
 
-@ We have publicly available functions trimming whitespace from functions.
-
-@<interface for mizenv.pas@>=
-function @? TrimStringLeft(aString: String): String; @t\2@>
-function @? TrimStringRight(aString: String): String; @t\2@>
-function @? TrimString(const aString: String): String;
-
-@ Trimming the left String will repeatedly delete any leading
+@ \node{Trimming whitespace.}
+Trimming the left String will repeatedly delete any leading
 whitespace, until the String is empty or has no leading whitespace.
 
 Similarly, trimming the right String will repeatedly delete the \textit{last}
 character until it is no longer whitespace (or until the String becomes empty).
 
-@<implementation of mizenv.pas@>=
-function TrimStringLeft(aString: String): String;
+Remember, \PASCAL/ is call-by-value, so the string arguments are
+copied when these functions are invoked. We are mutating the copy of
+the argument, and returning them to the user.
+
+@<interface for mizenv.pas@>=
+function @? TrimStringLeft(aString: string): string; @t\2@>
+function @? TrimStringRight(aString: string): string;
+
+@ @<implementation of mizenv.pas@>=
+function TrimStringLeft(aString: string): string;
 begin
   while (length(aString) > 0) and (aString[1] = ' ') do Delete(aString, 1, 1);
   TrimStringLeft := aString;
 end;
 @#
-function TrimStringRight(aString: String): String;
+function TrimStringRight(aString: string): string;
 begin
   while (length(aString) > 0) and (aString[length(aString)] = ' ') do Delete(aString, length(aString), 1);
   TrimStringRight := aString;
@@ -493,35 +704,43 @@ end;
 
 @ Trimming a String amounts to trimming it on the left and right.
 
-@p
-function TrimString(const aString: String): String;
+@<interface for mizenv.pas@>=
+function @? TrimString(const aString: string): string;
+
+@ @<implementation of mizenv.pas@>=
+function TrimString(const aString: string): string;
 begin
   TrimString := TrimStringRight(TrimStringLeft(aString));
 end;
 
-@ We have a few more String manipulation functions for changing case,
+@ \node{Uppercase and lowercase strings.}
+We have a few more String manipulation functions for changing case,
 and turning an integer into a String.
 
 @<interface for mizenv.pas@>=
-function @? UpperCase(const aStr:String): String; @t\2@>
+function @? UpperCase(const aStr:string): string; @t\2@>
 function @? MizLoCase(aChar: char): char; @t\2@>
-function @? LowerCase(const aStr: String): String; @t\2@>
-function @? IntToStr(aInt: integer): String;
+function @? LowerCase(const aStr: string): string; @t\2@>
+function @? IntToStr(aInt: integer): string;
 
-@ Now, uppercase letters.
+@ Now, uppercase strings are obtained by uppercasing each character.
 
 @<implementation of mizenv.pas@>=
-function UpperCase(const aStr:String): String;
+function UpperCase(const aStr:string): string;
  var k: integer; {index ranging over |aStr|}
-  lStr: String;  {the uppercased String being built and returned}
+  lStr: string;  {the uppercased String being built and returned}
 begin
  lStr:=aStr;
  for k:=1 to length(aStr) do lStr[k]:=UpCase(aStr[k]);
  UpperCase:=lStr;
 end;
+
 @ Lowercasing a String can be done by iteratively replacing each
 character with its lowercase version. This ``lowercase a single
 character'' function is precisely |MizLoCase|.
+
+If the reader wished for a \UTF8 version of Mizar, then this function
+would require thinking very hard about how to generalize.
 
 @p
 function MizLoCase(aChar: char): char;
@@ -533,7 +752,7 @@ begin
 end;
 @#
 
-function LowerCase(const aStr: String): String;
+function LowerCase(const aStr: string): string;
  var i: integer;  {index ranging over |aStr|'s length}
      lStr: String; {result being built up}
 begin
@@ -541,11 +760,13 @@ begin
   for i:=1 to length(aStr) do lStr[i]:=MizLoCase(aStr[i]);
   LowerCase:=lStr;
 end;
-@ We also want to convert an integer to a String.
+
+@ We also want a \emph{funtion} to convert an integer to a
+String. \PASCAL/ provides us with a \emph{procedure}.
 
 @p
-function IntToStr(aInt: integer): String;
- var lStr: String;
+function IntToStr(aInt: integer): string;
+ var lStr: string;
 begin
  Str(aInt,lStr);
  IntToStr:=lStr;
@@ -554,21 +775,6 @@ end;
 @ {\bf File name manipulation.} We will want to test if a file exists,
 or split a path (represented as a String) into a directory and a filename.
 
-\interface
-@<interface for mizenv.pas@>=
-function @? MFileExists(const aFileName : String) : boolean;
-procedure @? EraseFile(const aFileName:String);
-procedure @? RenameFile(const aName1,aName2:String);
-function @? GetFileTime(aFileName: String): Longint;
-procedure @? SplitFileName(@+const aFileName: String; @/
-@t\hskip10pc@>@+ var aDir, aName, aExt: String);
-function @? TruncDir(const aFileName: String): String;
-function @? TruncExt(const aFileName: String): String;
-function @? ExtractFileDir(const aFileName: String): String;
-function @? ExtractFileName(const aFileName: String): String;
-function @? ExtractFileExt(const aFileName: String): String;
-function @? ChangeFileExt(const aFileName,aFileExt: String): String;
-@ \endinterface
 Testing if a file exists uses the Free Pascal's primitive |FileExists|
 function.
 
@@ -577,8 +783,12 @@ function.
 
 \label{MFileExists}
 
-@<implementation of mizenv.pas@>=
-function MFileExists(const aFileName : String) : boolean;
+@<interface for mizenv.pas@>=
+function @? MFileExists(const aFileName : string) : Boolean; @t\2@>
+procedure @? EraseFile(const aFileName:string);
+
+@ @<implementation of mizenv.pas@>=
+function MFileExists(const aFileName : String) : Boolean;
 begin
  MFileExists:=FileExists(aFileName); @+
 end;
@@ -587,22 +797,34 @@ procedure EraseFile(const aFileName:String);
 begin
  SysUtils.DeleteFile(aFileName); @+
 end;
-@ We will destructively rename a file. If a file with the name already
-exists, we delete it.
 
-@p
-procedure RenameFile(const aName1,aName2:String);
+@ We will destructively rename a file. If a file with the name already
+exists, we delete it. \CAUTION/: This function is not used anywhere,
+and it appears to be buggy (the file is deleted and then renamed,
+which begs the question---why is it deleted?).
+
+@<interface for mizenv.pas@>=
+procedure @? RenameFile(const aName1,aName2:string);
+
+@ @<implementation of mizenv.pas@>=
+procedure RenameFile(const aName1,aName2:String); {unused}
 begin
  if MFileExists(aName1) then
    EraseFile(aName2);
  SysUtils.RenameFile(aName1,aName2);
 end;
 
-@ Again, relying on Free Pascal's |FileAge| function.
+@ Again, relying on Free Pascal's |FileAge| function, which returns
+the modification time of the file. \CAUTION/: this will return a
+signed 32-bit integer, which will run into problems after 03:14:07~UTC on 19 January 2038
+because that's $2^{31}-1$ seconds since the \UNIX/ epoch.
 
 \label{GetFileTime}
 
-@p
+@<interface for mizenv.pas@>=
+function @? GetFileTime(aFileName: string): Longint;
+
+@ @<implementation of mizenv.pas@>=
 function GetFileTime(aFileName: String): Longint;
 begin
  GetFileTime := FileAge(aFileName); @+
@@ -615,9 +837,13 @@ into \texttt{/path/to/my/}, \texttt{file}, and \texttt{exe}.
 
 This implementation depends on the compiler used (Delphi or Free Pascal).
 
-@p
-procedure SplitFileName(@+const aFileName: String; {input} @/
-@t\hskip9.25pc@>@+  var aDir, aName, aExt: String) @t\2@>; {output}
+@<interface for mizenv.pas@>=
+procedure @? SplitFileName(@t\hskip-0.5em@>@+const aFileName: string; @/
+@t\hskip8.75pc@>@+ var aDir, aName, aExt: string);
+
+@ @<implementation of mizenv.pas@>=
+procedure SplitFileName(@t\hskip-0.5em@>@+const aFileName: string; {input} @/
+@t\hskip8.75pc@>@+  var aDir, aName, aExt: string) @t\2@>; {output}
 begin@|@/
 if_def(FPC) @/
  aDir := SysUtils.ExtractFilePath(aFileName); @/
@@ -634,10 +860,13 @@ end;
 @ ``Truncating a directory'' means ``throw away the directory part of
 the  path'' so we end up with just a filename and the file extension.
 
-@p
-function TruncDir(const aFileName: String): String;
+@<interface for mizenv.pas@>=
+function @? TruncDir(const aFileName: string): string;
+
+@ @<implementation of mizenv.pas@>=
+function TruncDir(const aFileName: string): string;
 var
-  Dir, lName, Ext: String;
+  Dir, lName, Ext: string;
 begin
   SplitFileName(aFileName, Dir, lName, Ext);
   TruncDir := lName + Ext;
@@ -646,10 +875,12 @@ end;
 @ ``Truncating the extension'' means throwing away the extension part
 of a path.
 
-@p
-function TruncExt(const aFileName: String): String;
+@<interface for mizenv.pas@>=
+function @? TruncExt(const aFileName: string): string;
+@ @<implementation of mizenv.pas@>=
+function TruncExt(const aFileName: string): string;
 var
-  Dir, lName, Ext: String;
+  Dir, lName, Ext: string;
 begin
   SplitFileName(aFileName, Dir, lName, Ext);
   TruncExt := Dir + lName;
@@ -658,30 +889,39 @@ end;
 @ Extracting the file directory will return \textit{just} the directory
 part of a path.
 
-@p
-function ExtractFileDir(const aFileName: String): String;
+@<interface for mizenv.pas@>=
+function @? ExtractFileDir(const aFileName: string): string;
+
+@ @<implementation of mizenv.pas@>=
+function ExtractFileDir(const aFileName: string): string;
  var
-   Dir, lName, Ext: String;
+   Dir, lName, Ext: string;
 begin
   SplitFileName(aFileName, Dir, lName, Ext);
   ExtractFileDir := Dir;
 end;
 
 @ Extracting the file name will throw away both the directory and
-extension.
+extension. For example, extracting the file name from the path
+``\texttt{/path/to/file.ext}'' gives us ``\texttt{file}''. Extracting
+the file extension from the same path gives us ``\texttt{.ext}''.
 
-@p
-function ExtractFileName(const aFileName: String): String;
+@<interface for mizenv.pas@>=
+function @? ExtractFileName(const aFileName: string): string; @t\2@>
+function @? ExtractFileExt(const aFileName: string): string;
+
+@ @<implementation of mizenv.pas@>=
+function ExtractFileName(const aFileName: string): string;
 var
-  Dir, lName, Ext: String;
+  Dir, lName, Ext: string;
 begin
   SplitFileName(aFileName, Dir, lName, Ext);
   ExtractFileName := lName;
 end;
 @#
-function ExtractFileExt(const aFileName: String): String;
+function ExtractFileExt(const aFileName: string): string;
 var
-  Dir, lName, Ext: String;
+  Dir, lName, Ext: string;
 begin
   SplitFileName(aFileName, Dir, lName, Ext);
   ExtractFileExt := Ext;
@@ -689,18 +929,36 @@ end;
 
 @ Changing a file name's extension. See:
 
-\texttt{https://www.freepascal.org/docs-html/rtl/sysutils/changefileext.html}
+\href{https://www.freepascal.org/docs-html/rtl/sysutils/changefileext.html}{{\tt freepascal.org/docs-html/rtl/sysutils/changefileext.html}}
 
-@p
-function ChangeFileExt(const aFileName,aFileExt: String): String;
+\noindent Note this does not actually change the filename in the file
+system, it just changes it \emph{as a string}.
+
+@<interface for mizenv.pas@>=
+function @? ChangeFileExt(const aFileName,aFileExt: string): string;
+
+@ @<implementation of mizenv.pas@>=
+function ChangeFileExt(const aFileName,aFileExt: string): string;
 begin
  ChangeFileExt:=SysUtils.ChangeFileExt(aFileName,aFileExt); @+
 end;
 
-@ Getting an environmental variable.
+@ \node{Environment variables.}
+Getting an environment variable. The reader wishing to learn more
+about what \POSIX/ says about environmental variables may consult
+the \POSIX/ standard, Volume~1 Chapter~8:
 
-@p
-function GetEnvStr(aEnvName: String): String; @/
+\smallbreak
+\href{https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap08.html}{{\tt pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap08.html}}
+\smallbreak\noindent%
+The Free \PASCAL/ compiler handles this situation far friendlier than
+Delphi. 
+
+@<interface for mizenv.pas@>=
+function GetEnvStr(aEnvName: string): string;
+
+@ @<implementation of mizenv.pas@>=
+function GetEnvStr(aEnvName: string): string; @/
 if_def(FPC) 
 begin
  GetEnvStr:=GetEnv(aEnvname); @+
@@ -711,75 +969,100 @@ if_def(DELPHI)
 endif 
 
 @ The Delphi-compatible version of obtaining an environment variable
-is rather involved, so let us study it in silent meditation.
+is rather involved: copy the string, make it null terminated, look up
+the value.
 
 @<Get environment variable, Delphi-compatible mode@>=
- const cchBuffer=255;
- var lName,lpszTempPath: array[0..cchBuffer] of char;
+const cchBuffer=255;
+var lName,lpszTempPath: array[0..cchBuffer] of char;
      i: integer;
-     lStr: String;
+     lStr: string; @t\2@>
 begin
- lStr:='';
- for i:=1 to length(aEnvname) do
-  lName[i-1]:=aEnvname[i];
- lName[length(aEnvname)]:=#0;
+ @<Copy the variable name as a null-terminated string@>;
 
  if GetEnvironmentVariable(lName,lpszTempPath,cchBuffer) > 0 then
   begin
+   @<Copy environment variable's value into |lStr| until we find null character@>;
+  end;
+ GetEnvStr:=lStr;
+end;
+
+@ @<Copy the variable name as a null-terminated string@>=
+ lStr:='';
+ for i:=1 to length(aEnvname) do
+  lName[i-1]:=aEnvname[i];
+ lName[length(aEnvname)]:=#0
+
+@ @<Copy environment variable's value into |lStr| until we find null character@>=
    for i:=0 to cchBuffer do
     begin
      if lpszTempPath[i]=#0 then break;
      lStr:=lStr+lpszTempPath[i];
-    end;
-  end;
- GetEnvStr:=lStr;
-end; @/
-{restored for DELPHI4 compatibility ;-(
-begin
- GetEnvStr:=GetEnvironmentVariable(aEnvname);
-end;}
+    end
 
-@ The |DrawMessage| and |DrawIOResult| are procedures
-in \texttt{mconsole.pas} (see \section\xref{mconsole:drawmessage}\ETs\section\xref{mconsole:drawioresult}).
+@ \node{Common printing routines.}
+Examining a file amounts to testing if we can open the file. We close
+the file after opening it (because we don't want to actually want to
+do anything with it).
+
+We should tweak how \WEB/ formats a file to make it resemble the other
+types, rather than leave it as a ``type opertor'' like \&{array}
+(which is the default due to Knuth).
+
+@f file==integer;
 
 @<implementation of mizenv.pas@>=
-procedure FileExam(const aFileName: String);
- var Source: file; I: byte;
+procedure FileExam(const aFileName: string);
+var Source: file; {the file named |aFileName|}
+I: byte; {|IOResult| from trying to open the file}
 begin
-  if aFileName = '' then
-    begin DrawMessage('Can''t open '' .miz ''','');
-     halt(1);
-    end;
+  if aFileName = '' then @<Halt: we can't open the file@>;
   FileMode:=0;
   Assign(Source,aFileName); without_io_checking(Reset(Source));
-  I:=ioresult;
-  if I<>0 then DrawIOResult(aFileName,I);
+  I:=IOResult;
+  if I<>0 then DrawIOResult(aFileName,I); {(\section\xref{mconsole:drawioresult})}
   close(Source);
   FileMode:=2;
 end;
 
-@ We test if a file exists with the |EnvFileExam| procedure. It will
-notify the user if the file does not exist, otherwise it is
-silent. %(From \section\xref{mconsole:drawmessage}.)
+@ @<Halt: we can't open the file@>=
+    begin DrawMessage('Can''t open '' .miz ''',''); @t\hskip-1em@> {(\section\xref{mconsole:drawmessage})}@+
+     halt(1);
+    end
+
+@ The user provides a file to Mizar as the command line argument. This
+typically looks like a relative path ``\texttt{tex/article}'' without
+any file extension. Before even trying to open ``\texttt{tex/article.miz}'', or any of the
+related autogenerated intermediate files, we should test the file exists.
+
+This procedure will notify the user if the file does not exist,
+otherwise it is silent.
 
 Again, |DrawMessage| comes from \texttt{mconsole.pas} (\section\xref{mconsole:drawmessage}).
 
-@p
-procedure EnvFileExam(const aFileExt:String);
+@<implementation of mizenv.pas@>=
+procedure EnvFileExam(const aFileExt: string);
 begin
   if not MFileExists(EnvFileName+aFileExt) then
    begin
      DrawMessage('Can''t open '' '+EnvFileName+aFileExt+' ''','');
      Halt(1);
    end;
-end;
+end; 
 
-@ The \\{ParamCount} is \PASCAL/'s way of counting the command-line
+@ This function isn't used anywhere in Mizar. It's also misnamed: we
+are not ``getting'' the file name, we are \emph{updating} the file
+extension if the file lacks one. A better name might be ``populate
+missing file extension''. Further, this does not test if the |Nr|
+command line argument is actually a file name or not, which is a
+possible source of bugs.
+
+Remember, the \\{ParamCount} is \PASCAL/'s way of counting the command-line
 parameters passed to the program.
 
-@p
-procedure GetFileName(ParamNr:byte; DefaultExt:String; var aFileName:String);
- var  lFileExt: String;
+@<implementation of mizenv.pas@>=
+procedure GetFileName(ParamNr:byte; DefaultExt:string; var aFileName:string);
+ var  lFileExt: string;
 begin
  if ParamNr <= ParamCount then
   begin aFileName:=ParamStr(ParamNr);
@@ -793,14 +1076,15 @@ end;
 @ This procedure will take the |Nr| command line argument. If it lacks
 a file extension, then it will append the |DefaultExt| to it. At the
 end, this will populate |aFileName| and |aFileExt| based on the
-command line.
+command line. It's only used in the |GetMizFileName| procedure, and
+nowhere else in Mizar.
 
 The |ParamStr(Nr)| returns the ${\it Nr}^{th}$ parameter as a String (it's
 a \PASCAL/ primitive).
 
-@p
-procedure GetFileExtName(Nr:byte; DefaultExt:String;
-                      var aFileName:String; var aFileExt:String);
+@<implementation of mizenv.pas@>=
+procedure GetFileExtName(Nr:byte; DefaultExt: string;
+                      var aFileName: string; var aFileExt:s tring);
 begin
  if Nr <= ParamCount then
   begin aFileName:=ParamStr(Nr);
@@ -812,7 +1096,8 @@ begin
  aFileName:=''; aFileExt:='';
 end;
 
-@ We need to find the first command-line argument which resembles a
+@ \node{Populate the state variables using the command-line arguments.}
+We need to find the first command-line argument which resembles a
 Mizar article name. Note that Mizar articles have several files
 associated with it (the article's contents in a \texttt{.miz} file,
 the vocabulary in a \texttt{.voc} file, and \XML/ related intermediate
@@ -821,7 +1106,16 @@ representation in \texttt{.xml} files, as well as \texttt{.evl} files).
 Command line flags prefixed with a dash (``\texttt{-}'') will not be
 interpreted as the name of a Mizar article.
 
-@p
+If there are multiple articles passed to Mizar as command-line
+arguments, then this function finds the first one (and uses it to
+populate the state variables).
+
+A possible bug: if there are multiple files passed to Mizar and the
+first file passed is not a ``\texttt{.miz}'' file, then Mizar will
+halt as a failure instead of continuing looking for the needle in the
+haystack. 
+
+@<implementation of mizenv.pas@>=
 procedure GetMizFileName(aFileExt:String);
 var i:integer;
 begin
@@ -834,26 +1128,31 @@ begin
     ArticleName:=ExtractFileName(MizFileName);
     ArticleID:=UpperCase(ArticleName);
     if not IsMMLIdentifier(ArticleName) then
-     begin
-      DrawMessage('Only letters, numbers and _ allowed in Mizar file names','');
-      halt(1);
-     end;
+    @<Halt: invalid article name@>;
     EnvFileName:=MizFileName;
     exit;
    end;
 end;
 
-@ We will provide a standard way to refer to the article.
+@ @<Halt: invalid article name@>=
+     begin
+      DrawMessage('Only letters, numbers and _ allowed in Mizar file names','');
+      halt(1);
+     end
 
-@p
+@ We will provide a standard way to populate the global variables.
+
+@<implementation of mizenv.pas@>=
 procedure GetArticleName;
 begin
  GetMizFileName('.miz');
 end;
 
-@ The |EnvFileName| is populated here provided |MizFileName| is blank. 
+@ The second file provided to Mizar is treated as the |EnvFileName|.
+We need to populate the global variables if they have not been
+extracted from the command-line arguments already.
 
-@p
+@<implementation of mizenv.pas@>=
 procedure GetEnvironName;
 var i,c:integer;
 begin
@@ -874,15 +1173,15 @@ letters (\texttt{a-z}), decimal digits (\texttt{0-9}), and underscores
 (\texttt{\_}). 
 
 @p
-function IsMMLIdentifier(const aID: String): boolean;
+function IsMMLIdentifier(const aID: String): Boolean;
  const Allowed: array[chr(0)..chr(255)] of byte =
-   (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,
-    0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1,
-    0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+   (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, @/
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0, {\texttt{0}--\texttt{9}}
+    0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1, {\texttt{A}--\texttt{Z}, ``\texttt{\_}''}
+    0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0, {\texttt{a}--\texttt{z}}
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, @/
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, @/
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, @/
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
  var i: integer;
 begin
@@ -896,8 +1195,134 @@ begin
 end;
 
 
+@* [F] PC Mizar Version.
+This is used to track the version of Mizar.
+
+@<pcmizver.pas@>=
+  @<GNU License@>
+unit pcmizver;
+
+interface @|@#
+
+const  @<Constants for \texttt{pcmizver.pas}@>@;
+
+@<Public functions for \texttt{pcmizver.pas}@>@;
+
+implementation @|@#
+
+@<Implementation for \texttt{pcmizver.pas}@>  @t\2@> @; @#
+
+end.
+
+@
+Note the slight variant of terminology compared to semantic versioning
+``Major.Minor.Patch'', Mizar uses ``Release.Version.Variant''. This
+appears to be just a minor difference in vocabulary.
+
+@<Constants for \texttt{pcmizver.pas}@>=
+   PCMizarReleaseNbr = 8; @/
+   PCMizarVersionNbr = 1; @/
+   PCMizarVariantNbr = 14;
+
+@ The current year could probably be determined from the \PASCAL/
+system utilities, but it is hardcoded to 2025. The \\{CurrentYear} is
+only used in one procedure in this module, so we could easily replace
+it with (the possibly non-portable) |FormatDateTime('YYYY',Now)|.
+
+@<Constants for \texttt{pcmizver.pas}@>=
+   CurrentYear = 2025; @#
+
+@ The directory separator for the file system supports Windows
+and \UNIX/-like file systems. So Classic \macOS/ and \QNX/ users would
+have to request this changed. 
+
+@<Constants for \texttt{pcmizver.pas}@>=
+@{@&$IFDEF WIN32@}
+   DirSeparator = '\'; @/
+@{@&$ELSE@}
+   DirSeparator = '/'; @/
+@{@&$ENDIF@}
+
+@ There are only four functions provided by this module.
+
+\interface
+@<Public functions for \texttt{pcmizver.pas}@>=
+function @? PCMizarVersionStr: string;
+function @? VersionStr: string;
+function @? PlatformNameStr: string;
+function @? Copyright : string;
+@ \endinterface
+Their implementation is relativiely straightforward: just print the
+appropriate constants to the screen.
+
+
+@<Implementation for \texttt{pcmizver.pas}@>=
+function Copyright : string;
+var s:string;
+begin
+ Str(CurrentYear,s);
+ Copyright:='Copyright (c) 1990-'+s+' Association of Mizar Users';
+end;
+
+@ @<Implementation for \texttt{pcmizver.pas}@>=
+function  VersionStr: string;
+ var lRel,lVer,lVar: string[2]; lStr:string;
+begin
+ Str(PCMizarReleaseNbr,lRel);
+ Str(PCMizarVersionNbr,lVer);
+ Str(PCMizarVariantNbr,lVar);
+ if length(lVar) = 1 then lVar:='0'+lVar; @/
+@{@&$IFDEF VERALPHA@} 
+ lStr:='-alpha'; @/
+@{@&$ELSE@}
+ lStr:=''; @/
+@{@&$ENDIF@} @/
+ VersionStr:=lRel+'.'+lVer+'.'+lVar+lStr;
+end;
+
+@ There are a number of platforms supported, a surprisingly large
+number. If we were to support more platforms (other \BSD/s, \BeOS/, \GNU/
+Hurd, etc.), then we would need to update this function. To see what
+platforms are predefined for FreePascal, consult:
+\item{$\bullet$}\href{https://wiki.freepascal.org/Platform_defines}{\texttt{https://wiki.freepascal.org/Platform_defines}}
+
+\noindent Ostensibly, we could extend the platform name string to
+display ``generic \UNIX/'' (and even ``generic \BSD/''), as well as
+``generic Windows''.
+
+
+@<Implementation for \texttt{pcmizver.pas}@>=
+function  PlatformNameStr: string;
+var lStr: string;
+begin
+   lStr:=''; @#
+   
+   if_def(WIN32) lStr:=lStr+'Win32'; @+ end_if
+   if_def(LINUX) lStr:=lStr+'Linux'; @+ end_if
+   if_def(SOLARIS) lStr:=lStr+'Solaris'; @+ end_if
+   if_def(FREEBSD) lStr:=lStr+'FreeBSD'; @+ end_if
+   if_def(DARWIN) lStr:=lStr+'Darwin'; @+ end_if @#
+
+   if_def(FPC) lStr:=lStr+'/FPC'; @+ end_if
+   if_def(DELPHI) lStr:=lStr+'/Delphi'; @+ end_if @#
+
+   PlatformNameStr:=lStr;
+end;
+
+@ The last function in the \texttt{pcmizver.pas} file provides a
+string for the Mizar version.
+
+@<Implementation for \texttt{pcmizver.pas}@>=
+function  PCMizarVersionStr: string;
+begin
+ PCMizarVersionStr:='Mizar Ver. '+VersionStr;
+end;
+
 @* [F] Mizar Console.
 The Mizar Console unit is used for interacting with the command line.
+Specifically, this module will be used for printing error messages,
+reporting progress, and parsing command-line arguments for
+configuration options.
 
 @<mconsole.pas@>=
 @<GNU License@>
@@ -905,27 +1330,6 @@ The Mizar Console unit is used for interacting with the command line.
 unit mconsole;
 
 interface
-
-@<Interface for mconsole.pas@>
-
-implementation
-@|@#
-@<Import units for \texttt{mconsole.pas}@>
-@#
-@<Implementation for mconsole.pas@>
-
-@t\2@>end
-
-@ We import two modules, |pcmizver| (which we have yet to see), and
-|mizenv| (which we have already introduced).
-
-@<Import units for \texttt{mconsole.pas}@>=
-uses pcmizver,mizenv;
-
-@ The interface contains the publicly available functions, as well as
-some specific variables for the state of the analyzer, etc.
-
-@<Interface for mconsole.pas@>=
 @<Report results to command line@>@;
 
 @<Constants for common error messages reported to console@>@;
@@ -936,107 +1340,80 @@ some specific variables for the state of the analyzer, etc.
 
 @<Interface for transfer-specific command line options@>@;
 
-@<Interface for other command line options@>
+@<Interface for other command line options@>@;
 
-@ @<Report results to command line@>= 
-procedure @? InitDisplayLine(const aComment:String); @t\2@>
-procedure @? NoDisplayLine(fLine,fErrNbr: integer); @t\2@> @#
+implementation
+@|@#
+@<Import units for \texttt{mconsole.pas}@>
+@#
+@<Implementation for mconsole.pas@>
 
-@<|DisplayLine| global constant@>@; @#
+@t\2@>end
 
-procedure @? DrawMizarScreen(const aApplicationName:String); @t\2@>
-procedure @? DrawArticleName(const fName:String); @t\2@> @#
+@ We import two modules, \\{pcmizver} and \\{mizenv},
 
-procedure @? DrawStr(const aStr:String); @t\2@>
-procedure @? FinishDrawing;
+@<Import units for \texttt{mconsole.pas}@>=
+uses pcmizver,mizenv;
 
-@ @<|DisplayLine| global constant@>=
+@ We want to have a method which allows us to flag an error
+(\\{fErrNbr}) on a given line of the article being processed. But the
+user may request Mizar to silence these messages. We can facilitate
+this by 
+
+@<|DisplayLine| global constant@>=
 const@+DisplayLine:@+procedure(fLine,fErrNbr: integer) = NoDisplayLine; @t\2@>
 
-
-@ Common routines for ``drawing'' output to the console.
-
-\interface
-@<Report results to command line@>=
-procedure @? EmptyParameterList;
-procedure @? Noise;
-procedure @? DrawPass(const aName: String);
-procedure @? DrawTime(const aTime: String);
-procedure @? DrawVerifierExit(const aTime: String); @#
-
-procedure @? DrawMessage(const Msg1,Msg2:String);
-procedure @? BugInProcessor;
-procedure @? DrawIOResult(const FileName:String; @+ I:byte);
-procedure @? DrawErrorsMsg(aErrorNbr: integer); @#
-
-procedure @? DisplayLineInCurPos(fLine,fErrNbr: integer);
-@ \endinterface
-We also have a constant for error messages commonly encountered.
-
-@<Constants for common error messages reported to console@>=
-const
-  ErrMsg: array[1..6] of String[20] = @/
-       ('', @/
-        'File not found', @/
-        'Path not found', @/
-        'Too many open files', @/
-        'Disk read error', @/
-        'Disk write error'
-       );
 @ Now, we have accommodator specific options.
 
 @<Interface for accommodator command line options@>=
 {Accommodator specific options:}
 
 var
- InsertHiddenFiles,
- VocabulariesProcessing,FormatsProcessing,NotationsProcessing,
- SignatureProcessing,
- ConstructorsProcessing,
- ClustersProcessing,IdentifyProcessing,ReductionProcessing,PropertiesProcessing,
- DefinitionsProcessing,EqualitiesProcessing,ExpansionsProcessing,
- TheoremsProcessing,SchemesProcessing,TheoremListsProcessing,SchemeListsProcessing:boolean;
+ SignatureProcessing, {unused}
+ TheoremListsProcessing, {unused}
+ SchemeListsProcessing, {unused}
+ InsertHiddenFiles, {Include \.{HIDDEN} automatically?}
+ FormatsProcessing:Boolean;
 
-procedure @? InitAccOptions; @t\2@>
-procedure @? GetAccOptions;
-@ @<Interface for |MakeEnv| command line options@>=
-{MakeEnv specific options:}
 
-var Accomodation : boolean = false;
-    NewAccom : boolean = false;
+var {Registrations-related configuration for Accommodator}
+ ClustersProcessing,IdentifyProcessing,ReductionProcessing,PropertiesProcessing: Boolean;
 
-procedure @? GetMEOptions;
+var {The environ-specifical Accommodator options}
+ VocabulariesProcessing, {Accommodator will run \\{ProcessVocabularies}}
+ NotationsProcessing, {Accommodator processes \.{notations} directive}
+ ConstructorsProcessing, {Will the Accommodator determine which constructor to use for identifier?}
+ DefinitionsProcessing,EqualitiesProcessing,ExpansionsProcessing, {Definition environs}
+ TheoremsProcessing,SchemesProcessing: Boolean;
 
-@ @<Interface for transfer-specific command line options@>=
-{Transfer specific options:}
+@ Among the state variables introduced in the \texttt{mconsole} unit,
+there is one for handling \.{SIGINT}, \.{SIGQUIT}, and \.{SIGTERM} signals. \Ithink{The other \UNIX/
+signals should probably be supported, as well.}
 
-var PublicLibr: boolean;
-
-procedure @? GetTransfOptions;
-
-@ @<Interface for other command line options@>=
+@<Interface for other command line options@>=
 {Other options:}
 
 var
- CtrlCPressed : boolean = false;
- LongLines : boolean = false;
- QuietMode : boolean = false;
- StopOnError: boolean = false;
+ CtrlCPressed : Boolean = false; {\.{SIGINT}, \.{SIGQUIT}, or \.{SIGTERM} signal received?}
+ LongLines : Boolean = false; {Allow lines longer than 80 characters}
+ QuietMode : Boolean = false; {Don't print anything to the console?}
+ StopOnError: Boolean = false; @#
 
- FinishingPass: boolean = false;
- ParserOnly : boolean = false;
- AnalyzerOnly : boolean = false;
- CheckerOnly : boolean = false;
- SwitchOffUnifier: boolean = false;
+ FinishingPass: Boolean = false;
+ ParserOnly : Boolean = false; {No analyzing or checking}
+ AnalyzerOnly : Boolean = false; {Analyze, but no parsing or checking}
+ CheckerOnly : Boolean = false; {Check, but do not re-analyze or re-parse}
+ SwitchOffUnifier: Boolean = false; @#
 
- AxiomsAllowed: boolean = false;
-
-procedure @? GetOptions;
+ AxiomsAllowed: Boolean = false;
 
 @ \endinterface
 The implementation begins by initializing the Accommodator specific options.
 
-@<Implementation for mconsole.pas@>=
+@ @<Interface for accommodator command line options@>=
+procedure @? InitAccOptions;
+
+@ @<Implementation for mconsole.pas@>=
 procedure InitAccOptions;
 begin
  InsertHiddenFiles:=true;
@@ -1059,9 +1436,10 @@ begin
 end;
 
 @ Similarly, we want to be able to \emph{reset} the configuration for
-the accommodator to the default (initial) values.
+the accommodator to the default (initial) values. This is a private
+helper function for other things in the \texttt{mconsole}.
 
-@p
+@ @<Implementation for mconsole.pas@>=
 procedure ResetAccOptions;
 begin
  InsertHiddenFiles:=true;
@@ -1107,8 +1485,8 @@ then toggles |ConstructorsProcessing|, |SignatureProcessing|,\hfill\break
 \item{$\bullet$} \texttt{-h} will set |InsertHiddenFalse| to false
 (presumably preventing Mizar from loading the ``hidden'' article,
 i.e., the primitive notions
-of \texttt{object}, \texttt{set}, \texttt{in}, \texttt{=}, and
-inequality will not be loaded).
+of ``\texttt{object}'', ``\texttt{<>}'', ``\texttt{in}'', and ``\texttt{strict}'' will
+not be loaded).
 
 \item{$\bullet$} \texttt{-l} will toggle |LongLines| to true (allowing
 lines with more than 80 characters)
@@ -1121,7 +1499,10 @@ lines with more than 80 characters)
 Note this processes \emph{all} command line options \emph{in order}.
 So \texttt{-e -v} will produce the same results as \texttt{-v} alone.
 
-@p
+@<Interface for accommodator command line options@>=
+procedure @? GetAccOptions;
+
+@ @<Implementation for mconsole.pas@>=
 procedure GetAccOptions;
  var i,j: integer;
 begin
@@ -1165,7 +1546,16 @@ end;
 @ Similarly, we have |MakeEnv| specific options parsed from the
 command line flags.
 
-@p
+
+@ @<Interface for |MakeEnv| command line options@>=
+{MakeEnv specific options:}
+
+var Accomodation : Boolean = false;
+    NewAccom : Boolean = false;
+
+procedure @? GetMEOptions;
+
+@ @<Implementation for mconsole.pas@>=
 procedure GetMEOptions;
  var i,j: integer;
 begin
@@ -1187,7 +1577,10 @@ Notably, there is a feature to allow axioms,@^Axioms@> which is completely
 undocumented (and probably for good reason!). The axioms must appear
 in ``\texttt{.axm}'' files.
 
-@p
+@<Interface for other command line options@>=
+procedure @? GetOptions;
+
+@ @<Implementation for mconsole.pas@>=
 procedure GetOptions;
  var i,j: integer;
 begin
@@ -1211,9 +1604,16 @@ end;
 
 @ Transfer specific options.
 
-@p
+@<Interface for transfer-specific command line options@>=
+{Transfer specific options:}
+
+var PublicLibr: Boolean; {use ``\texttt{prel/}\<Article-name>\texttt{/}'' subdirectory?}
+
+procedure @? GetTransfOptions;
+
+@ @<Implementation for mconsole.pas@>=
 procedure GetTransfOptions;
- var lOption: String;
+ var lOption: string;
 begin
  PublicLibr:=false;
  if ParamCount>=2 then
@@ -1226,8 +1626,19 @@ end;
 @ We have a number of functions useful for ``drawing'', i.e.,
 reporting progress and results (and so on).
 
-@p
-var gComment: String = '';
+
+@<Report results to command line@>= 
+procedure @? InitDisplayLine(const aComment: string); @t\2@>
+procedure @? NoDisplayLine(fLine,fErrNbr: integer); @t\2@> @#
+
+@t\4@>@<|DisplayLine| global constant@>@; @#
+
+@ The \\{gComment} is used only within this module. Mizar stores the
+name of the pass (parser, MSM, analyzer, checker) in \\{gComment},
+which is used in a helper function to print the progress to the console.
+
+@<Implementation for mconsole.pas@>=
+var gComment: string = ''; {The pass currently being run}
 @#
 disable_io_checking;
 @#
@@ -1235,33 +1646,51 @@ procedure NoDisplayLine(fLine,fErrNbr: integer);
 begin
 end;
 @#
-procedure InitDisplayLine(const aComment:String);
+procedure InitDisplayLine(const aComment: string);
 begin
  gComment:=aComment;
  WriteLn;
  write(aComment);
  DisplayLine:=DisplayLineInCurPos
 end;
-@#
-procedure DrawStr(const aStr:String);
+
+@ @<Report results to command line@>= 
+procedure @? DrawMizarScreen(const aApplicationName: string); @t\2@>
+procedure @? DrawArticleName(const fName: string); @t\2@> @#
+
+procedure @? DrawStr(const aStr: string); @t\2@>
+procedure @? FinishDrawing;
+
+@ @<Implementation for mconsole.pas@>=
+procedure DrawStr(const aStr: string);
 begin write(aStr) @+ end;
 @#
 procedure FinishDrawing;
 begin WriteLn; end;
 @#
-procedure DrawTPass(const fPassName:String);
+procedure DrawTPass(const fPassName: string);
 begin write(fPassName) @+ end;
 @#
-procedure DrawMizarScreen(const aApplicationName:String);
+procedure DrawMizarScreen(const aApplicationName: string);
 begin
  WriteLn(aApplicationName,', ',PCMizarVersionStr,' (',PlatformNameStr,')');
  WriteLn(Copyright);
 end;
-@#
+
+@ The \\{Noise} parameter rings the bell three times (the |^G| is
+Caret notation ``Ctrl+G'', which is \ASCII/ code 10 \.{BEL}). For
+non-Windows systems, this will write three \.{BEL} characters to the
+standard output stream. Windows will do nothing.
+
+@<Report results to command line@>=
+procedure @? EmptyParameterList; @t\2@>
+procedure @? Noise;
+
+@ @<Implementation for mconsole.pas@>=
 procedure Noise; @t\2@>
 begin @|@/
   if_not_def(WIN32)
-  write(^G^G^G);
+  write(^G^G^G); @+
   endif;
 end;
 @#
@@ -1272,32 +1701,49 @@ begin
  halt(2);
 end;
 
-@ More such procedures, reporting the article processed, the time, etc.
+@ When the user asks Mizar to verify an article, Mizar will begin by
+writing to the standard output stream ``Processing: \<Article name>''.
 
-@p
-procedure DrawArticleName(const fName:String);
+@<Implementation for mconsole.pas@>=
+procedure DrawArticleName(const fName: string);
 begin
  WriteLn('Processing: ',fName); @+
 end;
-@#
-procedure DrawPass(const aName: String);
+
+@ @<Report results to command line@>=
+procedure @? DrawPass(const aName: string); @t\2@>
+procedure @? DrawTime(const aTime: string); @t\2@>
+procedure @? DrawVerifierExit(const aTime: string);
+
+@ @<Implementation for mconsole.pas@>=
+procedure DrawPass(const aName: string);
 begin
  WriteLn;
  write(aName); @+
 end;
 @#
-procedure DrawTime(const aTime: String);
+procedure DrawTime(const aTime: string);
 begin
  write(aTime); @+
 end;
 @#
-procedure DrawVerifierExit(const aTime: String);
+procedure DrawVerifierExit(const aTime: string);
 begin
  WriteLn;
  WriteLn('Time of mizaring:',aTime);
 end;
 
-@ @p
+@ On non-Windows machines, |^M| is used in \\{write} to add a carriage
+return. Windows machines will require |#13| instead. This is because
+|^M| is ``Ctrl+M'' which has \ASCII/ code 77-64=13 (see, it's the same
+as |#13|).
+
+% https://stackoverflow.com/a/50188627
+
+@<Report results to command line@>=
+procedure @? DisplayLineInCurPos(fLine,fErrNbr: integer);
+
+@<Implementation for mconsole.pas@>=
 procedure DisplayLineInCurPos(fLine,fErrNbr: integer);
 begin
  if (not CtrlCPressed) and (not QuietMode)then
@@ -1314,10 +1760,18 @@ begin
   end; 
 end;
 
-@ \label{mconsole:drawmessage}
+@ When Mizar needs to notify the user that a critical error has
+occurred, \\{DrawMessage} will be used for communicating it. By
+``critical error'', I mean things like Mizar cannot open the file, or
+there was a stack overflow, or the hard drive exploded.
 
-@p
-procedure DrawMessage(const Msg1,Msg2:String);
+\label{mconsole:drawmessage}
+
+@<Report results to command line@>=
+procedure @? DrawMessage(const Msg1,Msg2: string);
+
+@ @<Implementation for mconsole.pas@>=
+procedure DrawMessage(const Msg1,Msg2: string);
  var Lh: byte;
 begin
   Noise;
@@ -1333,15 +1787,29 @@ begin
      WriteLn(' ****');
    end;
 end;
-@ \label{mconsole:drawioresult}
 
-@p
+@ The \texttt{monitor.pas} file uses \\{BugInProcessor} when reporting
+errors. It's a logging function for severe situations.
+
+@<Report results to command line@>=
+procedure @? BugInProcessor;
+
+@ @<Implementation for mconsole.pas@>=
 procedure BugInProcessor;
 begin
   DrawMessage('Internal Error',''); @+
 end;
-@#
-procedure DrawIOResult(const FileName:String; I:byte);
+
+@ When \\{reset} (or \\{rewrite}) fails, Mizar will cease. We should
+specifically report the situation to the user, because they can
+address the situation whereas we cannot.
+
+\label{mconsole:drawioresult}
+@<Report results to command line@>=
+procedure @? DrawIOResult(const FileName: string; @+ I:byte);
+
+@ @<Implementation for mconsole.pas@>=
+procedure DrawIOResult(const FileName: string;@+ I:byte);
 begin
  if I in [2..6,12,100] then
    begin
@@ -1352,7 +1820,24 @@ begin
  halt(1);
 end;
 
-@ @p
+@ We also have a constant for error messages commonly encountered.
+
+@<Constants for common error messages reported to console@>=
+const
+  ErrMsg: array[1..6] of string[20] = @/
+       ('', @/
+        'File not found', @/
+        'Path not found', @/
+        'Too many open files', @/
+        'Disk read error', @/
+        'Disk write error'
+       );
+
+
+@ @<Report results to command line@>=
+procedure @? DrawErrorsMsg(aErrorNbr: integer);
+
+@ @<Implementation for mconsole.pas@>=
 procedure DrawErrorsMSg(aErrorNbr: integer);
 begin
   if aErrorNbr > 0 then
@@ -1364,425 +1849,6 @@ begin
       WriteLn('**** ', aErrorNbr, ' errors detected');
   end;
 end;
-
-@* [F] PC Mizar Version.
-This is used to track the version of Mizar.
-
-@<pcmizver.pas@>=
-  @<GNU License@>
-unit pcmizver;
-
-interface @|@#
-
-const  @/
-   PCMizarReleaseNbr = 8; @/
-   PCMizarVersionNbr = 1; @/
-   PCMizarVariantNbr = 14; @#
-
-   CurrentYear = 2025; @#
-
-@{@&$IFDEF WIN32@}
-   DirSeparator = '\'; @/
-@{@&$ELSE@}
-   DirSeparator = '/'; @/
-@{@&$ENDIF@}
-
-@ There are only four functions provided by this module.
-
-\interface
-@p
-function @? PCMizarVersionStr: String;
-function @? VersionStr: String;
-function @? PlatformNameStr: String;
-function @? Copyright : String;
-@ \endinterface
-Their implementation is relativiely straightforward: just print the
-appropriate constants to the screen.
-
-@p
-implementation @|@#
-function Copyright : String;
-var s:String;
-begin
- Str(CurrentYear,s);
- Copyright:='Copyright (c) 1990-'+s+' Association of Mizar Users';
-end;
-
-@ @p
-function  VersionStr: String;
- var lRel,lVer,lVar: String[2]; lStr:String;
-begin
- Str(PCMizarReleaseNbr,lRel);
- Str(PCMizarVersionNbr,lVer);
- Str(PCMizarVariantNbr,lVar);
- if length(lVar) = 1 then lVar:='0'+lVar; @/
-@{@&$IFDEF VERALPHA@} 
- lStr:='-alpha'; @/
-@{@&$ELSE@}
- lStr:=''; @/
-@{@&$ENDIF@} @/
- VersionStr:=lRel+'.'+lVer+'.'+lVar+lStr;
-end;
-
-@ There are a number of platforms supported, a surprisingly large
-number. If we were to support more platforms (other \BSD/s, \BeOS/, \GNU/
-Hurd, etc.), then we would need to update this function. To see what
-platforms are predefined for FreePascal, consult:
-\item{$\bullet$}\href{https://wiki.freepascal.org/Platform_defines}{\texttt{https://wiki.freepascal.org/Platform_defines}}
-
-\noindent Ostensibly, we could extend the platform name string to
-display ``generic \UNIX/'' (and even ``generic \BSD/''), as well as
-``generic Windows''.
-
-@p
-function  PlatformNameStr: String;
-var lStr: String;
-begin
-   lStr:=''; @#
-   
-   if_def(WIN32) lStr:=lStr+'Win32'; @+ end_if
-   if_def(LINUX) lStr:=lStr+'Linux'; @+ end_if
-   if_def(SOLARIS) lStr:=lStr+'Solaris'; @+ end_if
-   if_def(FREEBSD) lStr:=lStr+'FreeBSD'; @+ end_if
-   if_def(DARWIN) lStr:=lStr+'Darwin'; @+ end_if @#
-
-   if_def(FPC) lStr:=lStr+'/FPC'; @+ end_if
-   if_def(DELPHI) lStr:=lStr+'/Delphi'; @+ end_if @#
-
-   PlatformNameStr:=lStr;
-end;
-
-@ The last function in the \texttt{pcmizver.pas} file provides a
-String for the Mizar version.
-
-@p
-function  PCMizarVersionStr: String;
-begin
- PCMizarVersionStr:='Mizar Ver. '+VersionStr;
-end;
-@t\2@>
-
-end.
-
-@* [F] Mizar internal state.
-As far as \emph{processing} an article, Mizar works like a ``batch compiler''
-and works in multiple ``passes''.
-
-@<mstate.pas@>=
-  @<GNU License@>
-
-unit mstate;
-
-interface @;@|@/
-
-@<Interface for \texttt{mstate.pas}@> @#
-
-implementation @; @|@/
-
-uses mizenv, pcmizver, monitor, errhan, mconsole, mtime @/
-mdebug @+ ,info @+ end_mdebug @+; @t\1@>
-
-var PassTime: longint; @|@/
-
-@<Implementation for \texttt{mstate.pas}@>
-
-@t\2@>
-end
-
-@ @<Interface for \texttt{mstate.pas}@>=
-procedure @? InitPass(const aPassName: String); @t\2@>
-procedure @? FinishPass; @t\2@>
-procedure @? InitProcessing(const aProgName,aExt: String); @t\2@>
-procedure @? ProcessingEnding;
-
-@ The implementation amounts to, well, these four functions. We have a
-couple ``private'' functions to help us: |MError| and |MizarExitProc|.
-
-@<Implementation for \texttt{mstate.pas}@>=
-procedure InitPass(const aPassName: String);
-begin
- CurPos.Line:=1;
- CurPos.Col:=1;
- InitDisplayLine(aPassName);
- TimeMark(PassTime);
-end;
-
-procedure FinishPass;
-begin
- FinishingPass:=true;
- if QuietMode then DisplayLine(CurPos.Line,ErrorNbr);
- FinishingPass:=false;
- DrawTime('  '+ReportTime(PassTime));
-end;
-
-procedure MError(Pos:Position; ErrNr:integer);
-begin
- WriteError(Pos,ErrNr);
- DisplayLine(CurPos.Line,ErrorNbr);
-end;
-@ We also have |MizarExitProc| as a private ``helper'' function.
-
-@p
-var _ExitProc: pointer;
-procedure MizarExitProc;
-begin
- ExitProc := _ExitProc; @/
- disable_io_checking;
- if IOResult<>0 then;
- if not StopOnError then DisplayLine(CurPos.Line,ErrorNbr);
- PutError:=WriteError;
- DrawVerifierExit(ReportTime(gStartTime));
-{Halt(ErrorCode);}
- enable_io_checking;
-end;
-
-@ @p
-procedure InitProcessing(const aProgName,aExt: String);
-begin
-  DrawMizarScreen(aProgName);
-  if ParamCount<1 then EmptyParameterList;
-  GetArticleName;
-  GetEnvironName;
-  DrawArticleName(MizFileName+aExt);
-  GetOptions;
-  InitExitProc;
-  FileExam(MizFileName+aExt);
-  _ExitProc := ExitProc;
-  ExitProc:=@@MizarExitProc;
-  PutError:=MError;
-  OpenErrors(MizFileName); @/
-  mdebug
-  OpenInfoFile; @+
-  end_mdebug
-end;
-@ At the end, we should report the number of errors (if any were encountered).
-
-@p
-procedure ProcessingEnding;
-begin
- if ErrorNbr > 0 then
-  begin
-   DrawErrorsMsg(ErrorNbr);
-   FinishDrawing;
-  end;
-end;
-
-@* [F] Monitor.
-
-@<monitor.pas@>=
-  @<GNU License@>
-
-unit monitor;
-
-interface @;@|@/
-
-procedure @? InitExitProc;
-
-implementation @; @|@/
-
-uses @|@/
-@{@&$IFDEF FPC@} @/
- @t\quad @> @{@&$IFNDEF WIN32@} @/
-   baseunix, @/
- @t\quad @> @{@&$ENDIF@} @/
-@{@&$ENDIF@} @/
-mizenv,errhan,mconsole @/
-@{@&$IFDEF WIN32@} @+ ,windows @{@&$ENDIF@}
-mdebug @+ ,info @+ end_mdebug @+@+;@#
-
-var
-   _ExitProc: pointer;
-   _IOResult:integer; @|@/
-
-@<Implementation for \texttt{monitor.pas}@>
-
-@t\2@>
-end
-
-@ There are a few private helper functions in this module.
-
-@<Implementation for \texttt{monitor.pas}@>=
-procedure _Halt_(ErrorCode: word);
-begin
-  _IOResult:=IOResult;
-   ErrorAddr:=nil;
-  if ErrorCode>1 then
-   case ErrorCode of
-    2..4:     begin ErrImm(1000+ErrorCode);
-                DrawMessage('I/O error',ErrMsg[ErrorCode]) @+
-              end;
-    5..6:     begin ErrImm(1000+ErrorCode); BugInProcessor @+ end;
-    12:       begin ErrImm(1000+ErrorCode); BugInProcessor @+ end;
-    97,98,99:
-     begin ErrImm(RTErrorCode);
-       @<Handle runtime error cases for \texttt{monitor.pas}@>
-     end;
-    100..101: begin ErrImm(1000+ErrorCode);
-                DrawMessage('I/O error',ErrMsg[ErrorCode-95]);
-              end;
-    102..106: begin ErrImm(1000+ErrorCode); BugInProcessor @+ end;
-    150..162: begin ErrImm(1000+ErrorCode);
-                DrawMessage('I/O error','Critical disk error');
-              end;
-    200..201: begin ErrImm(1000+ErrorCode); BugInProcessor @+ end;
-    202:      begin ErrImm(1000+ErrorCode); DrawMessage('Stack overflow error','') @+ end;
-    203,204:  begin ErrImm(1000+ErrorCode); DrawMessage('Heap overflow error','') @+ end;
-    208:      begin ErrImm(1000+ErrorCode); DrawMessage('Overlay manager not installed','') @+ end;
-    209:      begin ErrImm(1000+ErrorCode); DrawMessage('Overlay file read error','') @+ end;
-    210..212: begin ErrImm(1000+ErrorCode); BugInProcessor @+ end;
-    213:      begin ErrImm(1000+ErrorCode); DrawMessage('Collection Index out of range','') @+ end;
-    214:      begin ErrImm(1000+ErrorCode); DrawMessage('Collection overflow error','') @+ end;
-    215:      begin ErrImm(1000+ErrorCode); DrawMessage('Arithmetic overflow error','') @+ end;
-    216:      begin ErrImm(1000+ErrorCode); DrawMessage('General Protection fault','') @+ end;
-    217:      begin ErrImm(1000+ErrorCode); DrawMessage('Segmentation fault','') @+ end;
-    218..254: begin ErrImm(1000+ErrorCode); BugInProcessor @+ end;
-    255:      ErrImm(1000+ErrorCode);
-    othercases
-     begin ErrImm(ErrorCode);
-      if OverflowErroor then
-       DrawMessage('Mizar parameter overflow error','')
-      else BugInProcessor
-     end;
-   endcases;
-  CloseErrors;
-  ExitProc:=_ExitProc;
-  if (ErrorCode = 0) and (ErrorNbr <> 0) then Halt(1) else Halt(ErrorCode);
-end;
-
-@ @<Handle runtime error cases for \texttt{monitor.pas}@>=
-case RTErrorCode of
-  800,804:  DrawMessage('Library Corrupted','');
-  857:      DrawMessage('Connection Fault','');
-  {900..999: DrawMessage('Mizar parameter overflow: '+IntToStr(RTErrorCode),'');}
-  1255:     DrawMessage('User break','');
-  othercases
-    if OverflowErroor then
-      DrawMessage('Mizar parameter overflow: '+IntToStr(RTErrorCode),'')
-    else BugInProcessor
-endcases;
-
-@ The |MizExitProc| is a private ``bail out'' function.
-
-@<Implementation for \texttt{monitor.pas}@>=
-procedure MizExitProc;
-begin @|@/
-@{@&$IFDEF IODEBUG@}
-  ExitProc:=_ExitProc; @/
-@{@&$ELSE@}
-  _Halt_(ExitCode); @/
-@{@&$ENDIF@}
-end;
-
-@ We use the |MizExitProc| to initialize the |ExitProc| pointer.
-
-@p
-procedure InitExitProc;
-begin ExitProc := @@MizExitProc end;
-
-@ \node{Initializing Control.}%
-This is a \emph{heavily} system dependent piece of code. There are two
-ways to implement it (one way for Windows, another way for everyone
-else). Once we're done, we have to initialize the |_ExitProc| and
-invoke |InitCtrl|.
-
-@p
-@<Non-windows FreePascal implemenation for |InitCtrl|@>@; @#
-
-@<Windows implemenation for |InitCtrl|@>@;@#
-
-begin
-  _ExitProc := ExitProc;
-   InitCtrl;
-end.
-
-@ @<Non-windows FreePascal implemenation for |InitCtrl|@>=
-@{@&$IFDEF FPC@}
-@t\quad @> @{@&$IFNDEF WIN32@}
-procedure CatchSignal(aSig : integer);cdecl;
-begin @t\1@> @/
- case aSig of
-@t\qquad @>    SIGINT,SIGQUIT,SIGTERM:
-     begin
-      CtrlCPressed:=true;
-      RunTimeError(1255); @+
-     end; @+
- endcases; @t\2@>
-end; @#
-
-var NewSignal, OldSigInt : SignalHandler; @#
-
-procedure InitCtrl;
-begin
-  NewSignal:=SignalHandler(@@CatchSignal);
-  OldSigInt:=fpSignal(SIGINT,NewSignal);
-  OldSigInt:=fpSignal(SIGQUIT,NewSignal);
-  OldSigInt:=fpSignal(SIGTERM,NewSignal);
-end; @|@/
-@t\quad @> @{@&$ENDIF@}
-@{@&$ENDIF@}
-
-@ Microsoft breaks everything. This is a mess because of them.
-
-@<Windows implemenation for |InitCtrl|@>=
-@{@&$IFDEF WIN32@} @t\1@> @/
-@<Windows implemenation for |CtrlSignal|@>@; @/
-@{@&$IFDEF FPC@} @t\1@> @/
-@<FreePascal implementation of |InitCtrl| for Windows@>@; @t\2@>
-@t\4@> @{@&$ENDIF@}@/
-@{@&$IFDEF DELPHI@} @t\1@> @/
-@<Delphi implementation of |InitCtrl| for Windows@>@;  @t\2@>
-@t\4@>  @{@&$ENDIF@} @t\2@>@/
- @{@&$ENDIF@}
-
-@ The FreePascal implementation is pretty succinct thanks to the
-libraries they provide.
-
-@<FreePascal implementation of |InitCtrl| for Windows@>=
-procedure InitCtrl;
-begin
- SetConsoleCtrlHandler(CtrlSignal, TRUE); @+
-end;
-
-@ @<Delphi implementation of |InitCtrl| for Windows@>=
-procedure InitCtrl;
-var
-  ConsoleMode,lConsoleMode: DWORD;
-begin
-  if GetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), ConsoleMode) then
-  begin
-    lConsoleMode := ConsoleMode or ENABLE_PROCESSED_INPUT;
-     {Treat Ctrl+C as a signal}
-    if SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), lConsoleMode) then
-    begin
-      SetConsoleCtrlHandler(@@CtrlSignal, TRUE);
-    end;
-  end;
-end;
-
-@ Windows requires a helper function |CtrlSignal| for this Microsoft
-mania.
-
-@<Windows implemenation for |CtrlSignal|@>=
-@<FreePascal declaration of |CtrlSignal| for Windows@>@;
-@<Delphi declaration of |CtrlSignal| for Windows@>@;
-begin
-  {TRUE: do not call next handler in the queue, FALSE: call it}
-  CtrlCPressed:=true;
-  RunTimeError(1255);
-  CtrlSignal := true;
-  {ExitProcess(1);}
-end;
-
-@ @<FreePascal declaration of |CtrlSignal| for Windows@>=
-@{@&$IFDEF FPC@}
-function CtrlSignal(aSignal: DWORD): WINBOOL ;stdcall; @/
-@{@&$ENDIF@}
-
-@ @<Delphi declaration of |CtrlSignal| for Windows@>=
-@{@&$IFDEF DELPHI@} 
-function CtrlSignal(aSignal: DWORD): BOOL; cdecl; @/
-@t\hskip-1em @>  @{@&$ENDIF@}
-
 
 @* [F] Error handling.
 
@@ -1987,6 +2053,309 @@ begin
  RunError(99);
 end;
 
+@* [F] Info file handling.
+I don't think this is actually used anywhere, but I am including it
+for completeness.
+
+@<info.pas@>=
+  @<GNU License@>
+
+unit info;
+
+interface
+
+uses errhan;
+
+var InfoFile: text; @#
+
+procedure InfoChar (C: char); @t\2@>
+procedure InfoInt (I: integer); @t\2@>
+procedure InfoWord (C: char; I: integer); @t\2@>
+procedure InfoNewLine; @t\2@>
+procedure InfoString (S: string); @t\2@>
+procedure InfoPos (Pos: Position); @t\2@>
+procedure InfoCurPos; @t\2@> @#
+
+procedure OpenInfoFile; @t\2@>
+procedure CloseInfofile; @t\2@> @#
+
+implementation @|@#
+
+uses mizenv,mconsole; @#
+
+procedure InfoChar (C: char);
+begin write(InfoFile,C) end; @#
+
+procedure InfoInt (I: integer);
+begin write(InfoFile,I,' ') end; @#
+
+procedure InfoWord (C: char; I: integer);
+begin write(InfoFile,C,I,' ') end; @#
+
+procedure InfoNewLine;
+begin WriteLn(InfoFile) end; @#
+
+procedure InfoString (S: string);
+begin write(InfoFile,S) end; @#
+
+procedure InfoPos (Pos: Position);
+begin with Pos do write(InfoFile,Line,' ',Col,' ') end; @#
+
+procedure InfoCurPos;
+begin with CurPos do write(InfoFile,Line,' ',Col,' ') end;
+
+@ There are a few helper functions which is more than ``Write
+$\langle$data type$\rangle$ to info file''.
+
+@p
+var _InfoExitProc:pointer;
+
+procedure InfoExitProc;
+begin
+   CloseInfoFile;
+   ExitProc:=_InfoExitProc;
+end; @#
+
+procedure OpenInfoFile;
+begin
+   Assign(InfoFile,MizFileName+'.inf');
+   Rewrite(InfoFile);
+   WriteLn(InfoFile,'Mizared article: "',MizFileName,'"');
+   _InfoExitProc := ExitProc;
+   ExitProc:=@@InfoExitProc;
+end; @#
+
+procedure CloseInfofile;
+begin close(InfoFile) end; @#
+
+end.
+
+
+@* [F] Monitor.
+
+@<monitor.pas@>=
+  @<GNU License@>
+
+unit monitor;
+
+interface @;@|@/
+
+procedure @? InitExitProc; @t\2@>
+
+implementation @; @|@/
+
+@<Units used by \texttt{monitor.pas}@>;@#
+
+var
+   _ExitProc: pointer;
+   _IOResult:integer; @|@/
+
+@<Implementation for \texttt{monitor.pas}@>
+
+@t\2@>
+end
+
+@ The monitor is used for reporting errors, which is heavily system
+dependent. The modules used by it are\dots wonky. We need
+the \\{baseunix} unit for \UNIX/ systems, and the \\{windows} unit for
+Windows-based systems.
+
+@<Units used by \texttt{monitor.pas}@>=
+uses @|@/
+@{@&$IFDEF FPC@} @/
+ @t\quad @> @{@&$IFNDEF WIN32@} @/
+   baseunix, @/
+ @t\quad @> @{@&$ENDIF@} @/
+@{@&$ENDIF@} @/
+mizenv,errhan,mconsole @/
+@{@&$IFDEF WIN32@} @+ ,windows @{@&$ENDIF@}
+mdebug @+ ,info @+ end_mdebug
+
+@ There are a few private helper functions in this module.
+
+@<Implementation for \texttt{monitor.pas}@>=
+procedure _Halt_(ErrorCode: word);
+begin
+  _IOResult:=IOResult;
+   ErrorAddr:=nil;
+  if ErrorCode>1 then
+   case ErrorCode of
+    2..4:     begin ErrImm(1000+ErrorCode);
+                DrawMessage('I/O error',ErrMsg[ErrorCode]) @+
+              end;
+    5..6:     begin ErrImm(1000+ErrorCode); BugInProcessor @+ end;
+    12:       begin ErrImm(1000+ErrorCode); BugInProcessor @+ end;
+    97,98,99:
+     begin ErrImm(RTErrorCode);
+       @<Handle runtime error cases for \texttt{monitor.pas}@>
+     end;
+    100..101: begin ErrImm(1000+ErrorCode);
+                DrawMessage('I/O error',ErrMsg[ErrorCode-95]);
+              end;
+    102..106: begin ErrImm(1000+ErrorCode); BugInProcessor @+ end;
+    150..162: begin ErrImm(1000+ErrorCode);
+                DrawMessage('I/O error','Critical disk error');
+              end;
+    200..201: begin ErrImm(1000+ErrorCode); BugInProcessor @+ end;
+    202:      begin ErrImm(1000+ErrorCode); DrawMessage('Stack overflow error','') @+ end;
+    203,204:  begin ErrImm(1000+ErrorCode); DrawMessage('Heap overflow error','') @+ end;
+    208:      begin ErrImm(1000+ErrorCode); DrawMessage('Overlay manager not installed','') @+ end;
+    209:      begin ErrImm(1000+ErrorCode); DrawMessage('Overlay file read error','') @+ end;
+    210..212: begin ErrImm(1000+ErrorCode); BugInProcessor @+ end;
+    213:      begin ErrImm(1000+ErrorCode); DrawMessage('Collection Index out of range','') @+ end;
+    214:      begin ErrImm(1000+ErrorCode); DrawMessage('Collection overflow error','') @+ end;
+    215:      begin ErrImm(1000+ErrorCode); DrawMessage('Arithmetic overflow error','') @+ end;
+    216:      begin ErrImm(1000+ErrorCode); DrawMessage('General Protection fault','') @+ end;
+    217:      begin ErrImm(1000+ErrorCode); DrawMessage('Segmentation fault','') @+ end;
+    218..254: begin ErrImm(1000+ErrorCode); BugInProcessor @+ end;
+    255:      ErrImm(1000+ErrorCode);
+    othercases
+     begin ErrImm(ErrorCode);
+      if OverflowErroor then
+       DrawMessage('Mizar parameter overflow error','')
+      else BugInProcessor
+     end;
+   endcases;
+  CloseErrors;
+  ExitProc:=_ExitProc;
+  if (ErrorCode = 0) and (ErrorNbr <> 0) then Halt(1) else Halt(ErrorCode);
+end;
+
+@ @<Handle runtime error cases for \texttt{monitor.pas}@>=
+case RTErrorCode of
+  800,804:  DrawMessage('Library Corrupted','');
+  857:      DrawMessage('Connection Fault','');
+  {900..999: DrawMessage('Mizar parameter overflow: '+IntToStr(RTErrorCode),'');}
+  1255:     DrawMessage('User break','');
+  othercases
+    if OverflowErroor then
+      DrawMessage('Mizar parameter overflow: '+IntToStr(RTErrorCode),'')
+    else BugInProcessor
+endcases;
+
+@ The |MizExitProc| is a private ``bail out'' function.
+
+@<Implementation for \texttt{monitor.pas}@>=
+procedure MizExitProc;
+begin @|@/
+@{@&$IFDEF IODEBUG@}
+  ExitProc:=_ExitProc; @/
+@{@&$ELSE@}
+  _Halt_(ExitCode); @/
+@{@&$ENDIF@}
+end;
+
+@ We use the |MizExitProc| to initialize the |ExitProc| pointer.
+
+@p
+procedure InitExitProc;
+begin ExitProc := @@MizExitProc end;
+
+@ \node{Initializing Control.}%
+This is a \emph{heavily} system dependent piece of code. There are two
+ways to implement it (one way for Windows, another way for everyone
+else). Once we're done, we have to initialize the |_ExitProc| and
+invoke |InitCtrl|.
+
+@p
+@<Non-windows FreePascal implemenation for |InitCtrl|@>@; @#
+
+@<Windows implemenation for |InitCtrl|@>@;@#
+
+begin
+  _ExitProc := ExitProc;
+   InitCtrl;
+end.
+
+@ @<Non-windows FreePascal implemenation for |InitCtrl|@>=
+@{@&$IFDEF FPC@}
+@t\quad @> @{@&$IFNDEF WIN32@}
+procedure CatchSignal(aSig : integer);cdecl;
+begin @t\1@> @/
+ case aSig of
+@t\qquad @>    SIGINT,SIGQUIT,SIGTERM:
+     begin
+      CtrlCPressed:=true;
+      RunTimeError(1255); @+
+     end; @+
+ endcases; @t\2@>
+end; @#
+
+var NewSignal, OldSigInt : SignalHandler; @#
+
+procedure InitCtrl;
+begin
+  NewSignal:=SignalHandler(@@CatchSignal);
+  OldSigInt:=fpSignal(SIGINT,NewSignal);
+  OldSigInt:=fpSignal(SIGQUIT,NewSignal);
+  OldSigInt:=fpSignal(SIGTERM,NewSignal);
+end; @|@/
+@t\quad @> @{@&$ENDIF@}
+@{@&$ENDIF@}
+
+@ Microsoft breaks everything. This is a mess because of them.
+
+@<Windows implemenation for |InitCtrl|@>=
+@{@&$IFDEF WIN32@} @t\1@> @/
+@<Windows implemenation for |CtrlSignal|@>@; @/
+@{@&$IFDEF FPC@} @t\1@> @/
+@<FreePascal implementation of |InitCtrl| for Windows@>@; @t\2@>
+@t\4@> @{@&$ENDIF@}@/
+@{@&$IFDEF DELPHI@} @t\1@> @/
+@<Delphi implementation of |InitCtrl| for Windows@>@;  @t\2@>
+@t\4@>  @{@&$ENDIF@} @t\2@>@/
+ @{@&$ENDIF@}
+
+@ The FreePascal implementation is pretty succinct thanks to the
+libraries they provide.
+
+@<FreePascal implementation of |InitCtrl| for Windows@>=
+procedure InitCtrl;
+begin
+ SetConsoleCtrlHandler(CtrlSignal, TRUE); @+
+end;
+
+@ @<Delphi implementation of |InitCtrl| for Windows@>=
+procedure InitCtrl;
+var
+  ConsoleMode,lConsoleMode: DWORD;
+begin
+  if GetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), ConsoleMode) then
+  begin
+    lConsoleMode := ConsoleMode or ENABLE_PROCESSED_INPUT;
+     {Treat Ctrl+C as a signal}
+    if SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), lConsoleMode) then
+    begin
+      SetConsoleCtrlHandler(@@CtrlSignal, TRUE);
+    end;
+  end;
+end;
+
+@ Windows requires a helper function |CtrlSignal| for this Microsoft
+mania.
+
+@<Windows implemenation for |CtrlSignal|@>=
+@<FreePascal declaration of |CtrlSignal| for Windows@>@;
+@<Delphi declaration of |CtrlSignal| for Windows@>@;
+begin
+  {TRUE: do not call next handler in the queue, FALSE: call it}
+  CtrlCPressed:=true;
+  RunTimeError(1255);
+  CtrlSignal := true;
+  {ExitProcess(1);}
+end;
+
+@ @<FreePascal declaration of |CtrlSignal| for Windows@>=
+@{@&$IFDEF FPC@}
+function CtrlSignal(aSignal: DWORD): WINBOOL ;stdcall; @/
+@{@&$ENDIF@}
+
+@ @<Delphi declaration of |CtrlSignal| for Windows@>=
+@{@&$IFDEF DELPHI@} 
+function CtrlSignal(aSignal: DWORD): BOOL; cdecl; @/
+@t\hskip-1em @>  @{@&$ENDIF@}
+
+
 @* [F] Time utilities.
 This is another heavily ``system dependent'' library.
 
@@ -2130,6 +2499,109 @@ end;
 begin
  TimeMark(gStartTime);
 end.
+
+@* [F] Mizar internal state.
+As far as \emph{processing} an article, Mizar works like a ``batch compiler''
+and works in multiple ``passes''.
+
+@<mstate.pas@>=
+  @<GNU License@>
+
+unit mstate;
+
+interface @;@|@/
+
+@<Interface for \texttt{mstate.pas}@> @#
+
+implementation @; @|@/
+
+uses mizenv, pcmizver, monitor, errhan, mconsole, mtime @/
+mdebug @+ ,info @+ end_mdebug @+; @t\1@>
+
+var PassTime: longint; @|@/
+
+@<Implementation for \texttt{mstate.pas}@>
+
+@t\2@>
+end
+
+@ @<Interface for \texttt{mstate.pas}@>=
+procedure @? InitPass(const aPassName: String); @t\2@>
+procedure @? FinishPass; @t\2@>
+procedure @? InitProcessing(const aProgName,aExt: String); @t\2@>
+procedure @? ProcessingEnding;
+
+@ The implementation amounts to, well, these four functions. We have a
+couple ``private'' functions to help us: |MError| and |MizarExitProc|.
+
+@<Implementation for \texttt{mstate.pas}@>=
+procedure InitPass(const aPassName: String);
+begin
+ CurPos.Line:=1;
+ CurPos.Col:=1;
+ InitDisplayLine(aPassName);
+ TimeMark(PassTime);
+end;
+
+procedure FinishPass;
+begin
+ FinishingPass:=true;
+ if QuietMode then DisplayLine(CurPos.Line,ErrorNbr);
+ FinishingPass:=false;
+ DrawTime('  '+ReportTime(PassTime));
+end;
+
+procedure MError(Pos:Position; ErrNr:integer);
+begin
+ WriteError(Pos,ErrNr);
+ DisplayLine(CurPos.Line,ErrorNbr);
+end;
+@ We also have |MizarExitProc| as a private ``helper'' function.
+
+@p
+var _ExitProc: pointer;
+procedure MizarExitProc;
+begin
+ ExitProc := _ExitProc; @/
+ disable_io_checking;
+ if IOResult<>0 then;
+ if not StopOnError then DisplayLine(CurPos.Line,ErrorNbr);
+ PutError:=WriteError;
+ DrawVerifierExit(ReportTime(gStartTime));
+{Halt(ErrorCode);}
+ enable_io_checking;
+end;
+
+@ @p
+procedure InitProcessing(const aProgName,aExt: String);
+begin
+  DrawMizarScreen(aProgName);
+  if ParamCount<1 then EmptyParameterList;
+  GetArticleName;
+  GetEnvironName;
+  DrawArticleName(MizFileName+aExt);
+  GetOptions;
+  InitExitProc;
+  FileExam(MizFileName+aExt);
+  _ExitProc := ExitProc;
+  ExitProc:=@@MizarExitProc;
+  PutError:=MError;
+  OpenErrors(MizFileName); @/
+  mdebug
+  OpenInfoFile; @+
+  end_mdebug
+end;
+@ At the end, we should report the number of errors (if any were encountered).
+
+@p
+procedure ProcessingEnding;
+begin
+ if ErrorNbr > 0 then
+  begin
+   DrawErrorsMsg(ErrorNbr);
+   FinishDrawing;
+  end;
+end;
 
 @* [F] Arbitrary precision arithmetic.
 Specifically, arbitrary precision arithmetic on \emph{integers}
@@ -8493,7 +8965,7 @@ end;
    var EmptyNatFunc: NatFunc;
 
 @* [F] XML Dictionary.
-We have several types declared in the \texttt{xml\_dict.parse} file.
+We have several types declared in the \texttt{xml\_dict.pas} file.
 These are enumerated types, and string constants for their names.
 
 \label{XMLDictionary}
@@ -9123,507 +9595,6 @@ executable invoked.
 @<Guess |MizFiles| from environment variables or executable path@>=
    MizFiles:=GetEnvStr(EnvMizFiles);
    if MizFiles='' then MizFiles:=MizPath;
-
-@* [F] Environment library.
-We have a library to handle accessing the Mizar mathematical library
-files. This is used in \texttt{makeenv.dpr} and using
-local \texttt{prel/} directories.
-
-This will execute |InitLibrEnv| (\section\xref{InitLibrEnv}) and
-|CheckCompatibility| (\section\xref{CheckCompatibility}).
-
-@<librenv.pas@>=
-  @<GNU License@>
-
-unit librenv;
-
-interface @|@#
-
-uses mobjects; @|@#
-
-@<Interface for \.{MIZFILES} library@>@; @#
-
-implementation @|@#
-
-uses @|@/
-   @{@&$IFDEF WIN32@}
-   windows, @/
-   @{@&$ENDIF@}
-   mizenv,pcmizver,mconsole; @#
-
-@<Implementation for \texttt{librenv.pas}@>@; @#
-
-begin
-   InitLibrEnv;
-   CheckCompatibility; @t\2@>
-end.
-
-@ @<Interface for \.{MIZFILES} library@>=
-const
-   MML = 'mml';
-   EnvMizFiles = 'MIZFILES';
-
-var MizPath, MizFiles: string;
-
-function LibraryPath(fName,fExt: string): string; @t\2@>@#
-
-procedure GetSortedNames(fParam:byte; var fList:MStringCollection); @t\2@>
-procedure GetNames(fParam:byte; var fList: StringColl); @t\2@>@#
-
-procedure ReadSortedNames(fName:string; var fList:MStringCollection); @t\2@>
-procedure ReadNames(fName:string; var fList: StringColl); @t\2@>
-
-@ There are two public-facing classes.
-
-@<Interface for \.{MIZFILES} library@>=
-type
-   @<Declare \\{FileDescr} data type@>@;
-   @<Declare \\{FileDescrCollection} data type@>@;@#
-
-var LocFilesCollection: FileDescrCollection;
-
-@ \node{File descriptors.} We use file descriptors for things. These
-are just ``a file name'' and ``a timestamp''.
-
-@<Declare \\{FileDescr} data type@>=
-   PFileDescr = ^FileDescr; @/
-   FileDescr = object(MObject) @t\1@> @/
-      nName: PString;
-      Time: LongInt;
-      constructor Init(fIdent:string; fTime:LongInt); @t\2@>
-      destructor Done; virtual; @t\2\2\2@>
-   end;
-
-@ \node{Constructor.}
-
-@<Implementation for \texttt{librenv.pas}@>=
-constructor FileDescr.Init(fIdent:string; fTime:LongInt);
-begin
-   nName:=NewStr(fIdent); Time:=fTime;
-end;
-
-@ \node{Destructor.}
-
-@p
-destructor FileDescr.Done;
-begin
-   DisposeStr(nName);
-end;
-
-@ \node{Collection of file descriptions.}
-
-@<Declare \\{FileDescrCollection} data type@>=
-   PFileDescrCollection = ^FileDescrCollection; @/
-   FileDescrCollection = object(MSortedCollection) @t\1@>
-      function Compare(Key1, Key2: Pointer): integer; virtual; @t\2@>
-      procedure StoreFIL(fName:string); @t\2@>
-      constructor LoadFIL(fName:string); @t\2@>
-      procedure InsertTimes; @t\2\2\2@>
-   end;
-
-@ Comparing two entries in a file descriptor collection amounts to
-comparing the names for the file descriptors.
-
-@<Implementation for \texttt{librenv.pas}@>=
-function FileDescrCollection.Compare(Key1, Key2: Pointer): integer;
-begin
-   if PFileDescr(Key1)^.nName^ < PFileDescr(Key2)^.nName^ then Compare:=-1
-   else if PFileDescr(Key1)^.nName^ = PFileDescr(Key2)^.nName^ then Compare:=0
-   else Compare:=1;
-end;
-
-@ Inserting file times into the file descriptors relies
-upon \texttt{mizenv.pas}'s |GetFileTime| (\section\xref{GetFileTime})
-function.
-
-@p
-procedure FileDescrCollection.InsertTimes;
-var z: integer;
-begin
-   for z:=0 to Count-1 do
-      with PFileDescr(Items^[z])^ do Time:=GetFileTime(nName^);
-end;
-
-@ \node{Constructor.} This leverages a few primitive \PASCAL/
-functions: \\{assign}(\\{file},\\{name}) assigns \\{name} to a file
-but does not open the file (it is still considered closed).
-Then \\{reset}(\\{file}) opens the file for reading.
-
-Specifically, this will load a \texttt{.fil} file produced by Mizar.
-These contain $2N$ lines: a file path on line $2n-1$, then a timestamp
-on line $2n$ for $n=1,\dots,N$. This appears to be used for
-local \texttt{prel/} files.
-@:File, .fil}{File, \texttt{.fil}@>
-@^Prel directory@>
-
-@p
-constructor FileDescrCollection.LoadFIL(fName:string);
-var FIL: text; lName: string; lTime: longint;
-begin
-   Assign(FIL,fName); Reset(FIL);
-   Init(0,10);
-   while not eof(FIL) do
-   begin
-      ReadLn(FIL,lName);
-      ReadLn(FIL,lTime);
-      Insert(new(PFileDescr,Init(lName,lTime)));
-   end;
-   close(FIL);
-end;
-
-@ \node{Repopulate .fil file.}
-This will erase the file named \\{fName}, then assign to \\{FIL} that
-file, and $\\{rewrite}(\\{FIL})$ will open it for writing.
-
-This will loop through every item in the caller's underlying
-collection, writing the file names and times to the \texttt{.fil} file.
-
-@p
-procedure FileDescrCollection.StoreFIL(fName:string);
-var FIL: text; i: integer;
-begin
-   EraseFile(fName);
-   Assign(FIL,fName); Rewrite(FIL);
-   InsertTimes;
-   for i:=0 to Count-1 do
-      with PFileDescr(Items^[i])^ do
-         begin WriteLn(FIL,nName^); WriteLn(FIL,Time) end;
-   Close(FIL);
-end;
-
-@ The library path tries to use the local version of a file, if it
-exists as tested with |MFileExists| (\section\xref{MFileExists}).
-Otherwise it looks at the Mizar MML version of a file, if it exists.
-
-This returns the path to the file, as a string.
-If the file cannot be found either in the local prel directory or the
-MML prel directory, then it returns the empty string.
-
-@p
-function LibraryPath(fName,fExt: string): string;
-begin
-   LibraryPath:='';
-   if MFileExists('prel'+DirSeparator+fName+fExt) then
-   begin
-      LocFilesCollection.Insert(New(PFileDescr,Init('prel'+DirSeparator+fName+fExt,0)));
-      LibraryPath:='prel'+DirSeparator+fName+fExt; exit
-   end;
-   if MFileExists(MizFiles+'prel'+DirSeparator+fName[1]+DirSeparator+fName+fExt) then
-      LibraryPath:=MizFiles+'prel'+DirSeparator+fName[1]+DirSeparator+fName+fExt;
-end;
-
-@ This function actually is not used anywhere, so I am not sure why we
-have it.
-
-@p
-procedure ReadSortedNames(fName:string; var fList:MStringCollection);
-var NamesFile: text;
-begin
-   if fName[1]='@@' then
-   begin
-      Delete(fName,1,1);
-      FileExam(fName);
-      Assign(NamesFile,fName);
-      Reset(NamesFile);
-      fList.Init(100,100);
-      while not seekEof(NamesFile) do
-      begin
-         ReadLn(NamesFile,fName);
-         fList.Insert(NewStr(fName));
-      end;
-      exit;
-   end;
-   fList.Init(2,10);
-   fList.Insert(NewStr(fName));
-end;
-
-@ Again, this function is not used anywhere, so I am not sure why we
-have it.
-
-@p
-procedure ReadNames(fName:string; var fList: StringColl);
-var NamesFile: text;
-begin
-   if fName[1]='@@' then
-   begin
-      Delete(fName,1,1);
-      FileExam(fName);
-      Assign(NamesFile,fName);
-      Reset(NamesFile);
-      fList.Init(10,10);
-      while not seekEof(NamesFile) do
-      begin
-         ReadLn(NamesFile,fName);
-         fList.Insert(NewStr(fName));
-      end;
-      exit;
-   end;
-   fList.Init(2,10);
-   fList.Insert(NewStr(fName));
-end;
-
-@ This function is used in \texttt{lisvoc.dpr}
-
-@p
-procedure GetSortedNames(fParam:byte; var fList:MStringCollection);
-var FileName:string;
-NamesFile: text;
-i: integer;
-begin
-   if ParamCount < fParam then  begin fList.Init(0,0); exit end;
-   FileName:=ParamStr(fParam);
-   if FileName[1]='@@' then
-   begin
-      Delete(FileName,1,1);
-      FileExam(FileName);
-      Assign(NamesFile,FileName);
-      Reset(NamesFile);
-      fList.Init(10,10);
-      while not seekEof(NamesFile) do
-      begin
-         ReadLn(NamesFile,FileName);
-         fList.Insert(NewStr(TrimString(FileName)));
-      end;
-      exit;
-   end;
-   fList.Init(2,8);
-   fList.Insert(NewStr(FileName));
-   for i:=fParam+1 to ParamCount do
-   begin
-      FileName:=ParamStr(i);
-      fList.Insert(NewStr(FileName));
-   end;
-end;
-
-@ Continuing with the ``this is not used anywhere'' theme, this
-function is not used anywhere.
-
-@p
-procedure GetNames(fParam:byte; var fList: StringColl);
-var FileName:string;
-NamesFile: text;
-i: integer;
-begin
-   if ParamCount < fParam then  begin fList.Init(0,0); exit end;
-   FileName:=ParamStr(fParam);
-   if FileName[1]='@@' then
-   begin
-      Delete(FileName,1,1);
-      FileExam(FileName);
-      Assign(NamesFile,FileName);
-      Reset(NamesFile);
-      fList.Init(10,10);
-      while not seekEof(NamesFile) do
-      begin
-         ReadLn(NamesFile,FileName);
-         fList.Insert(NewStr(TrimString(FileName)));
-      end;
-      exit;
-   end;
-   fList.Init(2,8);
-   fList.Insert(NewStr(FileName));
-   for i:=fParam+1 to ParamCount do
-   begin
-      FileName:=ParamStr(i);
-      fList.Insert(NewStr(FileName));
-   end;
-end;
-
-@ \node{Check compatibility of Mizar with MML.}
-We will load the \texttt{mml.ini} file for the MML version number, and
-we check it against the Mizar version. If they are not compatible,
-print a message to the screen, and halt as an error has occurred.
-
-\label{CheckCompatibility}
-The \texttt{mml.ini} file looks something like:
-
-\medbreak
-{\obeylines\tt
-[Mizar verifier]
-MizarReleaseNbr=8
-MizarVersionNbr=1
-MizarVariantNbr=15
-[MML]
-NumberOfArticles=1493
-MMLVersion=5.94
-\par}
-
-\medbreak\noindent%
-We will read line-by-line the \texttt{mml.ini} file to initialize
-several variables. This motivates the \\{Try\_read\_ini\_var} macro.
-
-@d init_val_and_end(#)==val(lLine,#,lCode);
-    end
-@d Try_read_ini_var(#)==@+
-  lPos:=Pos(#,lLine);
-  if lPos > 0 then
-    begin delete(lLine,1,lPos+15);
-    init_val_and_end
-
-@<Implementation for \texttt{librenv.pas}@>=
-procedure CheckCompatibility;
-var lFile: text;
-lLine,lVer1,lVer2,l: string;
-lPos,lCode: integer;
-lMizarReleaseNbr,lMizarVersionNbr,lMizarVariantNbr: integer;
-begin
-   @<Open \texttt{mml.ini} file@>@;
-   lMizarReleaseNbr:=-1;
-   lMizarVersionNbr:=-1;
-   lMizarVariantNbr:=-1;
-   while not seekEof(lFile) do
-   begin
-      ReadLn(lFile,lLine);
-      Try_read_ini_var('MizarReleaseNbr=')(lMizarReleaseNbr);
-      Try_read_ini_var('MizarVersionNbr=')(lMizarVersionNbr);
-      Try_read_ini_var('MizarVariantNbr=')(lMizarVariantNbr);
-   end;
-   close(lFile); @/
-   @<Assert MML version is compatible with Mizar version@>@;
-end;
-
-@ We open the \texttt{\$MIZFILES/mml.ini} file for reading.
-
-@<Open \texttt{mml.ini} file@>=
-   FileExam(MizFiles+MML+'.ini');
-   Assign(lFile,MizFiles+MML+'.ini');
-   Reset(lFile);
-
-@ We need to check the MML version is compatible with the Mizar
-version. If they are not compatible, raise an error, print a warning
-to the user, and halt here.
-
-@<Assert MML version is compatible with Mizar version@>=
-   if not ((lMizarReleaseNbr=PCMizarReleaseNbr) and
-         (lMizarVersionNbr=PCMizarVersionNbr)) then
-   begin
-      Str(PCMizarReleaseNbr,l); lVer1:=l;
-      Str(PCMizarVersionNbr,l); lVer1:=lVer1+'.'+l;
-      Str(PCMizarVariantNbr,l); lVer1:=lVer1+'.'+l;
-      Str(lMizarReleaseNbr,l); lVer2:=l;
-      Str(lMizarVersionNbr,l); lVer2:=lVer2+'.'+l;
-      Str(lMizarVariantNbr,l); lVer2:=lVer2+'.'+l;
-      DrawMessage('Mizar System ver. '+lVer1+' is incompatible with the MML version imported ('+lVer2+')','Please check '+MizFiles+'mml.ini');
-      halt(1);
-   end;
-
-@ \node{Initialize library environment.}
-This will try to initialize the |MizFiles| variable to be equal to
-the \texttt{\$MIZFILES} environment variable (if that environment
-variable exists) or the directory of the program being executed. This
-|MizFiles| will always end in a directory separator.
-
-We also initalize |MizFileName|, |EnvFileName|, |ArticleName|,
-|ArticleExt| to be empty strings.
-
-\label{InitLibrEnv}
-
-@d append_dir_separator(#)==@+if #[length(#)]<>DirSeparator then
-  #:=#+DirSeparator;
-
-@<Implementation for \texttt{librenv.pas}@>=
-procedure InitLibrEnv;
-begin
-   LocFilesCollection.Init(0,20);
-   MizPath:=ExtractFileDir(ParamStr(0));
-   @<Initialize |Mizfiles|@>@;
-   MizFileName:=''; EnvFileName:=''; ArticleName:=''; ArticleExt:='';
-end;
-
-@ Initalizing |Mizfiles| requires a bit of work. We first guess it
-based on environment variables. Then we need to ensure it is a
-directory path.
-
-@<Initialize |Mizfiles|@>=
-   @<Guess |MizFiles| from environment variables or executable path@>@;
-   if MizFiles<>'' then append_dir_separator(MizFiles);
-   if MizFiles='' then Mizfiles:=DirSeparator;
-
-@ When the \texttt{\$MIZFILES} environment variable is set, we just
-use it. When it is empty or missing, then we guess the path of the
-executable invoked.
-
-@<Guess |MizFiles| from environment variables or executable path@>=
-   MizFiles:=GetEnvStr(EnvMizFiles);
-   if MizFiles='' then MizFiles:=MizPath;
-
-@* [F] Info file handling.
-I don't think this is actually used anywhere, but I am including it
-for completeness.
-
-@<info.pas@>=
-  @<GNU License@>
-
-unit info;
-
-interface
-
-uses errhan;
-
-var InfoFile: text; @#
-
-procedure InfoChar (C: char); @t\2@>
-procedure InfoInt (I: integer); @t\2@>
-procedure InfoWord (C: char; I: integer); @t\2@>
-procedure InfoNewLine; @t\2@>
-procedure InfoString (S: string); @t\2@>
-procedure InfoPos (Pos: Position); @t\2@>
-procedure InfoCurPos; @t\2@> @#
-
-procedure OpenInfoFile; @t\2@>
-procedure CloseInfofile; @t\2@> @#
-
-implementation @|@#
-
-uses mizenv,mconsole; @#
-
-procedure InfoChar (C: char);
-begin write(InfoFile,C) end; @#
-
-procedure InfoInt (I: integer);
-begin write(InfoFile,I,' ') end; @#
-
-procedure InfoWord (C: char; I: integer);
-begin write(InfoFile,C,I,' ') end; @#
-
-procedure InfoNewLine;
-begin WriteLn(InfoFile) end; @#
-
-procedure InfoString (S: string);
-begin write(InfoFile,S) end; @#
-
-procedure InfoPos (Pos: Position);
-begin with Pos do write(InfoFile,Line,' ',Col,' ') end; @#
-
-procedure InfoCurPos;
-begin with CurPos do write(InfoFile,Line,' ',Col,' ') end;
-
-@ There are a few helper functions which is more than ``Write
-$\langle$data type$\rangle$ to info file''.
-
-@p
-var _InfoExitProc:pointer;
-
-procedure InfoExitProc;
-begin
-   CloseInfoFile;
-   ExitProc:=_InfoExitProc;
-end; @#
-
-procedure OpenInfoFile;
-begin
-   Assign(InfoFile,MizFileName+'.inf');
-   Rewrite(InfoFile);
-   WriteLn(InfoFile,'Mizared article: "',MizFileName,'"');
-   _InfoExitProc := ExitProc;
-   ExitProc:=@@InfoExitProc;
-end; @#
-
-procedure CloseInfofile;
-begin close(InfoFile) end; @#
-
-end.
-
 
 @* [F] XML Parser.
 The \XML/ parser module is used for extracting information from XML
@@ -15384,7 +15355,6 @@ begin
    CloseSourceFile;
    DisposePrf;
 end;
-
 @* [F] Abstract Syntax.
 A crucial step in any interpreter, compiler, or proof assistant is to
 transform the concrete syntax into an abstract syntax tree. This
@@ -17190,6 +17160,378 @@ begin
    nFormulaPos:=aPos;
    nformulaSort:=wsErrorFormula;
 end;
+
+
+@* [S] Within expressions (deferred).
+The ``first identification'' process needs to track ``within
+expressions''. You should probably come back to this section when
+you've arrived at the ``first identification'' unit.
+
+@<Class for Within expression@>=
+   biStackedPtr = ^biStackedObj; @/
+   biStackedObj =
+      object(MObject)
+      end; @#
+      
+   WithinExprPtr =  ^WithinExprObj; @/
+   WithinExprObj =
+      object(MObject) @t\1@> @/
+         nExpKind: ExpKind; @/
+         nStackArr: array of  biStackedPtr; @/
+         nStackCnt: integer; @#
+
+         constructor Init(aExpKind:ExpKind); @t\2@>
+         destructor Done; virtual; @t\2@>
+         function CreateExpressionsVariableLevel: biStackedPtr; virtual@t\2@>; {??} 
+
+         procedure Process_Adjective(aAttr:AdjectiveExpressionPtr ); virtual; @t\2@>
+         procedure Process_AdjectiveList(aCluster: PList ); virtual; @t\2@>
+         procedure Process_Variable(var aVar: VariablePtr); virtual; @t\2@>
+         procedure Process_ImplicitlyQualifiedVariable(var aSegm: ImplicitlyQualifiedSegmentPtr); virtual; @t\2@>
+         procedure Process_VariablesSegment(aSegm: QualifiedSegmentPtr); virtual; @t\2@>
+         procedure Process_StartVariableSegment; virtual; @t\2@>
+         procedure Process_FinishVariableSegment; virtual; @t\2@>
+
+         procedure Process_Type (aTyp: TypePtr ); virtual; @t\2@>
+         procedure Process_BinaryFormula (aFrm:BinaryFormulaPtr ); virtual; @t\2@>
+         procedure Process_StartQuantifiedFormula(aFrm:QuantifiedFormulaPtr); virtual; @t\2@>
+         procedure Process_QuantifiedFormula(aFrm:QuantifiedFormulaPtr); virtual; @t\2@>
+         procedure Process_FinishQuantifiedFormula(aFrm:QuantifiedFormulaPtr); virtual; @t\2@>
+         procedure Process_Formula (aFrm:FormulaPtr ); virtual; @t\2@>
+         procedure Process_TermList (aTrmList:PList ); virtual; @t\2@>
+         procedure Process_SimpleTerm (var aTrm: SimpleTermPtr ); virtual; @t\2@>
+         procedure Process_StartFraenkelTerm(aTrm:SimpleFraenkelTermPtr); virtual; @t\2@>
+         procedure Process_FinishFraenkelTerm(var aTrm:SimpleFraenkelTermPtr); virtual; @t\2@>
+         procedure Process_FraenkelTermsScope (var aFrm:FormulaPtr ); virtual; @t\2@>
+         procedure Process_SimpleFraenkelTerm(var aTrm:SimpleFraenkelTermPtr); virtual; @t\2@>
+         procedure Process_Term (var aTrm: TermPtr ); virtual; @t\2\2\2@>
+      end;
+
+@ @<Within expression AST implementation@>=
+constructor WithinExprObj.Init(aExpKind:ExpKind);
+begin
+   setlength(nStackArr,50);
+   nStackCnt:=0;
+   nExpKind:=aExpKind;
+end;
+
+@ @<Within expression AST implementation@>=
+destructor WithinExprObj.Done;
+begin
+   inherited Done;
+end;
+
+@ @<Within expression AST implementation@>=
+function WithinExprObj.CreateExpressionsVariableLevel: biStackedPtr;
+begin
+   result:=new(biStackedPtr, Init);
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_Adjective(aAttr:AdjectiveExpressionPtr);
+begin
+   case aAttr^.nAdjectiveSort of
+      wsAdjective:
+         begin
+            Process_TermList(AdjectivePtr(aAttr)^.nArgs );
+            {nAdjectiveSymbol;}
+         end;
+      wsNegatedAdjective:
+         Process_Adjective(NegatedAdjectivePtr(aAttr)^.nArg );
+   endcases;
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_AdjectiveList(aCluster: PList);
+var i: integer;
+begin
+   with aCluster^ do
+      for i:=0 to Count-1 do
+         Process_Adjective(Items^[i]);
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_Variable(var aVar: VariablePtr);
+begin
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_ImplicitlyQualifiedVariable(var aSegm: ImplicitlyQualifiedSegmentPtr);
+begin
+   Process_Variable(aSegm^.nIdentifier);
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_VariablesSegment(aSegm: QualifiedSegmentPtr);
+var i: integer;
+begin
+   Process_StartVariableSegment;
+   case aSegm^.nSegmentSort of
+      ikImplQualifiedSegm:
+         Process_ImplicitlyQualifiedVariable(ImplicitlyQualifiedSegmentPtr(aSegm));
+      ikExplQualifiedSegm:
+         with ExplicitlyQualifiedSegmentPtr(aSegm)^ do
+      begin
+         for i:=0 to nIdentifiers.Count-1 do
+            Process_Variable(VariablePtr(nIdentifiers.Items^[i]));
+         Process_Type(nType);
+      end;
+   endcases;
+   Process_FinishVariableSegment;
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_StartVariableSegment;
+begin
+end; @#
+
+procedure WithinExprObj.Process_FinishVariableSegment;
+begin
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_TermList (aTrmList:PList );
+var i: integer;
+begin
+   for i:=0 to aTrmList^.Count-1 do
+      Process_Term(TermPtr(aTrmList^.Items^[i]));
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_Type (aTyp: TypePtr);
+begin
+   with aTyp^ do
+   begin
+      case aTyp^.nTypeSort of
+         wsStandardType:
+            with StandardTypePtr(aTyp)^ do
+         begin
+            {nModeSymbol}
+            Process_TermList(nArgs);
+         end;
+         wsStructureType:
+            with StructTypePtr(aTyp)^ do
+         begin
+            {nStructSymbol}
+            Process_TermList(nArgs);
+         end;
+         wsClusteredType:
+            with ClusteredTypePtr(aTyp)^ do
+         begin
+            Process_AdjectiveList(nAdjectiveCluster);
+            Process_Type(nType);
+         end;
+         wsErrorType: ;
+      endcases;
+   end;
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_BinaryFormula (aFrm:BinaryFormulaPtr );
+begin
+   Process_Formula(aFrm^.nLeftArg);
+   Process_Formula(aFrm^.nRightArg);
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_StartQuantifiedFormula(aFrm:QuantifiedFormulaPtr);
+begin
+end; @#
+
+procedure WithinExprObj.Process_FinishQuantifiedFormula(aFrm:QuantifiedFormulaPtr);
+begin
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_QuantifiedFormula (aFrm: QuantifiedFormulaPtr );
+begin
+   Process_VariablesSegment(aFrm^.nSegment);
+   Process_Formula(aFrm^.nScope);
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_Formula (aFrm: FormulaPtr );
+var i: integer;
+begin
+   case aFrm^.nFormulaSort of
+      wsNegatedFormula:
+         Process_Formula(NegativeFormulaPtr(aFrm)^.nArg);
+      wsConjunctiveFormula,wsDisjunctiveFormula,
+      wsConditionalFormula,wsBiconditionalFormula,
+      wsFlexaryConjunctiveFormula,wsFlexaryDisjunctiveFormula:
+         Process_BinaryFormula(BinaryFormulaPtr(aFrm));
+      wsRightSideOfPredicativeFormula:
+         with RightSideOfPredicativeFormulaPtr(aFrm)^ do
+      begin
+         {nPredNr}
+         Process_TermList(nRightArgs);
+      end;
+      wsPredicativeFormula:
+         with PredicativeFormulaPtr(aFrm)^ do
+      begin
+         Process_TermList(nLeftArgs);
+         {nPredNr}
+         Process_TermList(nRightArgs);
+      end;
+      wsMultiPredicativeFormula:
+         with MultiPredicativeFormulaPtr(aFrm)^ do
+      begin
+         for i := 0 to nScraps.Count - 1 do
+            Process_Formula(nScraps.Items^[i]);
+      end;
+      wsPrivatePredicateFormula:
+         with PrivatePredicativeFormulaPtr(aFrm)^ do
+      begin
+         {nPredIdNr}
+         Process_TermList(nArgs);
+      end;
+      wsAttributiveFormula:
+         with AttributiveFormulaPtr(aFrm)^ do
+      begin
+         Process_Term(nSubject);
+         Process_AdjectiveList(nAdjectives);
+      end;
+      wsQualifyingFormula:
+         with QualifyingFormulaPtr(aFrm)^ do
+      begin
+         Process_Term(nSubject);
+         Process_Type(nType);
+      end;
+      wsExistentialFormula, wsUniversalFormula:
+         with QuantifiedFormulaPtr(aFrm)^ do
+      begin
+         inc(nStackCnt);
+         if nStackCnt > length(nStackArr) then
+            setlength(nStackArr,2*length(nStackArr));
+         nStackArr[nStackCnt]:=CreateExpressionsVariableLevel;
+         Process_StartQuantifiedFormula(QuantifiedFormulaPtr(aFrm));
+         Process_QuantifiedFormula(QuantifiedFormulaPtr(aFrm));
+         Process_FinishQuantifiedFormula(QuantifiedFormulaPtr(aFrm));
+         dispose(nStackArr[nStackCnt],Done);
+         dec(nStackCnt);
+      end;
+      wsContradiction: ;
+      wsThesis: ;
+      wsErrorFormula: ;
+   endcases;
+end;
+
+@ There are a few empty ``abstract virtual'' methods.
+
+@<Within expression AST implementation@>=
+procedure WithinExprObj.Process_SimpleTerm (var aTrm: SimpleTermPtr );
+begin
+end; @#
+
+procedure WithinExprObj.Process_StartFraenkelTerm(aTrm:SimpleFraenkelTermPtr);
+begin
+end; @#
+
+procedure WithinExprObj.Process_FinishFraenkelTerm(var aTrm:SimpleFraenkelTermPtr);
+begin
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_FraenkelTermsScope(var aFrm:FormulaPtr );
+begin
+   Process_Formula(aFrm);
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_SimpleFraenkelTerm(var aTrm:SimpleFraenkelTermPtr);
+var i: integer;
+begin
+   with aTrm^ do
+   begin
+      for i := 0 to nPostqualification^.Count - 1 do
+         Process_VariablesSegment(QualifiedSegmentPtr(nPostqualification^.Items^[i]));
+      Process_Term(nSample);
+   end;
+end;
+
+@ @<Within expression AST implementation@>=
+procedure WithinExprObj.Process_Term(var aTrm: TermPtr);
+begin
+   case aTrm^.nTermSort of
+      wsPlaceholderTerm: ;
+      {|PlaceholderTermPtr(aTrm)^.nLocusNr|}
+      wsSimpleTerm:
+         Process_SimpleTerm (SimpleTermPtr(aTrm));
+      wsNumeralTerm: ;
+      {|NumeralTermPtr(aTrm)^.nValue|}
+      wsInfixTerm:
+         with InfixTermPtr(aTrm)^ do
+      begin
+         Process_TermList(nLeftArgs);
+         {nFunctorSymbol}
+         Process_TermList(nRightArgs);
+      end;
+      wsCircumfixTerm:
+         with CircumfixTermPtr(aTrm)^ do
+      begin
+         {nLeftBracketSymbol}
+         Process_TermList(nArgs);
+         {nRightBracketSymbol}
+      end;
+      wsPrivateFunctorTerm:
+         with PrivateFunctorTermPtr(aTrm)^ do
+      begin
+         {nFunctorIdent}
+         Process_TermList(nArgs);
+      end;
+      wsAggregateTerm:
+         with AggregateTermPtr(aTrm)^ do
+      begin
+         { nStructSymbol}
+         Process_TermList(nArgs);
+      end;
+      wsSelectorTerm:
+         with SelectorTermPtr(aTrm)^ do
+      begin
+         {nSelectorSymbol}
+         Process_Term(nArg);
+      end;
+      wsInternalSelectorTerm: ;
+      {|InternalSelectorTermPtr(aTrm)^.nSelectorSymbol|}
+      wsForgetfulFunctorTerm:
+         with ForgetfulFunctorTermPtr(aTrm)^ do
+      begin
+         {nStructSymbol}
+         Process_Term(nArg);
+      end;
+      wsInternalForgetfulFunctorTerm: ;
+      {|InternalForgetfulFunctorTermPtr(aTrm)^.nStructSymbol|}
+      wsSimpleFraenkelTerm,wsFraenkelTerm:
+         with FraenkelTermPtr(aTrm)^ do
+      begin
+         inc(nStackCnt);
+         if nStackCnt > length(nStackArr) then
+            setlength(nStackArr,2*length(nStackArr));
+         nStackArr[nStackCnt]:=CreateExpressionsVariableLevel;
+         Process_StartFraenkelTerm(SimpleFraenkelTermPtr(aTrm));
+         Process_SimpleFraenkelTerm(SimpleFraenkelTermPtr(aTrm));
+         if aTrm^.nTermSort = wsFraenkelTerm then
+            Process_FraenkelTermsScope(FraenkelTermPtr(aTrm)^.nFormula);
+         Process_FinishFraenkelTerm(SimpleFraenkelTermPtr(aTrm));
+         dispose(nStackArr[nStackCnt],Done);
+         dec(nStackCnt);
+      end;
+      wsQualificationTerm:
+         with QualifiedTermPtr(aTrm)^ do
+      begin
+         Process_Term(nSubject);
+         Process_Type(nQualification);
+      end;
+      wsExactlyTerm:
+         Process_Term(ExactlyTermPtr(aTrm)^.nSubject);
+      wsGlobalChoiceTerm:
+         Process_Type(ChoiceTermPtr(aTrm)^.nChoiceType);
+      wsItTerm: ;
+      wsErrorTerm: ;
+   endcases;
+end;
+
+
 
 @* [F] Weakly strict Mizar article.
 The parser ``eats in'' a mizar article, then produces
@@ -20881,35 +21223,35 @@ var i: integer;
 begin
    case aFrm^.nFormulaSort of
       wsNegatedFormula:
-         @<Emit XML for negated formula (WSM)@>;
+         @<Emit \XML/ for negated formula (WSM)@>;
       wsConjunctiveFormula:
-         @<Emit XML for conjunction (WSM)@>;
+         @<Emit \XML/ for conjunction (WSM)@>;
       wsDisjunctiveFormula:
-         @<Emit XML for disjunction (WSM)@>;
+         @<Emit \XML/ for disjunction (WSM)@>;
       wsConditionalFormula:
-         @<Emit XML for conditional formula (WSM)@>;
+         @<Emit \XML/ for conditional formula (WSM)@>;
       wsBiconditionalFormula:
-         @<Emit XML for biconditional formula (WSM)@>;
+         @<Emit \XML/ for biconditional formula (WSM)@>;
       wsFlexaryConjunctiveFormula:
-         @<Emit XML for flexary-conjunction (WSM)@>;
+         @<Emit \XML/ for flexary-conjunction (WSM)@>;
       wsFlexaryDisjunctiveFormula:
-         @<Emit XML for flexary-disjunction (WSM)@>;
+         @<Emit \XML/ for flexary-disjunction (WSM)@>;
       wsPredicativeFormula:
-         @<Emit XML for predicative formula (WSM)@>;
+         @<Emit \XML/ for predicative formula (WSM)@>;
       wsRightSideOfPredicativeFormula:
-         @<Emit XML for right-side of predicative formula (WSM)@>;
+         @<Emit \XML/ for right-side of predicative formula (WSM)@>;
       wsMultiPredicativeFormula:
-         @<Emit XML for multi-predicative formula (WSM)@>;
+         @<Emit \XML/ for multi-predicative formula (WSM)@>;
       wsPrivatePredicateFormula:
          Out_PrivatePredicativeFormula(PrivatePredicativeFormulaPtr(aFrm));
       wsAttributiveFormula:
-         @<Emit XML for attributive formula (WSM)@>;
+         @<Emit \XML/ for attributive formula (WSM)@>;
       wsQualifyingFormula:
-         @<Emit XML for qualifying formula (WSM)@>;
+         @<Emit \XML/ for qualifying formula (WSM)@>;
       wsUniversalFormula:
-         @<Emit XML for universal formula (WSM)@>;
+         @<Emit \XML/ for universal formula (WSM)@>;
       wsExistentialFormula:
-         @<Emit XML for existential formula (WSM)@>;
+         @<Emit \XML/ for existential formula (WSM)@>;
       wsContradiction:
          begin
             Out_XElWithPos(FormulaName[wsContradiction],aFrm^.nFormulaPos);
@@ -20935,7 +21277,7 @@ NegatedFormula = element Negated-Formula \LB
 \quad Formula
 \RB\par}
 
-@<Emit XML for negated formula (WSM)@>=
+@<Emit \XML/ for negated formula (WSM)@>=
          begin
             Out_XElStart(FormulaName[wsNegatedFormula]);
             Out_PosAsAttrs(aFrm^.nFormulaPos);
@@ -20955,7 +21297,7 @@ ConjunctiveFormula = element Conjunctive-Formula \LB
 \RB
 \par}
 
-@<Emit XML for conjunction (WSM)@>=
+@<Emit \XML/ for conjunction (WSM)@>=
          begin
             Out_XElStart( FormulaName[wsConjunctiveFormula]);
             Out_PosAsAttrs(aFrm^.nFormulaPos);
@@ -20976,7 +21318,7 @@ DisjunctiveFormula = element Disjunctive-Formula \LB
 \RB
 \par}
 
-@<Emit XML for disjunction (WSM)@>=
+@<Emit \XML/ for disjunction (WSM)@>=
          begin
             Out_XElStart( FormulaName[wsDisjunctiveFormula]);
             Out_PosAsAttrs(aFrm^.nFormulaPos);
@@ -20997,7 +21339,7 @@ ConditionalFormula = element Conditional-Formula \LB
 \RB
 \par}
 
-@<Emit XML for conditional formula (WSM)@>=
+@<Emit \XML/ for conditional formula (WSM)@>=
          begin
             Out_XElStart( FormulaName[wsConditionalFormula]);
             Out_PosAsAttrs(aFrm^.nFormulaPos);
@@ -21017,7 +21359,7 @@ BiconditionalFormula = element Biconditional-Formula \LB
 \RB
 \par}
 
-@<Emit XML for biconditional formula (WSM)@>=
+@<Emit \XML/ for biconditional formula (WSM)@>=
          begin
             Out_XElStart( FormulaName[wsBiconditionalFormula]);
             Out_PosAsAttrs(aFrm^.nFormulaPos);
@@ -21037,7 +21379,7 @@ FlexaryConjunctiveFormula = element FlexaryConjunctive-Formula \LB
 \RB
 \par}
 
-@<Emit XML for flexary-conjunction (WSM)@>=
+@<Emit \XML/ for flexary-conjunction (WSM)@>=
          begin
             Out_XElStart( FormulaName[wsFlexaryConjunctiveFormula]);
             Out_PosAsAttrs(aFrm^.nFormulaPos);
@@ -21058,7 +21400,7 @@ FlexaryDisjunctiveFormula = element FlexaryDisjunctive-Formula \LB
 \RB
 \par}
 
-@<Emit XML for flexary-disjunction (WSM)@>=
+@<Emit \XML/ for flexary-disjunction (WSM)@>=
          begin
             Out_XElStart( FormulaName[wsFlexaryDisjunctiveFormula]);
             Out_PosAsAttrs(aFrm^.nFormulaPos);
@@ -21082,7 +21424,7 @@ Predicative-Formula = element Predicative-Formula \LB
 \RB
 \par}
 
-@<Emit XML for predicative formula (WSM)@>=
+@<Emit \XML/ for predicative formula (WSM)@>=
          with PredicativeFormulaPtr(aFrm)^ do
       begin
          Out_XElStart(FormulaName[wsPredicativeFormula]);
@@ -21122,7 +21464,7 @@ RightSideOf-Predicative-Formula = element RightSideOf-Predicative-Formula \LB
 \RB
 \par}
 
-@<Emit XML for right-side of predicative formula (WSM)@>=
+@<Emit \XML/ for right-side of predicative formula (WSM)@>=
          with RightSideOfPredicativeFormulaPtr(aFrm)^ do
       begin
          Out_XElStart(FormulaName[wsRightSideOfPredicativeFormula]);
@@ -21152,7 +21494,7 @@ Multi-Predicative-Formula = element Multi-Predicative-Formula \LB
 
 \par}
 
-@<Emit XML for multi-predicative formula (WSM)@>=
+@<Emit \XML/ for multi-predicative formula (WSM)@>=
          with MultiPredicativeFormulaPtr(aFrm)^ do
       begin
          Out_XElStart( FormulaName[wsMultiPredicativeFormula]);
@@ -21173,7 +21515,7 @@ Attributive-Formula = element Attributive-Formula \LB
 \quad Adjective-Cluster.element
 \RB\par}
 
-@<Emit XML for attributive formula (WSM)@>=
+@<Emit \XML/ for attributive formula (WSM)@>=
          with AttributiveFormulaPtr(aFrm)^ do
       begin
          Out_XElStart(FormulaName[wsAttributiveFormula]);
@@ -21195,7 +21537,7 @@ Qualifying-Formula = element Qualifying-Formula \LB
 \quad Formula
 \RB\par}
 
-@<Emit XML for qualifying formula (WSM)@>=
+@<Emit \XML/ for qualifying formula (WSM)@>=
          with QualifyingFormulaPtr(aFrm)^ do
       begin
          Out_XElStart(FormulaName[wsQualifyingFormula]);
@@ -21216,7 +21558,7 @@ Universal-Quantifier-Formula = element Universal-Quantifier-Formula \LB
 \quad Formula
 \RB\par}
 
-@<Emit XML for universal formula (WSM)@>=
+@<Emit \XML/ for universal formula (WSM)@>=
          with QuantifiedFormulaPtr( aFrm)^ do
       begin
          Out_XElStart(FormulaName[wsUniversalFormula]);
@@ -21237,7 +21579,7 @@ Existential-Quantifier-Formula = element Existential-Quantifier-Formula \LB
 \quad Formula
 \RB\par}
 
-@<Emit XML for existential formula (WSM)@>=
+@<Emit \XML/ for existential formula (WSM)@>=
          with QuantifiedFormulaPtr( aFrm)^ do
       begin
          Out_XElStart(FormulaName[wsExistentialFormula]);
@@ -21351,7 +21693,7 @@ var i: integer;
 begin
    case aTrm^.nTermSort of
       wsPlaceholderTerm:
-         @<Emit XML for placeholder (WSM)@>;
+         @<Emit \XML/ for placeholder (WSM)@>;
       wsSimpleTerm:
          Out_SimpleTerm(SimpleTermPtr(aTrm));
       wsNumeralTerm:
@@ -21362,31 +21704,31 @@ begin
             Out_XElEnd0;
          end;
       wsInfixTerm:
-         @<Emit XML for infix term (WSM)@>;
+         @<Emit \XML/ for infix term (WSM)@>;
       wsCircumfixTerm:
-         @<Emit XML for circumfix term (WSM)@>;
+         @<Emit \XML/ for circumfix term (WSM)@>;
       wsPrivateFunctorTerm:
          Out_PrivateFunctorTerm(PrivateFunctorTermPtr(aTrm));
       wsAggregateTerm:
-         @<Emit XML for aggregate term (WSM)@>;
+         @<Emit \XML/ for aggregate term (WSM)@>;
       wsSelectorTerm:
-         @<Emit XML for selector term (WSM)@>;
+         @<Emit \XML/ for selector term (WSM)@>;
       wsInternalSelectorTerm:
          Out_InternalSelectorTerm(InternalSelectorTermPtr(aTrm));
       wsForgetfulFunctorTerm:
-         @<Emit XML for forgetful functor (WSM)@>;
+         @<Emit \XML/ for forgetful functor (WSM)@>;
       wsInternalForgetfulFunctorTerm:
-         @<Emit XML for internal forgetful functor (WSM)@>;
+         @<Emit \XML/ for internal forgetful functor (WSM)@>;
       wsFraenkelTerm:
-         @<Emit XML for Fraenkel term (WSM)@>;
+         @<Emit \XML/ for Fraenkel term (WSM)@>;
       wsSimpleFraenkelTerm:
-         @<Emit XML for simple Fraenkel term (WSM)@>;
+         @<Emit \XML/ for simple Fraenkel term (WSM)@>;
       wsQualificationTerm:
-         @<Emit XML for qualification term (WSM)@>;
+         @<Emit \XML/ for qualification term (WSM)@>;
       wsExactlyTerm:
-         @<Emit XML for exactly qualification term (WSM)@>;
+         @<Emit \XML/ for exactly qualification term (WSM)@>;
       wsGlobalChoiceTerm:
-         @<Emit XML for global choice term (WSM)@>;
+         @<Emit \XML/ for global choice term (WSM)@>;
       wsItTerm:
          Out_XElWithPos(TermName[wsItTerm],aTrm^.nTermPos);
       wsErrorTerm:
@@ -21404,7 +21746,7 @@ Term \pipe= element Placeholder-Term \LB
 \pos{\quad}
 \RB\par}
 
-@<Emit XML for placeholder (WSM)@>=
+@<Emit \XML/ for placeholder (WSM)@>=
          begin
             Out_XElStart( TermName[wsPlaceholderTerm]);
             Out_XIntAttr( XMLAttrName[atNr], PlaceholderTermPtr(aTrm)^.nLocusNr);
@@ -21426,7 +21768,7 @@ Term \pipe= element Infix-Term \LB
 \quad element Arguments \LB\ Term-List? \RB
 \RB\par}
 
-@<Emit XML for infix term (WSM)@>=
+@<Emit \XML/ for infix term (WSM)@>=
          with InfixTermPtr(aTrm)^ do
       begin
          Out_XElStart(TermName[wsInfixTerm]);
@@ -21470,7 +21812,7 @@ Term \pipe= element Circumfix-Term \LB
 \quad element Arguments \LB\ Term-List? \RB
 \RB\par}
 
-@<Emit XML for circumfix term (WSM)@>=
+@<Emit \XML/ for circumfix term (WSM)@>=
          with CircumfixTermPtr(aTrm)^ do
       begin
          Out_XElStart(TermName[wsCircumfixTerm]);
@@ -21500,7 +21842,7 @@ Term \pipe= element Aggregate-Term \LB
 \quad element Arguments \LB\ Term-List \RB?
 \RB\par}
 
-@<Emit XML for aggregate term (WSM)@>=
+@<Emit \XML/ for aggregate term (WSM)@>=
          with AggregateTermPtr(aTrm)^ do
       begin
          Out_XElStart(TermName[wsAggregateTerm]);
@@ -21527,7 +21869,7 @@ Term \pipe= element Selector-Term \LB
 \quad Term
 \RB\par}
 
-@<Emit XML for selector term (WSM)@>=
+@<Emit \XML/ for selector term (WSM)@>=
          with SelectorTermPtr(aTrm)^ do
       begin
          Out_XElStart(TermName[wsSelectorTerm]);
@@ -21551,7 +21893,7 @@ Term \pipe= element Forgetful-Functor-Term \LB
 \quad Term
 \RB\par}
 
-@<Emit XML for forgetful functor (WSM)@>=
+@<Emit \XML/ for forgetful functor (WSM)@>=
          with ForgetfulFunctorTermPtr(aTrm)^ do
       begin
          Out_XElStart(TermName[wsForgetfulFunctorTerm]);
@@ -21574,7 +21916,7 @@ Term \pipe= element Internal-Forgetful-Functor-Term \LB
 \pos{\quad},
 \RB\par}
 
-@<Emit XML for internal forgetful functor (WSM)@>=
+@<Emit \XML/ for internal forgetful functor (WSM)@>=
          with InternalForgetfulFunctorTermPtr(aTrm)^ do
       begin
          Out_XElStart(TermName[wsInternalForgetfulFunctorTerm]);
@@ -21596,7 +21938,7 @@ Term \pipe= element Fraenkel-Term \LB
 
 @^Fraenkel term@>
 
-@<Emit XML for Fraenkel term (WSM)@>=
+@<Emit \XML/ for Fraenkel term (WSM)@>=
          with FraenkelTermPtr(aTrm)^ do
       begin
          Out_XElStart( TermName[wsFraenkelTerm]);
@@ -21619,7 +21961,7 @@ Term \pipe= element Simple-Fraenkel-Term \LB
 \quad Term
 \RB\par}
 
-@<Emit XML for simple Fraenkel term (WSM)@>=
+@<Emit \XML/ for simple Fraenkel term (WSM)@>=
          with SimpleFraenkelTermPtr(aTrm)^ do
       begin
          Out_XElStart( TermName[wsSimpleFraenkelTerm]);
@@ -21641,7 +21983,7 @@ Term \pipe= element Qualification-Term \LB
 \quad Type
 \RB\par}
 
-@<Emit XML for qualification term (WSM)@>=
+@<Emit \XML/ for qualification term (WSM)@>=
          with QualifiedTermPtr(aTrm)^ do
       begin
          Out_XElStart( TermName[wsQualificationTerm]);
@@ -21661,7 +22003,7 @@ Term \pipe= element Exactly-Qualification-Term \LB
 \quad Term
 \RB\par}
 
-@<Emit XML for exactly qualification term (WSM)@>=
+@<Emit \XML/ for exactly qualification term (WSM)@>=
          with ExactlyTermPtr(aTrm)^ do
       begin
          Out_XElStart( TermName[wsQualificationTerm]);
@@ -21682,7 +22024,7 @@ Term \pipe= element Global-Choice-Term \LB
 
 @^Choice operator@>
 
-@<Emit XML for global choice term (WSM)@>=
+@<Emit \XML/ for global choice term (WSM)@>=
          begin
             Out_XElStart(TermName[wsGlobalChoiceTerm]);
             Out_PosAsAttrs(aTrm^.nTermPos);
@@ -21764,21 +22106,21 @@ procedure OutWSMizFileObj.Out_Pattern(aPattern: PatternPtr);
 begin
    case aPattern^.nPatternSort of
       itDefPred:
-         @<Emit XML for predicate pattern (WSM)@>;
+         @<Emit \XML/ for predicate pattern (WSM)@>;
       itDefFunc:
          begin
             case FunctorPatternPtr(aPattern)^.nFunctKind of
                InfixFunctor:
-                  @<Emit XML for infix functor pattern (WSM)@>;
+                  @<Emit \XML/ for infix functor pattern (WSM)@>;
                CircumfixFunctor:
-                  @<Emit XML for bracket functor pattern (WSM)@>;
+                  @<Emit \XML/ for bracket functor pattern (WSM)@>;
             endcases;
          end;
       itDefMode:
-         @<Emit XML for mode pattern (WSM)@>;
+         @<Emit \XML/ for mode pattern (WSM)@>;
       end;
       itDefAttr:
-         @<Emit XML for attribute pattern (WSM)@>;
+         @<Emit \XML/ for attribute pattern (WSM)@>;
    endcases;
 end;
 
@@ -21795,7 +22137,7 @@ Predicate-Pattern = element Predicate-Pattern \LB
 \RB
 \par}
 
-@<Emit XML for predicate pattern (WSM)@>=
+@<Emit \XML/ for predicate pattern (WSM)@>=
          with PredicatePatternPtr(aPattern)^ do
       begin
          Out_XElStart(DefPatternName[itDefPred]);
@@ -21821,7 +22163,7 @@ Operation-Functor-Pattern = element Operation-Functor-Pattern \LB
 \RB
 \par}
 
-@<Emit XML for infix functor pattern (WSM)@>=
+@<Emit \XML/ for infix functor pattern (WSM)@>=
                   with InfixFunctorPatternPtr(aPattern)^ do
                begin
                   Out_XElStart(FunctorPatternName[InfixFunctor]);
@@ -21851,7 +22193,7 @@ Bracket-Functor-Pattern = element Bracket-Functor-Pattern \LB
 \RB
 \par}
 
-@<Emit XML for bracket functor pattern (WSM)@>=
+@<Emit \XML/ for bracket functor pattern (WSM)@>=
                   with CircumfixFunctorPatternPtr(aPattern)^ do
                begin
                   Out_XElStart(FunctorPatternName[CircumfixFunctor]);
@@ -21882,7 +22224,7 @@ Mode-Pattern = element Mode-Pattern \LB
 \RB
 \par}
 
-@<Emit XML for mode pattern (WSM)@>=
+@<Emit \XML/ for mode pattern (WSM)@>=
          with ModePatternPtr(aPattern)^ do
       begin
          Out_XElStart(DefPatternName[itDefMode]);
@@ -21909,7 +22251,7 @@ Attribute-Pattern = element Attribute-Pattern \LB
 \RB
 \par}
 
-@<Emit XML for attribute pattern (WSM)@>=
+@<Emit \XML/ for attribute pattern (WSM)@>=
          with AttributePatternPtr(aPattern)^ do
       begin
          Out_XElStart(DefPatternName[itDefAttr]);
@@ -22385,7 +22727,7 @@ begin
          itSchemeBlock:
             Out_Block(nBlock);
          itSchemeHead:
-            @<Emit XML for schema (WSM)@>;
+            @<Emit \XML/ for schema (WSM)@>;
          itTheorem:
             Out_CompactStatement(CompactStatementPtr(nContent),nBlock);
          itAxiom:
@@ -22399,10 +22741,10 @@ begin
          itRegularStatement:
             Out_RegularStatement(RegularStatementPtr(nContent),nBlock);
          itChoice:
-            @<Emit XML for \texttt{consider} contents (WSM)@>;
+            @<Emit \XML/ for \texttt{consider} contents (WSM)@>;
          itReconsider:
-            @<Emit XML for \texttt{reconsider} contents (WSM)@>; @#
-@t\4@>         @<Emit XML for definition-related items (WSM)@>; @#
+            @<Emit \XML/ for \texttt{reconsider} contents (WSM)@>; @#
+@t\4@>         @<Emit \XML/ for definition-related items (WSM)@>; @#
          itPredSynonym, itPredAntonym, itFuncNotation, itModeNotation,
          itAttrSynonym, itAttrAntonym:
             with NotationDeclarationPtr(nContent)^ do
@@ -22410,7 +22752,7 @@ begin
             Out_Pattern(nOriginPattern);
             Out_Pattern(nNewPattern);
          end;
-@t\4@>         @<Emit XML for registration-related items (WSM)@>; @#
+@t\4@>         @<Emit \XML/ for registration-related items (WSM)@>; @#
          itPragma: ;
          itIncorrItem:;
       end;
@@ -22442,7 +22784,7 @@ Scheme-contents = element Scheme \LB
 \RB
 \par}
 
-@<Emit XML for schema (WSM)@>=
+@<Emit \XML/ for schema (WSM)@>=
             with SchemePtr(nContent)^ do
          begin
             Out_XElStart( XMLElemName[elScheme]);
@@ -22503,7 +22845,7 @@ Consider-Statement-contents =
 \quad Justification
 )\par}
 
-@<Emit XML for \texttt{consider} contents (WSM)@>=
+@<Emit \XML/ for \texttt{consider} contents (WSM)@>=
             with ChoiceStatementPtr(nContent)^ do
          begin
             for i:= 0 to  nQualVars^.Count-1 do
@@ -22527,7 +22869,7 @@ Type-Changing-Statement-contents =
 \ Type)
 \par}
 
-@<Emit XML for \texttt{reconsider} contents (WSM)@>=
+@<Emit \XML/ for \texttt{reconsider} contents (WSM)@>=
             with TypeChangingStatementPtr(nContent)^ do
          begin
             for i:=0 to nTypeChangeList^.Count-1 do
@@ -22560,7 +22902,7 @@ Item-contents \pipe=
 \pipe\ Variable-Segment \hphantom{st, Terms } \# {\rm loci}
 \par}
 
-@<Emit XML for definition-related items (WSM)@>=
+@<Emit \XML/ for definition-related items (WSM)@>=
          itPrivFuncDefinition:
             with PrivateFunctorDefinitionPtr(nContent)^ do
          begin
@@ -22586,7 +22928,7 @@ Item-contents \pipe=
             Out_VariableSegment( QualifiedSegmentPtr(nContent));
          itCaseHead,itSupposeHead,
          itAssumption:
-            @<Emit XML for assumptions item (WSM)@>;
+            @<Emit \XML/ for assumptions item (WSM)@>;
 @
 
 \medbreak
@@ -22596,7 +22938,7 @@ Item-contents \pipe=
 \quad element Conditions \LB\ Proposition* \RB\ )
 \par}
 
-@<Emit XML for definition-related items (WSM)@>=
+@<Emit \XML/ for definition-related items (WSM)@>=
          itExistentialAssumption:
             with ExistentialAssumptionPtr(nContent)^ do
          begin
@@ -22616,7 +22958,7 @@ Item-contents \pipe= (\ Variable?, Term? ) \# {\rm Exemplification}
 \qquad\qquad\qquad\qquad\pipe\ Block\qquad\qquad\qquad\quad\ \# \rlap{\rm case\ block}
 \par}
 
-@<Emit XML for definition-related items (WSM)@>=
+@<Emit \XML/ for definition-related items (WSM)@>=
          itExemplification:
             with ExamplePtr(nContent)^ do
          begin
@@ -22642,7 +22984,7 @@ Item-contents \pipe=
 \pipe Justification \# {\rm Property}
 \par}
 
-@<Emit XML for definition-related items (WSM)@>=
+@<Emit \XML/ for definition-related items (WSM)@>=
          itCorrectness:
             begin
                Out_XElStart0( XMLElemName[elCorrectnessConditions]);
@@ -22671,7 +23013,7 @@ Item-contents \pipe=
 \qquad \RB)
 \par}
 
-@<Emit XML for definition-related items (WSM)@>=
+@<Emit \XML/ for definition-related items (WSM)@>=
          itDefMode:
             with ModeDefinitionPtr(nContent)^ do
          begin
@@ -22710,7 +23052,7 @@ Item-contents \pipe=
 \ Definiens)
 \par}
 
-@<Emit XML for definition-related items (WSM)@>=
+@<Emit \XML/ for definition-related items (WSM)@>=
          itDefAttr:
             with AttributeDefinitionPtr(nContent)^ do
          begin
@@ -22738,7 +23080,7 @@ Item-contents \pipe=
  Definiens)
 \par}
 
-@<Emit XML for definition-related items (WSM)@>=
+@<Emit \XML/ for definition-related items (WSM)@>=
          itDefFunc:
             with FunctorDefinitionPtr(nContent)^ do
          begin
@@ -22776,7 +23118,7 @@ Item-contents \pipe=
 
 \par}
 
-@<Emit XML for definition-related items (WSM)@>=
+@<Emit \XML/ for definition-related items (WSM)@>=
          itDefStruct:
             with StructureDefinitionPtr(nContent)^ do
          begin
@@ -22825,7 +23167,7 @@ Item-contents \pipe= (element Single-Assumption \LB
 \quad element Conditions \LB\ Proposition* \RB
 \RB)\par}
 
-@<Emit XML for assumptions item (WSM)@>=
+@<Emit \XML/ for assumptions item (WSM)@>=
             case AssumptionPtr(nContent)^.nAssumptionSort of
                SingleAssumption:
                   begin
@@ -22871,7 +23213,7 @@ Functorial-Registration-content = element Functorial-Registration \LB
 \RB
 \par}
 
-@<Emit XML for registration-related items (WSM)@>=
+@<Emit \XML/ for registration-related items (WSM)@>=
          itCluster:
             case ClusterPtr(nContent)^.nClusterKind of
                ExistentialRegistration :
@@ -22923,7 +23265,7 @@ Sethood-Registration-content = (Type, Justification)
 Reduction-Registration-content = (Term, Term)
 \par}
 
-@<Emit XML for registration-related items (WSM)@>=
+@<Emit \XML/ for registration-related items (WSM)@>=
          itIdentify:
             with IdentifyRegistrationPtr(nContent)^ do
          begin
@@ -35688,12 +36030,6 @@ tokens and report errors.
                ReadTokenProc;
                if CurWord.Kind = sy_Semicolon then ReadTokenProc;
             until CurWord.Kind <> sy_End
-
-@ @<Within expression AST implementation@>=
-{deferred}
-
-@ @<Class for Within expression@>=
-{deferred}
 
 @* [] Index. Underlined entries in an index item refers to which section
 defines the identifier. Primitive types
