@@ -11,8 +11,13 @@ presuppose the arguments are positive.
 \item Also there are \emph{no checks} whether the parameters
 contain only digits (and an optional sign ``-'').
 \item Further, |DEBUGNUM| is a conditional variable that can be used (with
-|DEBUG|) for testing.
+|DEBUG|) for testing. We can easily turn this into a macro.
+
+(I think
+ we could even introduce a macro |log_num(#) == debug_num(WriteLn(#))|\dots)
 \endenumerate
+
+@d debug_num(#) == @{@&$IFDEF DEBUGNUM@} @+ # @{@&$ENDIF@}
 
 @<numbers.pas@>=
   @<GNU License@>
@@ -22,9 +27,9 @@ unit numbers;
 interface @|@/
 @<Basic arithmetic operations declarations@>@;
 
-@<Types for arbitrary-precision arithmetic@>@;
+type @<Types for arbitrary-precision arithmetic@>@;
 
-@<Zero and units for arbitrary-precision@>@;
+const @<Zero and units for arbitrary-precision@>@;
 
 @<Rational arithmetic declarations@>@;
 
@@ -37,8 +42,8 @@ interface @|@/
 implementation @|@/
 
 uses mizenv @/
-@{@&$IFDEF CH_REPORT@}@+,req_info,prephan,builtin @{@&$ENDIF@} 
- mdebug@+,info @+ end_mdebug; @t\2@> @|@# 
+if_def(CH_REPORT)@+,req_info,prephan,builtin @+ endif
+ mdebug@+,info @+ end_mdebug; @#
 
 @<Trim leading zeros from arbitrary-precision integers@>@;
 
@@ -52,97 +57,42 @@ uses mizenv @/
 
 @<Arbitrary-precision rational arithmetic@>@;
 
-@<Complex-rational arbitrary-precision arithmetic@>@;
+@<Complex-rational arbitrary-precision arithmetic@> @t\2@>@;
 
-@ @<Basic arithmetic operations declarations@>=
-function @? Add(a,b: String): String; @t\2@>
-function @? Sub(a,b: String): String; @t\2@>
-function @? Mul(a,b: String): String; @t\2@>
-function @? Diva(a,b: String): String; @t\2@> {*Note: divides absolute values and preserves the sign of the division}
-function @? _Div(a,b: String): String; @t\2@>
-function @? _Mod(a,b: String): String; @t\2@>
-function @? GCD(a,b: String): String; @t\2@> {*Note: always returns a positive value}
-function @? LCM(a,b: String): String; @t\2@> {*Note: always returns a positive value}
-function @? Abs(a :String ): String; @t\2@>
-function @? IsPrime(a: String): boolean; @t\2@>
-function @? Divides(a,b: String): boolean;
+end.
 
-@ Rational numbers are a pair of arbitrary precision integers
-(represented as a String).
+@* [S] Arbitrary-precision integers.
+We will use ``schoolbook arithmetic'', representing an arbitrary
+precision integer as a string of digits, possibly leading with an
+optional sign. We will ``normalize'' the representation by the
+constraint: if the leading digit is zero, then the number is zero. So
+we will need to trim superfluous leading zeros.
 
-Rational complex numbers are represented by a pair of rational numbers
-in Cartesian form $z = p + {\rm i} q$.
+We will also adopt the convention that the empty string is a synonym
+for zero.
 
-@<Types for arbitrary-precision arithmetic@>=
-type
-   Rational = record Num,Den : String end;
-   RComplex = record  Re,Im: Rational end;
-
-@ @<Zero and units for arbitrary-precision@>=
-const
-   RZero:Rational = (Num:'0'; Den:'1');
-   ROne:Rational  = (Num:'1'; Den:'1');
-   CZero: RComplex     = (Re:(Num:'0'; Den:'1'); Im:(Num:'0'; Den:'1'));
-   COne: RComplex      = (Re:(Num:'1'; Den:'1'); Im:(Num:'0'; Den:'1'));
-   CMinusOne: RComplex = (Re:(Num:'-1'; Den:'1'); Im:(Num:'0'; Den:'1'));
-   CImUnit: RComplex   = (Re:(Num:'0'; Den:'1'); Im:(Num:'1'; Den:'1'));
-
-@ @<Rational arithmetic declarations@>=
-procedure @? RationalReduce(var r: Rational); @t\2@>
-function @? RationalAdd(const r1,r2: Rational): Rational; @t\2@>
-function @? RationalSub(const r1,r2: Rational): Rational; @t\2@>
-function @? RationalNeg(const r1: Rational): Rational; @t\2@>
-function @? RationalMult(const r1,r2: Rational): Rational; @t\2@>
-function @? RationalInv(const r: Rational): Rational; @t\2@>
-function @? RationalDiv(const r1,r2: Rational): Rational; @t\2@>
-function @? RationalEq(const r1,r2: Rational): boolean; @t\2@>
-function @? RationalLE(const r1,r2: Rational): boolean; @t\2@>
-function @? RationalGT(const r1,r2: Rational): boolean;
-
-@ @<Predicate declarations for arbitrary-precision arithmetic@>=
-function @? IsintegerNumber(const z: RComplex): boolean; @t\2@>
-function @? IsNaturalNumber(const z: RComplex): boolean; @t\2@>
-function @? IsPrimeNumber(const z: RComplex): boolean; @t\2@> @#
-
-function @? AreEqComplex(const z1,z2: RComplex): boolean; @t\2@>
-function @? IsEqWithInt(const z: RComplex; @t\hskip11.25pc@> n: longint): boolean; @t\2@>
-function @? IsRationalLE(const z1,z2 : RComplex): boolean; @t\2@>
-function @? IsRationalGT(const z1,z2 : RComplex): boolean;
-
-@ @<Declare public complex-valued arbitrary precision arithmetic@>=
-function @? IntToComplex(x: integer): RComplex; @t\2@>
-function @? ComplexAdd (const z1,z2: RComplex): RComplex; @t\2@>
-function @? ComplexSub(const z1,z2: RComplex): RComplex; @t\2@>
-function @? ComplexNeg (const z: RComplex): RComplex; @t\2@>
-function @? ComplexMult(const z1,z2: RComplex): RComplex; @t\2@>
-function @? ComplexInv(const z: RComplex): RComplex; @t\2@>
-function @? ComplexDiv(const z1,z2: RComplex): RComplex; @t\2@>
-function @? ComplexNorm(const z: RComplex): Rational;
-
-@ @<Declare public comparison operators for arbitrary-precision numbers@>=
-function @? CompareInt(X1,X2: Longint): integer; @t\2@>
-function @? CompareIntStr(X1,X2: String): integer; @t\2@>
-function @? CompareComplex(const z1,z2: RComplex): integer;
-
-@ If we are given single character String consisting of zero or the
-empty String, then we are done.
+@ If we are given single character string consisting of zero or the
+empty string, then we are done.
 
 If we are given anything else, we find the first index (from the left)
-of a nonzero character. Then we create a copy of the subString
-starting from the first nonzero digit to the rest of the String.
+of a nonzero character. Then we create a copy of the substring
+starting from the first nonzero digit to the rest of the string.
+
+This will break if given a string of zeroes like |a = '00'|, in the
+sense that the empty string will be returned.
 
 @<Trim leading zeros from arbitrary-precision integers@>=
-function trimlz(a : String) : String;
+function trimlz(a : string) : string;
 var i : integer;
 begin
    if (a='0') or (a='') then trimlz:=a else
    begin
-   i:=0;
-   repeat
-   i:=i+1;
-   if a[i]<>'0' then break;
-   until i=length(a);
-   trimlz:=copy(a,i,length(a));
+      i:=0;
+      repeat
+         i:=i+1;
+         if a[i]<>'0' then break;
+      until i=length(a);
+      trimlz:=copy(a,i,length(a));
    end;
 end;
 
@@ -155,49 +105,57 @@ then we update $a\K\\{a1}$.
 Then we do likewise on $b$.
 
 @<Check if arbitrary-precision integers are zero@>=
-procedure checkzero(var a,b :String);
-var a1,b1 : String;
+procedure checkzero(var a,b: string);
+var a1,b1 : string;
 begin
+   @<Convert ``$-0$'' into zero@>;
+   @<Trim leading zeros from numerator and denominator@>;
+end;
+
+@ @<Convert ``$-0$'' into zero@>=
    if copy(a,1,2)='-0' then
-   begin @|@/
-      @{@&$IFDEF DEBUGNUM@}
-      WriteLn(infofile,'a=-0'); @/
-      @{@&$ENDIF@}
+   begin 
+      debug_num(WriteLn(infofile,'a=-0')); @/
       a:='0';
    end;
    if copy(b,1,2)='-0' then
-   begin @|@/
-      @{@&$IFDEF DEBUGNUM@}
-      WriteLn(infofile,'b=-0'); @/
-      @{@&$ENDIF@} @/
+   begin 
+      debug_num(WriteLn(infofile,'b=-0')); @/
       b:='0';
-   end;
-   a1:=trimlz(a); if a1<>a then
-   begin @|@/
-      @{@&$IFDEF DEBUGNUM@}
-      WriteLn(infofile,'ZEROS1:',a); @/
-      @{@&$ENDIF@}
+   end
+
+@ @<Trim leading zeros from numerator and denominator@>=
+   a1:=trimlz(a);
+   if a1<>a then
+   begin 
+      debug_num(WriteLn(infofile,'ZEROS1:',a)); @/
       a:=a1;
    end;
-   b1:=trimlz(b); if b1<>b then
-   begin @|@/
-      @{@&$IFDEF DEBUGNUM@}
-      WriteLn(infofile,'ZEROS2:',b); @/
-      @{@&$ENDIF@}
+   b1:=trimlz(b);
+   if b1<>b then
+   begin 
+      debug_num(WriteLn(infofile,'ZEROS2:',b)); @/
       b:=b1;
-   end;
-end;
+   end
 
 @ Since arbitrary precision numbers (as Strings) are negative if they
 begin with a leading ``-'' character, it is easy to obtain the
-absolute value (just delete the minus sign).
+absolute value (just delete the minus sign). This assumes there are
+``double negatives'' like |'--5'|; the ``absolute value'' of |'--5'|
+would yield |'-5'|, which should be a bug.
 
-@<Absolute value for an arbitrary-precision number@>=
-function Abs(a :String ):String;
+@^Bug@>
+
+@<Basic arithmetic operations declarations@>=
+function @? Abs(a: string ): string;
+
+@ @<Absolute value for an arbitrary-precision number@>=
+function Abs(a: string ): string;
 begin
    if length(a)>0 then if a[1]='-' then delete(a,1,1);
    Abs:=a;
 end;
+
 @ When checking $a\leq b$ for two non-negative integers, written as
 Strings (without leading zeros) you can check if the length of $a$ is
 less than the length of $b$.
@@ -208,16 +166,19 @@ When the length of the two Strings are equal, use lexicographic
 ordering to determine which is less.
 
 @<Test if one arbitrary-precision number is less than or equal to another@>=
-function _leq(a,b :String): boolean;
+function _leq(a,b: string): boolean; {compare two positive integers}
 var i,x,y,z:integer;
 begin
-   @{@&$IFDEF DEBUGNUM@}
-   WriteLn(infofile,'_leq(',a,',',b,')');@/
-   @{@&$ENDIF@}
+   debug_num(WriteLn(infofile,'_leq(',a,',',b,')'));@/
    checkzero(a,b);
    if length(a)<length(b) then _leq:=true
    else if length(a)>length(b) then _leq:=false
-   else begin
+   else
+   @<Compare two positive integers with same number of digits@>;
+end;
+
+@ @<Compare two positive integers with same number of digits@>=
+   begin
       for i:=1 to length(a) do
       begin
          val(a[i],x,z); val(b[i],y,z);
@@ -225,8 +186,7 @@ begin
          if x<y then begin _leq:=true; exit; end;
       end;
       _leq:=true;
-   end;
-end;
+   end
 
 @ Now the \emph{general} case is when $a$ and $b$ are
 arbitrary-precision \emph{integers}. If $a$ starts with a minus sign
@@ -238,57 +198,50 @@ with a minus sign, then we're done: $b<a$.
 When neither $a$ nor $b$ starts with a minus sign, then we use
 $\\{\_leq(a,b)}$ to determine the result.
 
-@p
-function leq(a,b :String):boolean;
+@<Test if one arbitrary-precision number is less than or equal to another@>=
+function leq(a,b: string): Boolean;
 begin
-   @{@&$IFDEF DEBUGNUM@}
-   WriteLn(infofile,'leq(',a,',',b,')'); @/
-   @{@&$ENDIF@}
+   debug_num(WriteLn(infofile,'leq(',a,',',b,')')); @/
    checkzero(a,b);
    if a=b then leq:=true else
-      begin
-	 if (a[1]='-') and (b[1]<>'-') then leq:=true;
-	 if (a[1]='-') and (b[1]='-') then leq:=not _leq(abs(a),abs(b));
-	 if (a[1]<>'-') and (b[1]='-') then leq:=false;
-	 if (a[1]<>'-') and (b[1]<>'-') then leq:=_leq(a,b);
-      end;
+   begin
+      if (a[1]='-') and (b[1]<>'-') then leq:=true;
+      if (a[1]='-') and (b[1]='-') then leq:=not _leq(abs(a),abs(b));
+      if (a[1]<>'-') and (b[1]='-') then leq:=false;
+      if (a[1]<>'-') and (b[1]<>'-') then leq:=_leq(a,b);
+   end;
 end;
 
 @ Testing if $a\geq b$ is simply testing if $b\leq a$ after
-normalizing the Strings.
+normalizing the Strings. Mizar implements this by $(a>b)\lor(a=b)$,
+since $\neg(a\leq b)$ is identical to $a>b$.
 
-@p
-function geq(a,b :String):boolean;
+@<Test if one arbitrary-precision number is less than or equal to another@>=
+function geq(a,b: string): Boolean;
 begin
-   @{@&$IFDEF DEBUGNUM@}
-   WriteLn(infofile,'geq(',a,',',b,')'); @/
-   @{@&$ENDIF@}
+   debug_num(WriteLn(infofile,'geq(',a,',',b,')')); @/
    checkzero(a,b); @/
    geq:=(not leq(a,b)) or (a=b);
 end;
 
 @ Similarly, we may check if $a<b$ by testing $a\neq b$ and $a\leq b$.
 
-@p
-function le(a,b :String):boolean;
+@<Test if one arbitrary-precision number is less than or equal to another@>=
+function le(a,b: string): Boolean;
 begin
-   @{@&$IFDEF DEBUGNUM@}
-   WriteLn(infofile,'le(',a,',',b,')'); @/
-   @{@&$ENDIF@}
+   debug_num(WriteLn(infofile,'le(',a,',',b,')')); @/
    checkzero(a,b);
    le:=(a<>b) and (leq(a,b));
 end; @#
 
-function gt(a,b :String):boolean;
+function gt(a,b: string): Boolean;
 begin
-   @{@&$IFDEF DEBUGNUM@}
-   WriteLn(infofile,'gt(',a,',',b,')'); @/
-   @{@&$ENDIF@}
+   debug_num(WriteLn(infofile,'gt(',a,',',b,')')); @/
    checkzero(a,b);
    gt:= not leq(a,b);
 end;
 
-@ \node{Arithmetic operations.}%
+@* [s] Arithmetic operations.
 Now we get to some interesting bits.
 
 We have \\{\_Add} for the addition of two non-negative integers. The
@@ -305,60 +258,124 @@ Then we will compute
 $${\displaystyle{{}\atop{+}}{a_{n}\atop{}}{\dots\atop{}}{a_{m+1}\atop{c_{m+1}}}}\over{r_{n+1}\;r_{n}\;\dots\;r_{m+1}}\eqno(\modno.3)$$
 The result is assembled from the digits $r_{n+1}r_{n}\cdots r_{1}$.
 
+\edef\addmodno{\modno}
+
 @<Arithmetic for arbitrary-precision integers@>=
-function _Add(a,b :String):String;
-var c,x,y,z,v : integer;i:integer; a1,b1,s,r : String;
+function _Add(a,b :String):string;
+var c,x,y,z,v : integer; i:integer; a1,b1,s,r : string;
 begin
-   a1:=a; b1:=b; @/
-   @{@&$IFDEF DEBUGNUM@}
-   WriteLn(infofile,'_Add(',a1,',',b1,')'); @/
-   @{@&$ENDIF@}
-   checkzero(a1,b1);
-   if length(a1)<length(b1) then begin s:=b1; b1:=a1; a1:=s; @+ end;
+   @<Copy $a$ and $b$ into \\{a1}, \\{b1} ensuring \\{a1} is a longer string@>;
    r:='';
    c:=0;
    begin
-      for i:=0 to length(b1)-1 do {step 1, Eq (\modno.2)}
-      begin
-	 val(a1[length(a1)-i],x,z);
-	 val(b1[length(b1)-i],y,z);
-	 if x+y+c>9 then begin v:=(x+y+c)-10; c:=1; end else begin v:=x+y+c; c:=0; end;
-	 Str(v,s);
-	 r:=s+r;
-      end;
-      for i:=length(b1) to length(a1)-1 do {step 2, Eq (\modno.3)}
-      begin
-	 val(a1[length(a1)-i],x,z);
-	 if x+c>9 then begin v:=(x+c)-10; c:=1; end else begin v:=x+c; c:=0; end;
-	 Str(v,s);
-	 r:=s+r;
-      end;
-      if c=1 then r:='1'+r; @+ end; @/
+      @<Add \\{a1} and \\{b1} as in step 1, Eq (\addmodno.2)@>;
+      @<Carry the $c_{m+1}$ as in step 2, Eq (\addmodno.3)@>;
+   end;
    _Add:=trimlz(r);
 end;
+
+@ @<Copy $a$ and $b$ into \\{a1}, \\{b1} ensuring \\{a1} is a longer string@>=
+   a1:=a; b1:=b;
+   debug_num(WriteLn(infofile,'_Add(',a1,',',b1,')'));
+   checkzero(a1,b1);
+   if length(a1)<length(b1) then
+   begin
+      s:=b1;
+      b1:=a1;
+      a1:=s;
+   end
+
+@ @<Add \\{a1} and \\{b1} as in step 1, Eq (\addmodno.2)@>=
+      for i:=0 to length(b1)-1 do {step 1, Eq (\addmodno.2)}
+      begin
+	     val(a1[length(a1)-i],x,z);
+	     val(b1[length(b1)-i],y,z);
+	     if x+y+c>9 then
+         begin
+            v:=(x+y+c)-10;
+            c:=1;
+         end
+         else
+         begin
+            v:=x+y+c;
+            c:=0;
+         end;
+	     Str(v,s);
+	     r:=s+r;
+      end
+
+@ @<Carry the $c_{m+1}$ as in step 2, Eq (\addmodno.3)@>=
+      for i:=length(b1) to length(a1)-1 do {step 2, Eq (\addmodno.3)}
+      begin
+	     val(a1[length(a1)-i],x,z);
+	     if x+c>9 then
+         begin
+            v:=(x+c)-10; c:=1;
+         end
+         else
+         begin
+            v:=x+c; c:=0;
+         end;
+	     Str(v,s);
+	     r:=s+r;
+      end;
+      if c=1 then r:='1'+r
 
 @ Subtraction is a bit trickier, because of the ``borrowing''
 operation.
 
 Also note that \\{\_Sub(a,b)} will start by computing
 $a_{1}\gets\max(a,b)$ and $b_{1}\gets\min(a,b)$, then return $a_{1}-b_{1}$.
+This means the result is always non-negative.
 
-@p 
-function _Sub(a,b :String):String;
-var x,y,z,v : integer;i:integer; a1,b1,s,r : String; @/
-
-   @<Borrow 1 for |Sub_|@>@;   
+@<Arithmetic for arbitrary-precision integers@>=
+function _Sub(a,b :string): string;
+var x,y,z,v : integer; i: integer; a1,b1,s,r: string; @/
+@t\2@>
+   @<``Borrow 1'' procedure for |_Sub|@>@;   
 
 begin
    a1:=a; b1:=b; @/
-   @{@&$IFDEF DEBUGNUM@}
-   WriteLn(infofile,'_Sub(',a1,',',b1,')'); @/
-   @{@&$ENDIF@}
+   debug_num(WriteLn(infofile,'_Sub(',a1,',',b1,')')); @/
    checkzero(a1,b1);
-   if not _leq(b1,a1) then @+ begin s:=b1; b1:=a1; a1:=s; @+ end;
+   @<Swap \\{a1} and \\{b1} if $\\{b1}\leq\\{a1}$@>;
    r:=''; @t\1@>
    begin @t\1@>@/
       for i:=0 to length(b1)-1 do
+      @<Subtract the $i^{\rm th}$ digit of \\{b1} from \\{a1}@>;
+      for i:=length(a1)-length(b1) downto 1 do {nothing left to subtract}
+      begin
+         r:=a1[i]+r; @+ @t\2@> @+
+      end; {so copy remaining digits of minuend}
+   end; @t\2@> @/
+   _Sub:=trimlz(r); @t\2@>
+end;
+
+
+@ This is a private ``helper function'' for subtraction.
+
+@<``Borrow 1'' procedure for |_Sub|@>=
+procedure Borrow(k: integer);
+   var xx,zz: integer; sx: string;
+   begin
+      val(a1[k-1],xx,zz);
+      if xx>=1 then begin xx:=xx-1; Str(xx,sx); a1[k-1]:=sx[1]; end
+      else begin a1[k-1]:='9'; borrow(k-1); end;
+   end;
+
+@ @<Swap \\{a1} and \\{b1} if $\\{b1}\leq\\{a1}$@>=
+   if not _leq(b1,a1) then
+   begin
+      s:=b1;
+      b1:=a1;
+      a1:=s;
+   end
+
+@ We compute $v = x-y$ where $x\K (\\{a1})_{i}$ (possibly borrowing
+from the next digit of \\{a1}) and $y\K(\\{b1})_{i}$.
+We store this as the next digit in the result $r$.
+
+@<Subtract the $i^{\rm th}$ digit of \\{b1} from \\{a1}@>= 
       begin
          val(a1[length(a1)-i],x,z);
          val(b1[length(b1)-i],y,z);
@@ -370,95 +387,94 @@ begin
          v:=x-y;
          Str(v,s);
          r:=s+r;
-      end;
-      for i:=length(a1)-length(b1) downto 1 do
-      begin
-         r:=a1[i]+r; @+ @t\2@> @+
-      end;
-   end; @t\2@> @/
-   _Sub:=trimlz(r); @t\2@>
-end;
-
-@ This is a private ``helper function'' for subtraction.
-
-@<Borrow 1 for |Sub_|@>=
-procedure Borrow(k :integer);
-   var xx,zz : integer;sx:String;
-   begin
-      val(a1[k-1],xx,zz);
-      if xx>=1 then begin xx:=xx-1; Str(xx,sx); a1[k-1]:=sx[1]; end
-      else begin a1[k-1]:='9'; borrow(k-1); end;
-   end;
+      end
 
 @ \node{Multiplication.}%
 Multiplication of $a$ by $b$ works digit-by-digit, in the sense that
-for each digit $b_{i}$ of $b$, we need to multiply $a$ by $b_{i}$. The
+for each digit $b_{j}$ of $b$, we need to multiply $a$ by $b_{j}$. The
 function \\{\_Mul1} does this.
 
 @<Arithmetic for arbitrary-precision integers@>=
-function _Mul1(a:String ;y :integer ):String;
-var c,x,z,v : integer;i:integer; s,r : String;
-begin  @t\1@>@/
-   @{@&$IFDEF DEBUGNUM@}
-   WriteLn(infofile,'_Mul1(',a,',',y,')'); @/
-   @{@&$ENDIF@}
+function _Mul1(a: string; y: integer ): string;
+var c,x,z,v: integer; i:integer; s,r: string;
+begin 
+   debug_num(WriteLn(infofile,'_Mul1(',a,',',y,')')); @/
    r:='';
    c:=0;
-   begin   @t\1@>@/
-      for i:=0 to length(a)-1 do
-      begin
-        val(a[length(a)-i],x,z);
-        if x*y+c>9 then begin v:=(x*y+c) mod 10; c:=(x*y+c) div 10; @+ end
-        else begin v:=x*y+c; c:=0; @+ end;
-        Str(v,s);
-        r:=s+r;
-      end;
-      if c<>0 then
-      begin
-        Str(c,s);
-        r:=s+r; @+
-      end; @t\2@>
-   end;  @/
-   _mul1:=trimlz(r); @t\2@>
+   for i:=0 to length(a)-1 do
+   @<Multiply $i^{\rm th}$ digit of $a$ by $y$@>;
+   if c<>0 then
+   begin
+      Str(c,s);
+      r:=s+r;
+   end;
+   _mul1:=trimlz(r);
 end;
+
+@ @<Multiply $i^{\rm th}$ digit of $a$ by $y$@>=
+   begin
+      val(a[length(a)-i],x,z);
+      if x*y+c>9 then
+      begin
+         v:=(x*y+c) mod 10;
+         c:=(x*y+c) div 10;
+      end
+      else
+      begin
+         v:=x*y+c;
+         c:=0;
+      end;
+      Str(v,s);
+      r:=s+r;
+   end
 
 @ Then multiplication proper amounts to decomposing $b$ into its
 decimal expansion $\sum_{k}b_{k}10^{k}$ and computing $(a\times b_{k})10^{k}$.
 
-@p
-function _Mul(a,b :String):String;
-var y,z : integer;i,j:integer; a1,b1,s,r : String;
-begin @t\1@> @/
-   a1:=a;b1:=b; @/
-   @{@&$IFDEF DEBUGNUM@}
-   WriteLn(infofile,'_Mul(',a1,',',b1,')'); @/
-   @{@&$ENDIF@}
-   checkzero(a1,b1);
-   if length(a1)<length(b1) then begin s:=b1; b1:=a1; a1:=s; @+ end;
+@<Arithmetic for arbitrary-precision integers@>=
+function _Mul(a,b: string): string;
+var y,z: integer; i,j: integer; a1,b1,s,r: string;
+begin @/
+   @<Copy $a$ into \\{a1} and $b$ into \\{b1}, ensuring \\{b1} is a shorter string@>;
    r:='0';
    for i:=0 to length(b1)-1 do
+   @<Multiply $i^{\rm th}$ digit of \\{b1} to \\{a1} and add it to \\{r}@>;
+   _Mul:=trimlz(r);
+end;
+
+@ @<Copy $a$ into \\{a1} and $b$ into \\{b1}, ensuring \\{b1} is a shorter string@>=
+   a1:=a;b1:=b; @/
+   debug_num(WriteLn(infofile,'_Mul(',a1,',',b1,')')); @/
+   checkzero(a1,b1);
+   if length(a1)<length(b1) then begin s:=b1; b1:=a1; a1:=s; @+ end
+
+@ @<Multiply $i^{\rm th}$ digit of \\{b1} to \\{a1} and add it to \\{r}@>=
    begin
       val(b1[length(b1)-i],y,z);
       s:=_mul1(a1,y);
       for j:=0 to i-1 do s:=s+'0';
       r:=_Add(r,s);
-   end;
-   _Mul:=trimlz(r);  @t\2@>
-end;
+   end
 
 @ \node{Division.}%
 The basic design is similar to multiplication. We will try to divide
-$a$ by $b\times 10^{k}$ (which is zero whenever $b\times10^{k}>a$).
+$a$ by $b$ (which is zero whenever $b>a$).
+When $b\leq a$, then $a/b$ is the largest digit $i\in\LB\,1,2,\dots,9\,\RB$
+such that $bi\leq a$.
 
-@p
-function _Div1(a,b : String) : String;
-var i : integer; r : String;
-begin @|@/
-   @{@&$IFDEF DEBUGNUM@} 
-   WriteLn(infofile,'_Div1(',a,',',b,')'); @/
-   @{@&$ENDIF@}
+There appears to be an implicit assumption that $a<10b$, and both
+$a\geq0$ and $b\geq0$ are non-negative integers.
+
+\Ithink{There is no leading zero to $r$, so the \\{trimlz}($r$)
+statement is completely superfluous.}
+
+@<Arithmetic for arbitrary-precision integers@>=
+function _Div1(a,b: string) : string;
+var i: integer; r: string;
+begin
+   debug_num(WriteLn(infofile,'_Div1(',a,',',b,')')); @/
    checkzero(a,b);
-   if not _leq(b,a) then _div1:='0'
+   if not _leq(b,a) then _div1:='0' {$a/b=0$ when $b>a$}
    else
       for i:=9 downto 1 do
       begin
@@ -466,90 +482,110 @@ begin @|@/
          if _leq(_mul(b,r),a) then
          begin
             _div1:=trimlz(r);
-            exit; @+
+            exit;
          end;
       end;
 end;
 
-@ @p
-function _Div(a,b : String):String;
-var z,c,i:integer; s,r,rs : String;b_GPC:boolean; @/
+@ Calculate $q$ such that $a=bq+r$ for some $0\leq r<b$, assuming
+$a\geq0$ and $b\geq0$.
+
+@<Basic arithmetic operations declarations@>=
+function @? _Div(a,b: string): string;
+
+@ @<Arithmetic for arbitrary-precision integers@>=
+function _Div(a,b: string): string;
+var z,c,i: integer; s,r,rs : string; b_GPC: Boolean; @/
 @<Get the next digit for dividing arbitrary-precision integers@>@;
-begin @t\1@> @/
-   @{@&$IFDEF DEBUGNUM@}
-   WriteLn(infofile,'_Div(',a,',',b,')'); @/
-   @{@&$ENDIF@}
+begin 
+   debug_num(WriteLn(infofile,'_Div(',a,',',b,')')); @/
    checkzero(a,b);
    if a=b then _div:='1'
    else if not _leq(b,a) then _div:='0' @t\2@>
    else
+   @<Long division of $a$ by $b$@>;
+end;
+
+@ We take the leading digits of $a$ and treat them as a new integer
+$s=a_{1}\cdots a_{z}$.
+We only take as many digits necessary to make $b\leq s$ but with
+$a_{1}\cdots a_{z-1}<b$. Then we compute \\{rs} such that
+$s=b\times\\{rs}+r$ for some $0\leq r<b$. We update $s\K s - \\{rs}\times b$
+and move to the next digit of $a$ (updating $s$) using the \\{gets} function.
+This reflects ``long division'' as taught in gradeschool.
+
+@<Long division of $a$ by $b$@>=
    begin
-      s:='';r:='';z:=1;
-      for i:=1 to length(b) do s:=s+a[i];
-      if not _leq(b,s) then
-      begin
-         s:=s+a[length(b)+1];
-         z:=length(b)+1; @+
-      end
-      else
-      begin
-         z:=length(b); @+
-      end;
+      s:=''; r:=''; z:=1;
+      for i:=1 to length(b) do s:=s+a[i]; {copy leading digits of $a$ into $s$}
+      @<Ensure $b\leq s$ by adding another digit of $a$, initialize $z$@>;
+      {$z\K\\{length}(s)$}
       repeat
          rs:=_div1(s,b);
          r:=r+rs;
          gets;
          b_GPC:= _leq(b,s);
       until not b_GPC;
-      _div:=trimlz(r); @t\2@>
-   end; @t\1@>
-end;
+      _div:=trimlz(r);
+   end
 
-@ @<Get the next digit for dividing arbitrary-precision integers@>=
+@ @<Ensure $b\leq s$ by adding another digit of $a$, initialize $z$@>=
+      if _leq(b,s) then z:=length(b)
+      else
+      begin
+         s:=s+a[length(b)+1];
+         z:=length(b)+1; @+
+      end
+
+@ We just need to ``get the next digit'' of $a$, if available, and
+append it to $s$.
+
+@d remaining_digits_are_zero==(trimlz(copy(a,z+c,length(a)))='0')
+@<Get the next digit for dividing arbitrary-precision integers@>=
 procedure gets;
 var j : integer;
 begin
    c:=1;
-   s:=_Sub(s,_mul(rs,b));
-   if (s='0') and (trimlz(copy(a,z+c,length(a)))='0') then
-   begin
-      @{@&$IFDEF DEBUGNUM@}
-      WriteLn(infofile,'Rewriting zeros:',copy(a,z+c,length(a))); @/
-      @{@&$ENDIF@}
-      r:=r+copy(a,z+c,length(a)); exit;
-   end;
+   s:=_Sub(s,_mul(rs,b)); {i.e., $s\K s\mathbin{\&{mod}}b$}
+   if (s='0') and remaining_digits_are_zero then
+   @<Copy remainder of $a$ into $s$, and terminate the function@>;
    if z+1<=length(a) then
-   begin
-      s:=s+a[z+1]; inc(c);
-      if (not _leq(b,s)) then r:=r+'0';
-   end;
+   @<Append next digit of $a$ onto $s$, incrementing $c$@>;
    while (not _leq(b,s)) and (z+c<=length(a)) do
-   begin
-      s:=s+a[z+c];
-      inc(c);
-      if (not _leq(b,s)) then r:=r+'0';
-   end;
+   @<Append next digit of $a$ onto $s$, incrementing $c$@>;
    z:=z+c-1;
 end; {gets}
 
+@ @<Copy remainder of $a$ into $s$, and terminate the function@>=
+   begin
+      debug_num(WriteLn(infofile,'Rewriting zeros:',copy(a,z+c,length(a)))); @/
+      r:=r+copy(a,z+c,length(a)); exit;
+   end
+
+@ @<Append next digit of $a$ onto $s$, incrementing $c$@>=
+   begin
+      s:=s+a[z+c];
+      inc(c);
+      if (not _leq(b,s)) then r:=r+'0'; {shortcut: division will add a zero digit anyways}
+   end
+
 @ \node{Modulo.} We can compute $a\mathbin{\&{mod}}b$ by observing if
 $a < b$ then we should obtain $a$. Otherwise, we should compute
-$r\K a\mathbin{\&{div}} b$, then $a - rb$ is $a\mathbin{\&{mod}}b$.
+$q\K a\mathbin{\&{div}} b$, then $a - qb$ is $a\mathbin{\&{mod}}b$.
 
-@<Arithmetic for arbitrary-precision integers@>=
-function _Mod(a,b : String): String;
-var r : String;
+@<Basic arithmetic operations declarations@>=
+function @? _Mod(a,b: string): string;
+
+@ @<Arithmetic for arbitrary-precision integers@>=
+function _Mod(a,b : string): string;
+var r : string;
 begin @/
-   @{@&$IFDEF DEBUGNUM@}
-   WriteLn(infofile,'_Mod(',a,',',b,')'); @/
-   @{@&$ENDIF@}
+   debug_num(WriteLn(infofile,'_Mod(',a,',',b,')')); @/
    checkzero(a,b);
    if le(a,b) then r:=a
-   else r:=_Sub(a,_mul(b,_div(a,b)));
+   else r:=_Sub(a,_Mul(b,_Div(a,b)));
    _Mod:=trimlz(r); @/
-   @{@&$IFDEF DEBUGNUM@}
-    WriteLn(infofile,'End _Mod:',r); @/
-   @{@&$ENDIF@}
+   debug_num(WriteLn(infofile,'End _Mod:',r)); @/
 end;
 
 @ \node{Greatest common divisor.} \label{numbers:gcd}
@@ -567,46 +603,50 @@ handle the special cases:
 \noindent Otherwise, we end up in the default case, which is handled
 by the \&{while} loop.
 
-@p
-function GCD(a,b:String):String;
-label ex;var a1,b1,p,r:String;
+@d assign_gcd_and_jump(#) == begin r:=#; goto ex; @+ end
+
+@<Basic arithmetic operations declarations@>=
+function @? GCD(a,b: string): string; {*Note: always returns a positive value}
+
+@ @<Arithmetic for arbitrary-precision integers@>=
+function GCD(a,b: string): string;
+label ex;
+var a1,b1,p,r: string;
 begin
    a1:=a; b1:=b; @/
-   @{@&$IFDEF DEBUGNUM@}
-   WriteLn(infofile,'GCD(',a1,',',b1,')'); @/
-   @{@&$ENDIF@}
+   debug_num(WriteLn(infofile,'GCD(',a1,',',b1,')')); @/
    checkzero(a1,b1);
    a1:=abs(a1); b1:=abs(b1);
-   if (a1='1') or (b1='1') then begin r:='1'; goto ex; @+ end;
-   if (a1='0') and (b1<>'0') then begin r:=b1; goto ex; @+ end;
-   if (b1='0') and (a1<>'0') then begin r:=a1; goto ex; @+ end;
-   if a1=b1 then begin GCD:=a1; r:=a1; goto ex; @+ end;
-   while gt(b1,'0') do begin p:=b1; b1:= _mod(a1,b1); a1:=p @+ end;
+   if (a1='1') or (b1='1') then assign_gcd_and_jump('1');
+   if (a1='0') and (b1<>'0') then assign_gcd_and_jump(b1);
+   if (b1='0') and (a1<>'0') then assign_gcd_and_jump(a1);
+   if a1=b1 then assign_gcd_and_jump(a1);
+   while gt(b1,'0') do {$0 < \\{b1}$}
+   begin p:=b1; b1:= _Mod(a1,b1); a1:=p @+ end;
    r:=a1;
    ex:
       GCD:=r; @/
-   @{@&$IFDEF DEBUGNUM@}
-   WriteLn(infofile,'End GCD:',r); @/
-   @{@&$ENDIF@}
+   debug_num(WriteLn(infofile,'End GCD:',r)); @/
 end;
 
 @ \node{Least common multiple.} We recall $\lcm(a,b)=\abs{ab}/\gcd(\abs{a},\abs{b})$.
 
-@p
-function LCM(a,b:String):String;
-var a1,b1,r:String;
+@<Basic arithmetic operations declarations@>=
+function @? LCM(a,b: string): string; {*Note: always returns a positive value}
+
+@ @<Arithmetic for arbitrary-precision integers@>=
+function LCM(a,b: string): string;
+var a1,b1,r: string;
 begin
-   a1:=a; b1:=b; @/
-   @{@&$IFDEF DEBUGNUM@}
-   WriteLn(infofile,'LCM(',a1,',',b1,')'); @/
-   @{@&$ENDIF@}
+   a1:=a;
+   b1:=b; @/
+   debug_num(WriteLn(infofile,'LCM(',a1,',',b1,')')); @/
    checkzero(a1,b1);
-   a1:=abs(a1); b1:=abs(b1);
-   r:=Diva(Mul(a1,b1),GCD(a1,b1));
+   a1:=abs(a1);
+   b1:=abs(b1);
+   r:=DivA(Mul(a1,b1),GCD(a1,b1));
    LCM:=r; @/
-   @{@&$IFDEF DEBUGNUM@}
-   WriteLn(infofile,'End LCM:',r); @/
-   @{@&$ENDIF@}
+   debug_num(WriteLn(infofile,'End LCM:',r)); @/
 end;
 
 @ \node{Addition.} This is a bit obfuscated with the reliance of \&{goto} \\{ex},
@@ -623,28 +663,61 @@ $\max(a,b)-\min(a,b)$ for $a\geq0$ and $b\geq0$):
 using \\{\_Add}.
 \endenumerate
 
-@p
-function Add(a,b :String ):String;
-label ex; var r : String;
+@<Basic arithmetic operations declarations@>=
+function @? Add(a,b: string): string;
+
+@ @<Arithmetic for arbitrary-precision integers@>=
+function Add(a,b: string ): string;
+label ex; var r: string;
 begin
-   @{@&$IFDEF DEBUGNUM@}
-   WriteLn(infofile,'Add(',a,',',b,')'); @/
-   @{@&$ENDIF@}
+   debug_num(WriteLn(infofile,'Add(',a,',',b,')')); @/
    checkzero(a,b);
-   if (a[1]='-') and (b[1]='-') then begin r:='-'+_Add(abs(a),abs(b)); if r='-0' then r:='0'; goto ex; end;
-   if (a[1]<>'-') and (b[1]<>'-') then begin r:=_Add(a,b); goto ex; @+ end;
+   if (a[1]='-') and (b[1]='-') then
+   @<Add two negative integers, and \&{goto} \\{ex}@>;
+   if (a[1]<>'-') and (b[1]<>'-') then
+   begin
+      r:=_Add(a,b);
+      goto ex; @+
+   end;
    if (a[1]='-') and (b[1]<>'-') then
-      if gt(abs(a),b) then begin r:='-'+_Sub(abs(a),b); if r='-0' then r:='0'; goto ex; end
-      else begin r:=_Sub(abs(a),b); goto ex; @+ end;
+   @<Calculate $(-a)+b=b-a$ and \&{goto} \\{ex}@>;
    if (a[1]<>'-') and (b[1]='-') then
-      if gt(abs(b),a) then begin r:='-'+_Sub(abs(b),a); if r='-0' then r:='0'; goto ex; end
-      else begin r:=_Sub(abs(b),a); goto ex; @+ end;
+   @<Calculate $a+(-b)=a-b$ and \&{goto} \\{ex}@>;
    ex:
       Add:=r; @/
-   @{@&$IFDEF DEBUGNUM@}
-   WriteLn(infofile,'End Add:',r); @/
-   @{@&$ENDIF@}
+   debug_num(WriteLn(infofile,'End Add:',r)); @/
 end;
+
+@ @<Add two negative integers, and \&{goto} \\{ex}@>=
+   begin
+      r:='-'+_Add(abs(a),abs(b));
+      if r='-0' then r:='0';
+      goto ex;
+   end
+
+@ @<Calculate $(-a)+b=b-a$ and \&{goto} \\{ex}@>=
+      if gt(abs(a),b) then
+      begin
+         r:='-'+_Sub(abs(a),b);
+         if r='-0' then r:='0';
+         goto ex;
+      end
+      else begin
+         r:=_Sub(abs(a),b);
+         goto ex; @+
+      end
+
+@ @<Calculate $a+(-b)=a-b$ and \&{goto} \\{ex}@>=
+      if gt(abs(b),a) then
+      begin
+         r:='-'+_Sub(abs(b),a);
+         if r='-0' then r:='0';
+         goto ex;
+      end
+      else begin
+         r:=_Sub(abs(b),a);
+         goto ex; @+
+      end
 
 @ \node{Subtraction.} Now, given two arbitrary precision integers, we
 can compute their difference. Again, \&{goto} \\{ex} obfuscates the flow
@@ -663,56 +736,65 @@ here, but the basic logic is:
 \medbreak\noindent Testing if $x<0$ is done by checking $\sgn(x)=-1$, and
 $x\geq0$ tests if $\sgn(x)\neq-1$.
 
-@p
-function Sub(a,b :String ):String;
-label ex; var r : String;
+@<Basic arithmetic operations declarations@>=
+function @? Sub(a,b: string): string;
+
+@ @<Arithmetic for arbitrary-precision integers@>=
+function Sub(a,b: string): string;
+label ex; var r: string;
 begin
-   @{@&$IFDEF DEBUGNUM@}
-   WriteLn(infofile,'Sub(',a,',',b,')'); @/
-   @{@&$ENDIF@}
+   debug_num(WriteLn(infofile,'Sub(',a,',',b,')')); @/
    checkzero(a,b);
    if (a[1]='-') and (b[1]<>'-') then
+   @<Calculate $(-a)-b=-(a+b)$ and \&{goto} \\{ex}@>;
+   if (a[1]<>'-') and (b[1]='-') then begin r:=_Add(a,abs(b)); goto ex; @+ end;
+   if (a[1]='-') and (b[1]='-') then
+   @<Calculate $(-a)-(-b)$ and \&{goto} \\{ex}@>;
+   if (a[1]<>'-') and (b[1]<>'-') then
+   @<Calculate difference of two positive integers@>;
+   ex:
+      Sub:=r; @/
+   debug_num(WriteLn(infofile,'End Sub:',r)); @/
+end;
+
+@ @<Calculate $(-a)-b=-(a+b)$ and \&{goto} \\{ex}@>=
    begin
       r:='-'+_Add(abs(a),b);
       if r='-0' then r:='0';
       goto ex;
-   end;
-   if (a[1]<>'-') and (b[1]='-') then begin r:=_Add(a,abs(b)); goto ex; @+ end;
-   if (a[1]='-') and (b[1]='-') then
+   end
+
+@ @<Calculate $(-a)-(-b)$ and \&{goto} \\{ex}@>=
       if gt(abs(a),abs(b)) then
       begin
          r:='-'+_Sub(abs(a),abs(b));
          if r='-0' then r:='0';
          goto ex;
       end
-      else begin r:=_Sub(abs(a),abs(b)); goto ex; @+ end;
-   if (a[1]<>'-') and (b[1]<>'-') then
+      else begin r:=_Sub(abs(a),abs(b)); goto ex; @+ end
+
+@ @<Calculate difference of two positive integers@>=
       if gt(b,a) then
       begin
          r:='-'+_Sub(b,a);
          if r='-0' then r:='0';
          goto ex;
       end
-      else begin r:=_Sub(a,b); goto ex; @+ end;
-   ex:
-      Sub:=r; @/
-   @{@&$IFDEF DEBUGNUM@}
-   WriteLn(infofile,'End Sub:',r); @/
-   @{@&$ENDIF@}
-end;
+      else begin r:=_Sub(a,b); goto ex; @+ end
 
 @ \node{Multiplication of arbitrary-precision integers.}
 We calculate the product of $a$ with $b$ by handling the case where
 $\sgn(a)\neq\sgn(b)$ as $ab=-\abs{a}\cdot\abs{b}$. Otherwise we can
 just rely on the \\{\_Mul(a,b)} to do our work.
 
-@p
-function Mul(a,b :String ):String;
-label ex; var r : String;
+@<Basic arithmetic operations declarations@>=
+function @? Mul(a,b: string): string;
+
+@ @<Arithmetic for arbitrary-precision integers@>=
+function Mul(a,b: string ): string;
+label ex; var r: string;
 begin
-   @{@&$IFDEF DEBUGNUM@}
-   WriteLn(infofile,'Mul(',a,',',b,')'); @/
-   @{@&$ENDIF@}
+   debug_num(WriteLn(infofile,'Mul(',a,',',b,')')); @/
    checkzero(a,b);
    if ((a[1]='-') and (b[1]<>'-')) or ((a[1]<>'-') and (b[1]='-')) then
    begin
@@ -722,22 +804,21 @@ begin
    else r:=_Mul(abs(a),abs(b));
    ex:
       Mul:=r; @/
-   @{@&$IFDEF DEBUGNUM@}
-   WriteLn(infofile,'End Mul:',r); @/
-   @{@&$ENDIF@}
+   debug_num(WriteLn(infofile,'End Mul:',r)); @/
 end;
 
 @ \node{DivA.} This is the division for arbitrary-precision
 integers. Like multiplication, we handle the case $\sgn(a)\neq\sgn(b)$
 by computing $a/b = -\abs{a}/\abs{b}$.
 
-@p
-function DivA(a,b :String ):String;
-label ex; var r : String;
+@<Basic arithmetic operations declarations@>=
+function @? DivA(a,b: string): string; {*Note: divides absolute values and preserves the sign of the division}
+
+@ @<Arithmetic for arbitrary-precision integers@>=
+function DivA(a,b: string ): string;
+label ex; var r: string;
 begin
-   @{@&$IFDEF DEBUGNUM@}
-   WriteLn(infofile,'DivA(',a,',',b,')'); @/
-   @{@&$ENDIF@}
+   debug_num(WriteLn(infofile,'DivA(',a,',',b,')')); @/
    checkzero(a,b);
    if ((a[1]='-') and (b[1]<>'-')) or ((a[1]<>'-') and (b[1]='-')) then
    begin
@@ -747,9 +828,7 @@ begin
    else r:=_Div(abs(a),abs(b));
    ex:
       DivA:=r; @/
-   @{@&$IFDEF DEBUGNUM@}
-   WriteLn(infofile,'End DivA:',r); @/
-   @{@&$ENDIF@}
+   debug_num(WriteLn(infofile,'End DivA:',r)); @/
 end;
 
 @ \node{Testing for primality.}
@@ -764,10 +843,13 @@ and looking at the leading $\lceil n/2\rceil$ digits $s_{\rm lead}$.
 It's not hard to see that the number $x_{\rm lead}$ described
 by $s_{\rm lead}$ satisfies $x_{\rm lead}^{2}\geq x$.
 
-@p
-function IsPrime(a: String): boolean;
-var i: String;
-r: boolean;
+@<Basic arithmetic operations declarations@>=
+function @? IsPrime(a: string): Boolean;
+
+@ @<Arithmetic for arbitrary-precision integers@>=
+function IsPrime(a: string): Boolean;
+var i: string;
+r: Boolean;
 begin
    if leq('2',a) then 
    begin
@@ -790,20 +872,41 @@ end;
 @ \node{Divides relation.}
 We can check if ``$x$ divides $y$'' by testing if $\gcd(x,y)=\abs{x}$.
 
-@p
-function Divides(a,b: String): boolean;
-var r: boolean;
+@<Basic arithmetic operations declarations@>=
+function @? Divides(a,b: String): boolean;
+
+@ @<Arithmetic for arbitrary-precision integers@>=
+function Divides(a,b: string): Boolean;
+var r: Boolean;
 begin
     r:=GCD(a,b)=abs(a);
     Divides:=r;
 end;
+
+@* [S] Arbitrary-precision rational arithmetic.
+Rational numbers are a pair of arbitrary precision integers
+(represented as a String). The convention is that the denominator is
+a \emph{strictly positive} integer.
+
+@<Types for arbitrary-precision arithmetic@>=
+   Rational = record Num,Den : string end;
+
+@ ``Zero'' and ``one'' are frequently used rational numbers, so we
+should define them as constants.
+
+@<Zero and units for arbitrary-precision@>=
+   RZero:Rational = (Num:'0'; Den:'1');
+   ROne:Rational  = (Num:'1'; Den:'1');
 
 @ \node{Rational arithmetic.} Now we begin the rational arithmetic
 ``in earnest''. The first thing to do is provide a way to compute the
 reduced form for a fraction, i.e.,
 $$\frac{n}{d} = \frac{n/\gcd(n,d)}{d/\gcd(n,d)}$$
 
-@<Arbitrary-precision rational arithmetic@>=
+@<Rational arithmetic declarations@>=
+procedure @? RationalReduce(var r: Rational);
+
+@ @<Arbitrary-precision rational arithmetic@>=
 procedure RationalReduce(var r: Rational);
 var lGcd:String;
 begin
@@ -815,8 +918,12 @@ end;
 @ \node{Rational addition.}
 We recall
 $$ \frac{a}{b} + \frac{c}{d} = \frac{ad+bc}{bd} $$
+We should return the reduced form of the result.
 
-@p
+@<Rational arithmetic declarations@>=
+function @? RationalAdd(const r1,r2: Rational): Rational;
+
+@ @<Arbitrary-precision rational arithmetic@>=
 function RationalAdd(const r1,r2: Rational): Rational;
 var lRes: Rational;
 begin
@@ -829,7 +936,10 @@ end;
 @ \node{Rational subtraction.} Similar to addition, but the numerator
 is $ad-bc$.
 
-@p
+@<Rational arithmetic declarations@>=
+function @? RationalSub(const r1,r2: Rational): Rational;
+
+@ @<Arbitrary-precision rational arithmetic@>=
 function RationalSub(const r1,r2: Rational): Rational;
 var lRes: Rational;
 begin
@@ -842,7 +952,10 @@ end;
 @ Negating a rational number amounts to multiplying the numerator by
 $-1$.
 
-@p
+@<Rational arithmetic declarations@>=
+function @? RationalNeg(const r1: Rational): Rational;
+
+@ @<Arbitrary-precision rational arithmetic@>=
 function RationalNeg(const r1: Rational): Rational;
 var lRes: Rational;
 begin
@@ -855,7 +968,10 @@ end;
 This uses the school-book formula
 $$\frac{a}{b}\times\frac{c}{d}=\frac{ac}{bd}$$
 
-@p
+@<Rational arithmetic declarations@>=
+function @? RationalMult(const r1,r2: Rational): Rational;
+
+@ @<Arbitrary-precision rational arithmetic@>=
 function RationalMult(const r1,r2: Rational): Rational;
 var lRes: Rational;
 begin
@@ -873,7 +989,10 @@ $n\in\ZZ$ while $d\in\NN$).
 When the rational number \emph{is} zero, we simply take $0^{-1}=0$ (as
 is conventional among proof assistants).
 
-@p
+@<Rational arithmetic declarations@>=
+function @? RationalInv(const r: Rational): Rational;
+
+@ @<Arbitrary-precision rational arithmetic@>=
 function RationalInv(const r: Rational): Rational;
 var lRes: Rational;
 begin
@@ -891,7 +1010,10 @@ end;
 @ \node{Dividing rational numbers.}
 We see that $r_{1}/r_{2}=r_{1}\times(r_{2}^{-1})$. That's the trick.
 
-@p
+@<Rational arithmetic declarations@>=
+function @? RationalDiv(const r1,r2: Rational): Rational;
+
+@ @<Arbitrary-precision rational arithmetic@>=
 function RationalDiv(const r1,r2: Rational): Rational;
 begin
    RationalDiv := RationalMult(r1,RationalInv(r2));
@@ -902,20 +1024,27 @@ Two rational numbers $n_{1}/d_{1}$ and $n_{2}/d_{2}$ are equal if
 $n_{1}=n_{2}$ and $d_{1}=d_{2}$. This assumes that both rational
 numbers are in reduced form.
 
-@p
+
+@<Rational arithmetic declarations@>=
+function @? RationalEq(const r1,r2: Rational): boolean;
+
+@ @<Arbitrary-precision rational arithmetic@>=
 function RationalEq(const r1,r2: Rational): boolean;
 begin
    RationalEq := (r1.Num = r2.Num) and (r1.Den = r2.Den);
 end;
 
 @ \node{Testing inequality of rational numbers.}\label{numbers:rationalgt}
-We have $n_{1}/d_{1} < n_{2}/d_{2}$ if $n_{1}d_{2}<n_{2}d_{1}$.
+We have $n_{1}/d_{1} \leq n_{2}/d_{2}$ if $n_{1}d_{2}\leq n_{2}d_{1}$.
 
-Similarly, we have $n_{1}/d_{1}\geq n_{2}/d_{1}$ is just the negation
-of $n_{1}/d_{1} < n_{2}/d_{2}$. \textbf{But:} this is misleadingly
-called \\{RationalGT} instead of \\{RationalGEQ}.
+Similarly, we have $n_{1}/d_{1}>n_{2}/d_{1}$ is just the negation
+of $n_{1}/d_{1} \leq n_{2}/d_{2}$.
 
-@p
+@<Rational arithmetic declarations@>=
+function @? RationalLE(const r1,r2: Rational): boolean; @t\2@>
+function @? RationalGT(const r1,r2: Rational): boolean;
+
+@ @<Arbitrary-precision rational arithmetic@>=
 function RationalLE(const r1,r2: Rational): boolean;
 begin
    RationalLE := leq(Mul(r1.Num,r2.Den),Mul(r1.Den,r2.Num));
@@ -926,23 +1055,40 @@ begin
    RationalGT := not RationalLE(r1,r2);
 end;
 
-@ \node{Rational complex arbitrary-precision arithmetic.}
+@* [S] Rational complex numbers.
 We now begin with $\QQ+{\rm i}\QQ\subset\CC$, the subset of
 complex-numbers where the real and imaginary parts are rational
 numbers.
 
-We want to know when these numbers describe integers (i.e., the
+That is to say, rational complex numbers are represented by a pair of
+rational numbers in Cartesian form $z = p + {\rm i} q$.
+
+@<Types for arbitrary-precision arithmetic@>=
+   RComplex = record  Re,Im: Rational end;
+
+@ @<Zero and units for arbitrary-precision@>=
+   CZero: RComplex     = (Re:(Num:'0'; Den:'1'); Im:(Num:'0'; Den:'1'));
+   COne: RComplex      = (Re:(Num:'1'; Den:'1'); Im:(Num:'0'; Den:'1'));
+   CMinusOne: RComplex = (Re:(Num:'-1'; Den:'1'); Im:(Num:'0'; Den:'1'));
+   CImUnit: RComplex   = (Re:(Num:'0'; Den:'1'); Im:(Num:'1'; Den:'1'));
+
+@ We want to know when these numbers describe integers (i.e., the
 imaginary part is zero and the denominator of the real part is 1) and
 natural numbers (i.e., when furthermore the numerator of the real part
 is non-negative).
 
-@<Complex-rational arbitrary-precision arithmetic@>=
-function IsintegerNumber(const z: RComplex): boolean;
+@<Predicate declarations for arbitrary-precision arithmetic@>=
+function @? IsIntegerNumber(const z: RComplex): Boolean; @t\2@>
+function @? IsNaturalNumber(const z: RComplex): Boolean; @t\2@>
+function @? IsPrimeNumber(const z: RComplex): Boolean; @t\2@> @#
+
+@ @<Complex-rational arbitrary-precision arithmetic@>=
+function IsIntegerNumber(const z: RComplex): Boolean;
 begin
-   IsintegerNumber := (z.Im.Num = '0') and (z.Re.Den = '1'); @+
+   IsIntegerNumber := (z.Im.Num = '0') and (z.Re.Den = '1'); @+
 end;@#
 
-function IsNaturalNumber(const z: RComplex): boolean;
+function IsNaturalNumber(const z: RComplex): Boolean;
 begin
    IsNaturalNumber := (z.Im.Num = '0') and (z.Re.Den = '1') and (geq(z.Re.Num,'0')); @+
 end;@#
@@ -957,14 +1103,18 @@ end;
 This amounts to checking if the real and imaginary parts are equal to
 each other as rational numbers.
 
-@p
-function AreEqComplex(const z1,z2: RComplex): boolean;
+@<Predicate declarations for arbitrary-precision arithmetic@>=
+function @? AreEqComplex(const z1,z2: RComplex): Boolean; @t\2@>
+function @? IsEqWithInt(const z: RComplex; @t\hskip10.3333pc@> n: longint): Boolean;
+
+@ @<Complex-rational arbitrary-precision arithmetic@>=
+function AreEqComplex(const z1,z2: RComplex): Boolean;
 begin
    AreEqComplex := RationalEq(z1.Re,z2.Re) and RationalEq(z1.Im,z2.Im); @+
 end;@#
 
-function IsEqWithInt(const z: RComplex; @t\hskip10.3333pc@> n: longint): boolean;
-var s : String;
+function IsEqWithInt(const z: RComplex; @t\hskip10.3333pc@> n: longint): Boolean;
+var s : string;
 begin
    Str(n,s);
    IsEqWithInt := (z.Im.Num = '0') and (z.Re.Num = s) and (z.Re.Den = '1'); @+
@@ -976,23 +1126,31 @@ on the subset $\{q+{\rm i}0\mid q\in\QQ\}\subset\CC$.
 Again, what we said earlier about \\{RationalGT} being badly named holds
 for \\{IsRationalGT} being badly named as well.
 
-@p
-function IsRationalLE(const z1,z2 : RComplex): boolean;
+@<Predicate declarations for arbitrary-precision arithmetic@>=
+function @? IsRationalLE(const z1,z2 : RComplex): Boolean; @t\2@>
+function @? IsRationalGT(const z1,z2 : RComplex): Boolean;
+
+@ @<Complex-rational arbitrary-precision arithmetic@>=
+function IsRationalLE(const z1,z2 : RComplex): Boolean;
 begin
    IsRationalLE := (z1.Im.Num = '0') and (z2.Im.Num = '0') and RationalLE(z1.Re,z2.Re); @+
 end; @#
 
-function IsRationalGT(const z1,z2 : RComplex): boolean;
+function IsRationalGT(const z1,z2 : RComplex): Boolean;
 begin
    IsRationalGT := (z1.Im.Num = '0') and (z2.Im.Num = '0') and RationalGT(z1.Re,z2.Re); @+
 end;
 
-@ \node{Converting integers to complex numbers.} We have a function to
+@* [s] Arithmetic operations.
+\node{Converting integers to complex numbers.} We have a function to
 convert an integer $x\in\ZZ$ to be the complex number $(x/1) + {\rm i}(0/1)\in\CC$.
 
-@p
+@<Declare public complex-valued arbitrary precision arithmetic@>=
+function @? IntToComplex(x: integer): RComplex;
+
+@ @<Complex-rational arbitrary-precision arithmetic@>=
 function IntToComplex(x: integer): RComplex;
-var lRes:RComplex;
+var lRes: RComplex;
 begin
    lRes:=COne;
    lRes.Re.Num:=IntToStr(x);
@@ -1003,45 +1161,54 @@ end;
 We compute the sum of $(x_{1}+{\rm i}y_{1})$
 and $x_{2} + {\rm i}y_{2}$ to be $(x_{1}+x_{2})+{\rm i}(y_{1}+y_{2})$.
 
-@p
+@<Declare public complex-valued arbitrary precision arithmetic@>=
+function @? ComplexAdd (const z1,z2: RComplex): RComplex;
+
+@ @<Complex-rational arbitrary-precision arithmetic@>=
 function ComplexAdd(const z1,z2 : RComplex): RComplex;
-var lRes:RComplex;
+var lRes: RComplex; @t\2@>
 begin
    lRes.Re := RationalAdd(z1.Re,z2.Re);
-   lRes.Im := RationalAdd(z1.Im,z2.Im); @/
-   @{@&$IFDEF CH_REPORT@}
-   CHReport.Out_NumReq3(rqRealAdd, z1, z2, lRes); @/
-   @{@&$ENDIF@} 
+   lRes.Im := RationalAdd(z1.Im,z2.Im);
+   if_def(CH_REPORT) @t\enspace @>
+   CHReport.Out_NumReq3(rqRealAdd, z1, z2, lRes); @+
+   endif@; @/
    ComplexAdd:= lRes;
 end;
 
 @ \node{Subtracting complex numbers.}
 We find the difference of complex numbers componentwise.
 
-@p
+@<Declare public complex-valued arbitrary precision arithmetic@>=
+function @? ComplexSub(const z1,z2: RComplex): RComplex;
+
+@ @<Complex-rational arbitrary-precision arithmetic@>=
 function ComplexSub(const z1,z2: RComplex): RComplex;
-var lRes:RComplex;
+var lRes: RComplex;
 begin
    lRes.Re := RationalSub(z1.Re,z2.Re);
    lRes.Im := RationalSub(z1.Im,z2.Im); @/
-   @{@&$IFDEF CH_REPORT@}
-   CHReport.Out_NumReq3(rqRealDiff, z1, z2, lRes); @/
-   @{@&$ENDIF@}  
+   if_def(CH_REPORT) @t\enspace @>
+   CHReport.Out_NumReq3(rqRealDiff, z1, z2, lRes); @+
+   end_if@; @/
    ComplexSub:= lRes;
 end;
 
 @ \node{Negating complex numbers.} We negate a complex number $-z$ by
 negating its real and imaginary parts.
 
-@p
+@<Declare public complex-valued arbitrary precision arithmetic@>=
+function @? ComplexNeg (const z: RComplex): RComplex;
+
+@ @<Complex-rational arbitrary-precision arithmetic@>=
 function ComplexNeg(const z: RComplex): RComplex;
 var lRes:RComplex;
 begin
    lRes.Re := RationalNeg(z.Re);
    lRes.Im := RationalNeg(z.Im); @/
-   @{@&$IFDEF CH_REPORT@}
-   CHReport.Out_NumReq2(rqRealNeg, z, lRes); @/
-   @{@&$ENDIF@}  
+   if_def(CH_REPORT) @t\enspace @>
+   CHReport.Out_NumReq2(rqRealNeg, z, lRes); @+
+   end_if@;@/
    ComplexNeg:=lRes;
 end;
 
@@ -1049,29 +1216,38 @@ end;
 We use the usual formula
 $$(x_{1}+{\rm i}y_{1})(x_{2}+{\rm i}y_{2}) = (x_{1}x_{2}-y_{1}y_{2})+{\rm i}(x_{1}y_{2}+y_{1}x_{2}).$$
 
-@p
+@<Declare public complex-valued arbitrary precision arithmetic@>=
+function @? ComplexMult(const z1,z2: RComplex): RComplex;
+
+@ @<Complex-rational arbitrary-precision arithmetic@>=
 function ComplexMult(const z1,z2 : RComplex): RComplex;
 var lRes:RComplex;
 begin
    if IsEqWithInt(z1, -1) then ComplexMult:= ComplexNeg(z2)
    else if IsEqWithInt(z2, -1) then ComplexMult:= ComplexNeg(z1)
    else
+   @<Calculate the usual multiplication of complex numbers@>;
+end;
+
+@ @<Calculate the usual multiplication of complex numbers@>=
    begin
       lRes.Re := RationalSub(RationalMult(z1.Re,z2.Re),RationalMult(z1.Im,z2.Im));
       lRes.Im := RationalAdd(RationalMult(z1.Re,z2.Im),RationalMult(z1.Im,z2.Re));
       ComplexMult:=lRes; @/
-      @{@&$IFDEF CH_REPORT@}
-      CHReport.Out_NumReq3(rqRealMult, z1, z2, lRes); @/
-      @{@&$ENDIF@}  
-   end;
-end;
+      if_def(CH_REPORT) @t\enspace @>
+      CHReport.Out_NumReq3(rqRealMult, z1, z2, lRes); @+
+      end_if@;
+   end
 
 @ \node{Dividing complex numbers.} We recall
 $$\frac{x_{1} + {\rm i}y_{1}}{x_{2} + {\rm i}y_{2}} = \frac{(x_{1} + {\rm i}y_{1})(x_{2} - {\rm i}y_{2})}{x_{2}^{2} + y_{2}^{2}}$$
 This is the case for nonzero $z_{2}\neq0$. When we try to divide
 $z_{1}/0$, we return $0$.
 
-@p
+@<Declare public complex-valued arbitrary precision arithmetic@>=
+function @? ComplexDiv(const z1,z2: RComplex): RComplex;
+
+@ @<Complex-rational arbitrary-precision arithmetic@>=
 function ComplexDiv(const z1,z2: RComplex) : RComplex;
 var lDenom : Rational;
    lRes:RComplex;
@@ -1080,6 +1256,11 @@ begin
    with z2 do
       lDenom := RationalAdd(RationalMult(Re,Re),RationalMult(Im,Im));
    if lDenom.Num <> '0' then
+   @<Calculate quotient for nonzero divisor@>;
+   ComplexDiv:=lRes;
+end;
+
+@ @<Calculate quotient for nonzero divisor@>=
    begin @|@/
       lRes.Re := RationalDiv(RationalAdd(RationalMult(z1.Re,z2.Re),
                                          RationalMult(z1.Im,z2.Im)),
@@ -1087,17 +1268,19 @@ begin
       lRes.Im := RationalDiv(RationalSub(RationalMult(z1.Im,z2.Re),
                                          RationalMult(z1.Re,z2.Im)),
                           @t\hskip7.5pc@>   lDenom); @/
-      @{@&$IFDEF CH_REPORT@}
-      CHReport.Out_NumReq3(rqRealDiv, z1, z2, lRes); @/
-      @{@&$ENDIF@}     
-   end;
-   ComplexDiv:=lRes;
-end;
+
+      if_def(CH_REPORT) @t\enspace @>
+      CHReport.Out_NumReq3(rqRealDiv, z1, z2, lRes); @+
+      end_if@;
+   end
 
 @ \node{Inverting complex numbers.}
 We can now calculate $z^{-1}$ as just $1/z$.
 
-@p
+@<Declare public complex-valued arbitrary precision arithmetic@>=
+function @? ComplexInv(const z: RComplex): RComplex;
+
+@ @<Complex-rational arbitrary-precision arithmetic@>=
 function ComplexInv(const z: RComplex): RComplex;
 begin
    ComplexInv:=ComplexDiv(COne,z); @+
@@ -1107,26 +1290,33 @@ end;
 complex number is just the sum of the square of its components (well,
 the squareroot of this sum).
 
-@p
+@<Declare public complex-valued arbitrary precision arithmetic@>=
+function @? ComplexNorm(const z: RComplex): Rational;
+
+@ @<Complex-rational arbitrary-precision arithmetic@>=
 function ComplexNorm(const z: RComplex): Rational;
 begin
    ComplexNorm:=RationalAdd(RationalMult(Z.Re,Z.Re),RationalMult(Z.Im,Z.Im)); @+
 end;
 
-@ \node{Comparison functions.}
+@* [S] Comparison functions.
 The remainder of \texttt{numbers.pas} defines functions which compares
 numbers. These must return a value in the set $\{-1,0,+1\}$ as
 a \PASCAL/ \\{integer}.
 
-@p
-function CompareInt(X1, X2: Longint): integer;
+@<Declare public comparison operators for arbitrary-precision numbers@>=
+function @? CompareInt(X1,X2: longint): integer; @t\2@>
+function @? CompareIntStr(X1,X2: string): integer;
+
+@ @<Complex-rational arbitrary-precision arithmetic@>=
+function CompareInt(X1, X2: longint): integer;
 begin
    if X1 = X2 then CompareInt := 0
    else if X1 > X2 then CompareInt := 1
    else CompareInt := -1;
 end; @#
 
-function CompareIntStr(X1, X2: String): integer;
+function CompareIntStr(X1, X2: string): integer;
 begin
    if X1 = X2 then CompareIntStr := 0
    else if gt(X1,X2) then CompareIntStr := 1
@@ -1139,7 +1329,10 @@ $$ z = \frac{n_{1}}{d_{1}} + {\rm i}\frac{n_{2}}{d_{2}}$$
 as a tuple $(n_{1},d_{1},n_{2},d_{2})$ then uses lexicographic
 ordering based on the components.
 
-@p
+@<Declare public comparison operators for arbitrary-precision numbers@>=
+function @? CompareComplex(const z1,z2: RComplex): integer;
+
+@ @<Complex-rational arbitrary-precision arithmetic@>=
 function CompareComplex(const z1,z2: RComplex): integer;
 var lInt: integer;
 begin

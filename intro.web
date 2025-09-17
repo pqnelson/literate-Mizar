@@ -164,6 +164,12 @@ disables IO checking
 @d enable_io_checking == @{@&$I+@}
 @d without_io_checking(#) == disable_io_checking; #; enable_io_checking
 
+@ \node{Logging.}
+There appears to be a \\{CHReport} logger introduced in \texttt{kernel/prephan.pas},
+but its type is defined in \texttt{kernel/req\_info.pas}.
+
+@^\\{CHReport}@>
+
 @ \node{References.}
 I have inline citations to the literature, but there's some references
 worth explicitly drawing the reader's attention to (which may or may
@@ -414,10 +420,6 @@ me to identify a number of situations where things can ``go
 badly''. But they are not all bugs (some are impossible to occur).
 
 \startbugs%\par\advance\leftskip\parindent%
-\bug In \section\xref{numbers:rationalgt}, |RationalGT| is
-either misnamed (should be |RationalGEQ|) or implemented incorrectly
-(we should have |RationalGT(a,b) = RationalLT(b,a)| but do not)
-\bug In \section\xref{numbers:isrationalle} |IsRationalGT| is misnamed (should be |IsRationalGEQ|)
 \bug In \section\xref{MsortedExtList.FindInterval},
 |MSortedExtList.FindInterval| appears to assume that
  |MSortedExtList.Find| returns the left-most index.
@@ -585,3 +587,6 @@ $${\displaystyle{\LB\,(V=a)\W P\,\RB\ S\ \LB\,Q(a)\,\RB\atop
 \displaystyle{\LB\,(a\leq b)\W P\,\RB\ \&{for}\ V\K a\ \&{to}\ b\ \&{do}\ S\ \LB\,Q(b)\,\RB\atop
 \LB\,(a>b)\W P\,\RB\ \&{for}\ V\K a\ \&{to}\ b\ \&{do}\ S\ \LB\,P\,\RB}}$$
 
+@ The \\{exit} procedure may be invoked in a procedure or function, and
+it terminates the function or procedure. It roughly corresponds
+to \CEE/'s \&{return} statement.
