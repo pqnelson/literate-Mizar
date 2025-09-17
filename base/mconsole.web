@@ -39,12 +39,15 @@ uses pcmizver,mizenv;
 @ We want to have a method which allows us to flag an error
 (\\{fErrNbr}) on a given line of the article being processed. But the
 user may request Mizar to silence these messages. We can facilitate
-this by 
+this by having a \\{DisplayLine} procedure constant.
+
+\label{DisplayLine}
 
 @<|DisplayLine| global constant@>=
 const@+DisplayLine:@+procedure(fLine,fErrNbr: integer) = NoDisplayLine; @t\2@>
 
-@ Now, we have accommodator specific options.
+@* [S] Parsing command-line arguments.
+Now, we have accommodator specific options.
 
 @<Interface for accommodator command line options@>=
 {Accommodator specific options:}
@@ -65,7 +68,7 @@ var {The environ-specifical Accommodator options}
  NotationsProcessing, {Accommodator processes \.{notations} directive}
  ConstructorsProcessing, {Will the Accommodator determine which constructor to use for identifier?}
  DefinitionsProcessing,EqualitiesProcessing,ExpansionsProcessing, {Definition environs}
- TheoremsProcessing,SchemesProcessing: Boolean;
+ TheoremsProcessing,SchemesProcessing: Boolean; {unused variables}
 
 @ Among the state variables introduced in the \texttt{mconsole} unit,
 there is one for handling \.{SIGINT}, \.{SIGQUIT}, and \.{SIGTERM} signals. \Ithink{The other \UNIX/
@@ -88,8 +91,10 @@ var
 
  AxiomsAllowed: Boolean = false;
 
-@ \endinterface
-The implementation begins by initializing the Accommodator specific options.
+@ The implementation begins by initializing the Accommodator specific options.
+The default situation is every configuration option is \\{true}
+except for the unused variables \\{TheoremListsProcessing} and \\{SchemeListsProcessing} (both
+are false).
 
 @ @<Interface for accommodator command line options@>=
 procedure @? InitAccOptions;
@@ -117,8 +122,11 @@ begin
 end;
 
 @ Similarly, we want to be able to \emph{reset} the configuration for
-the accommodator to the default (initial) values. This is a private
-helper function for other things in the \texttt{mconsole}.
+the accommodator make everything false. The motivation is that we want
+to enable only certain specific flags, and it's faster to set
+everything to \\{false} and then manually toggle the flags we want.
+
+This is a private helper function for other things in the \texttt{mconsole}.
 
 @ @<Implementation for mconsole.pas@>=
 procedure ResetAccOptions;
@@ -227,7 +235,6 @@ end;
 @ Similarly, we have |MakeEnv| specific options parsed from the
 command line flags.
 
-
 @ @<Interface for |MakeEnv| command line options@>=
 {MakeEnv specific options:}
 
@@ -255,8 +262,8 @@ end;
 @ The ``other'' options.
 
 Notably, there is a feature to allow axioms,@^Axioms@> which is completely
-undocumented (and probably for good reason!). The axioms must appear
-in ``\texttt{.axm}'' files.
+undocumented (and probably for good reason!). The user may
+automatically enable axioms by placing them all in ``\texttt{.axm}'' files.
 
 @<Interface for other command line options@>=
 procedure @? GetOptions;
@@ -304,9 +311,9 @@ begin
   end
 end;
 
-@ We have a number of functions useful for ``drawing'', i.e.,
+@* [S] Reporting results to the console.
+We have a number of functions useful for ``drawing'', i.e.,
 reporting progress and results (and so on).
-
 
 @<Report results to command line@>= 
 procedure @? InitDisplayLine(const aComment: string); @t\2@>
@@ -317,6 +324,8 @@ procedure @? NoDisplayLine(fLine,fErrNbr: integer); @t\2@> @#
 @ The \\{gComment} is used only within this module. Mizar stores the
 name of the pass (parser, MSM, analyzer, checker) in \\{gComment},
 which is used in a helper function to print the progress to the console.
+
+\label{InitDisplayLine}
 
 @<Implementation for mconsole.pas@>=
 var gComment: string = ''; {The pass currently being run}

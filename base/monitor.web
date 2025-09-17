@@ -1,5 +1,9 @@
 
 @* [F] Monitor.
+There is only one single public-facing procedure in
+the \texttt{monitor.pas} file: \\{InitExitProc}. This just assigns
+the |_Halt_| function (defined in this module) to the \\{ExitProc}
+pointer global variable.
 
 @<monitor.pas@>=
   @<GNU License@>

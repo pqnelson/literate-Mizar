@@ -1,7 +1,9 @@
 
 @* [F] Mizar internal state.
 As far as \emph{processing} an article, Mizar works like a ``batch compiler''
-and works in multiple ``passes''.
+and works in multiple ``passes''. We will want to report on each
+``pass'', informing the user how long it took or how many errors were
+encountered. 
 
 @<mstate.pas@>=
   @<GNU License@>
@@ -15,33 +17,36 @@ interface @;@|@/
 implementation @; @|@/
 
 uses mizenv, pcmizver, monitor, errhan, mconsole, mtime @/
-mdebug @+ ,info @+ end_mdebug @+; @t\1@>
-
-var PassTime: longint; @|@/
+mdebug @+ ,info @+ end_mdebug @+; @t\1@> @#
 
 @<Implementation for \texttt{mstate.pas}@>
 
 @t\2@>
 end
 
-@ @<Interface for \texttt{mstate.pas}@>=
-procedure @? InitPass(const aPassName: String); @t\2@>
-procedure @? FinishPass; @t\2@>
-procedure @? InitProcessing(const aProgName,aExt: String); @t\2@>
-procedure @? ProcessingEnding;
+@ We have a local (well, ``module''-wide) variable \\{PassTime} to
+``start the clock'' for measuring how long a pass took.
 
-@ The implementation amounts to, well, these four functions. We have a
+The implementation amounts to, well, these four functions. We have a
 couple ``private'' functions to help us: |MError| and |MizarExitProc|.
 
-@<Implementation for \texttt{mstate.pas}@>=
-procedure InitPass(const aPassName: String);
+@<Interface for \texttt{mstate.pas}@>=
+procedure @? InitPass(const aPassName: string);
+
+@ @<Implementation for \texttt{mstate.pas}@>=
+var PassTime: longint; @#
+
+procedure InitPass(const aPassName: string);
 begin
- CurPos.Line:=1;
- CurPos.Col:=1;
- InitDisplayLine(aPassName);
+ @<Set current position to first line, first column@>;
+ InitDisplayLine(aPassName); {(\section\xref{InitDisplayLine})}
  TimeMark(PassTime);
 end;
 
+@ @<Interface for \texttt{mstate.pas}@>=
+procedure @? FinishPass;
+
+@ @<Implementation for \texttt{mstate.pas}@>=
 procedure FinishPass;
 begin
  FinishingPass:=true;
@@ -50,49 +55,63 @@ begin
  DrawTime('  '+ReportTime(PassTime));
 end;
 
-procedure MError(Pos:Position; ErrNr:integer);
-begin
- WriteError(Pos,ErrNr);
- DisplayLine(CurPos.Line,ErrorNbr);
-end;
 @ We also have |MizarExitProc| as a private ``helper'' function.
 
-@p
-var _ExitProc: pointer;
+@ @<Implementation for \texttt{mstate.pas}@>=
+var _ExitProc: pointer; @#
+
 procedure MizarExitProc;
 begin
  ExitProc := _ExitProc; @/
  disable_io_checking;
  if IOResult<>0 then;
  if not StopOnError then DisplayLine(CurPos.Line,ErrorNbr);
- PutError:=WriteError;
- DrawVerifierExit(ReportTime(gStartTime));
-{Halt(ErrorCode);}
+ PutError:=WriteError; {(\section\xref{WriteError})}
+ DrawVerifierExit(ReportTime(gStartTime)); @/
  enable_io_checking;
 end;
 
-@ @p
-procedure InitProcessing(const aProgName,aExt: String);
+@ @<Interface for \texttt{mstate.pas}@>=
+procedure @? InitProcessing(const aProgName,aExt: String);
+
+@ @<Implementation for \texttt{mstate.pas}@>=
+procedure MError(Pos:Position; ErrNr:integer);
+begin
+ WriteError(Pos,ErrNr); {(\section\xref{WriteError})}
+ DisplayLine(CurPos.Line,ErrorNbr); {(\section\xref{DisplayLine})}
+end; @#
+
+procedure InitProcessing(const aProgName,aExt: string);
 begin
   DrawMizarScreen(aProgName);
   if ParamCount<1 then EmptyParameterList;
-  GetArticleName;
-  GetEnvironName;
-  DrawArticleName(MizFileName+aExt);
-  GetOptions;
-  InitExitProc;
-  FileExam(MizFileName+aExt);
-  _ExitProc := ExitProc;
-  ExitProc:=@@MizarExitProc;
+  @<Parse the command-line arguments for article name and options@>;
+  @<Initialize the |ExitProc|@>;
   PutError:=MError;
   OpenErrors(MizFileName); @/
   mdebug
   OpenInfoFile; @+
   end_mdebug
 end;
+
+@ @<Parse the command-line arguments for article name and options@>=
+  GetArticleName;
+  GetEnvironName;
+  DrawArticleName(MizFileName+aExt);
+  GetOptions
+
+@ @<Initialize the |ExitProc|@>=
+  InitExitProc;
+  FileExam(MizFileName+aExt);
+  _ExitProc := ExitProc;
+  ExitProc:=@@MizarExitProc
+
 @ At the end, we should report the number of errors (if any were encountered).
 
-@p
+@<Interface for \texttt{mstate.pas}@>=
+procedure @? ProcessingEnding;
+
+@ @<Implementation for \texttt{mstate.pas}@>=
 procedure ProcessingEnding;
 begin
  if ErrorNbr > 0 then

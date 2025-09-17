@@ -72,7 +72,7 @@ begin
 end; @#
 
 procedure CloseInfofile;
-begin close(InfoFile) end; @#
+begin close(InfoFile) end;@t\2@> @#
 
 end.
 

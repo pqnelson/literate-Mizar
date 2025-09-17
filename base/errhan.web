@@ -1,5 +1,13 @@
 
 @* [F] Error handling.
+There are a few common error reporting routines bundled together. We
+should recall Borland \PASCAL/'s \\{RunError} method stops the execution of
+the program and generates a run-time error. The other
+primitive \PASCAL/ function worth remembering is \\{Halt} which takes
+an error exit code, halts the program, and returns control to the
+calling program. For \PASCAL/ specific error codes, consult:
+
+\href{https://wiki.freepascal.org/RunError}{{\tt https://wiki.freepascal.org/RunError}}
 
 @<errhan.pas@>=
   @<GNU License@>
@@ -20,6 +28,14 @@ end;
 
 @ We have a few custom types and internal variables describing the
 state of the Mizar error handler.
+
+The \\{Position} type is especially important for the Parser, which
+will store the metadata in the abstract syntax tree. The starchy
+reader may wish to consult the \POSIX/ Standard's \href{https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap03.html#tag_03_75}{definition}
+(3.75 of Volume~I) for ``column position'' which states, ``Column
+positions are numbered starting from 1.'' Coincidentally, this would
+imply Mizar cannot properly parse files longer than $2^{31}-1$ columns
+wide (or $2^{63}-1$ columns wide for 64-bit computers).
 
 \label{type:Position}
 
@@ -43,25 +59,7 @@ var  CurPos:    Position; {current position}
 @<Declare |Position| as |record|@>=
 record Line,Col: integer end
 
-@ And we just provide the public-facing functions and procedures.
-
-\interface
-@<Interface for \texttt{errhan.pas}@>=
-procedure @? Error(Pos:Position; ErrNr:integer);
-procedure @? ErrImm(ErrNr:integer); @#
-
-procedure @? WriteError(Pos:Position; ErrNr:integer);
-procedure @? OpenErrors(FileName:String);
-procedure @? AppendErrors(FileName:String);
-procedure @? EraseErrors;
-procedure @? CloseErrors; @#
-
-procedure @? OverflowError(ErrorCode:word);
-procedure @? Mizassert (ErrorCode:word; Cond:boolean);
-procedure @? RunTimeError(ErrorCode:word);
-
-@ \endinterface
-The implementation begins as we would expect/hope. If we have
+@ The implementation begins as we would expect/hope. If we have
 a \emph{preferred} error reporter already present in |PutError|, then
 we just use it. If we have toggled |StopOnError| to true, then we
 should end the program here (with a message).
@@ -69,9 +67,15 @@ should end the program here (with a message).
 If we want to report an error at the |CurrPos| (current position),
 then we have a helper function do that for us.
 
+The |Error| and |ErrImm| procedures are both used in the parser.
+
 \label{ErrImm}
 
-@<Implementation for \texttt{errhan.pas}@>=
+@<Interface for \texttt{errhan.pas}@>=
+procedure @? Error(Pos:Position; ErrNr:integer); @t\2@>
+procedure @? ErrImm(ErrNr:integer);
+
+@ @<Implementation for \texttt{errhan.pas}@>=
 procedure Error(Pos:Position; ErrNr:integer);
 begin
    inc(ErrorNbr);
@@ -95,7 +99,12 @@ the Boolean condition |OpenedErrors|).
 Note this takes advantage of |with| to destructure |Pos| into a |Line|
 and |Col| for us.
 
-@p
+\label{WriteError}
+
+@<Interface for \texttt{errhan.pas}@>=
+procedure @? WriteError(Pos:Position; ErrNr:integer);
+
+@ @<Implementation for \texttt{errhan.pas}@>=
 var
   Errors: text; {file name for errors file}
   OpenedErrors: boolean = false; {have we opened it yet?}
@@ -112,40 +121,60 @@ zero and re-initialize |CurPos| to line 1 and column 1.
 
 When |PutError| is |nil|, we initialize it to be |WriteError|.
 
-@p
-procedure OpenErrors(FileName:String);
+@<Interface for \texttt{errhan.pas}@>=
+procedure @? OpenErrors(FileName: string);
+
+@ @<Implementation for \texttt{errhan.pas}@>=
+procedure OpenErrors(FileName: string);
 begin
    if ExtractFileExt(FileName)='' then FileName:=FileName+'.err';
-   Assign(Errors,FileName);
-   without_io_checking(Rewrite(Errors));
+   Assign(Errors,FileName); @/
+   without_io_checking(Rewrite(Errors)); {Open the |FileName|}
+   @<If cannot open the |FileName|, report an error and halt@>;
+   @<Initialize \texttt{errhan.pas} state variables@>; 
+   @<Set current position to first line, first column@>;
+   if @@PutError = nil then PutError:=WriteError;
+end;
+
+@ @<If cannot open the |FileName|, report an error and halt@>=
    if IOResult <> 0 then
    begin
       DrawMessage('Can''t open errors file '''+FileName+''' for writing','');
       halt(1);
-   end;
+   end
+
+@ @<Initialize \texttt{errhan.pas} state variables@>=
    OpenedErrors:=true;
-   ErrorNbr:=0;  with CurPos do begin Line:=1; Col:=1 end;
-   if @@PutError = nil then PutError:=WriteError;
-end;
+   ErrorNbr:=0
 
-@ Appending errors to the errors file.
+@ @<Set current position to first line, first column@>=
+   with CurPos do begin Line:=1; Col:=1 end
 
-@p
-procedure AppendErrors(FileName:String);
+@ Appending errors to the errors file. This isn't used anywhere in Mizar.
+It may be instructive for the reader to compare this to \\{OpenErrors}.
+
+@<Interface for \texttt{errhan.pas}@>=
+procedure @? AppendErrors(FileName: string);
+
+@ @<Implementation for \texttt{errhan.pas}@>=
+procedure AppendErrors(FileName: string); {unused}
 begin
- OpenedErrors:=true;
  if ExtractFileExt(FileName)=''  then FileName:=FileName+'.err';
- Assign(Errors,FileName);
- ErrorNbr:=0;
- with CurPos do begin Line:=1; Col:=1 end; @/
+ Assign(Errors,FileName); @/
+ @<Initialize \texttt{errhan.pas} state variables@>; @/
+ @<Set current position to first line, first column@>; @/
  without_io_checking(append(Errors));
- if ioresult<>0 then Rewrite(Errors);
+ if IOResult<>0 then Rewrite(Errors);
 end;
 
 @ We can also close the errors file and unset the |Errors| variable,
-``forgetting'' where we logged the errors.
+``forgetting'' where we logged the errors. This does not appear to be
+used anywhere in Mizar.
 
-@p
+@<Interface for \texttt{errhan.pas}@>=
+procedure @? EraseErrors;
+
+@ @<Implementation for \texttt{errhan.pas}@>=
 procedure EraseErrors;
 begin
  if OpenedErrors then
@@ -155,9 +184,13 @@ begin
   end;
 end;
 
-@ We can also just close the errors file.
+@ We can also just close the errors file. This is used
+in \texttt{monitor.pas}.
 
-@p
+@<Interface for \texttt{errhan.pas}@>=
+procedure @? CloseErrors;
+
+@ @<Implementation for \texttt{errhan.pas}@>=
 procedure CloseErrors;
 begin
  if OpenedErrors then
@@ -168,9 +201,14 @@ begin
 end;
 
 @ Like I said, overflow errors are especially problematic. If/when
-they occur, we should just bail out immediately.
+they occur, we should just bail out immediately. Curiously,
+Free \PASCAL/ uses the 202 error for stack overflow errors, and 203
+for heap overflow errors. Mizar uses the 97 error code for overflow errors.
 
-@p
+@<Interface for \texttt{errhan.pas}@>=
+procedure @? OverflowError(ErrorCode:word);
+
+@ @<Implementation for \texttt{errhan.pas}@>=
 procedure OverflowError(ErrorCode:word);
 begin
  RTErrorCode:=ErrorCode;
@@ -179,12 +217,17 @@ begin
 end;
 
 @ We have an assertion utility to check if a |Cond| is |true|. When it
-is |false|, we should report a runtime error.
+is |false|, we should report a runtime error (i.e., update |RTErrorCode|
+and invoke |RunError(98)|). Free \PASCAL/'s \\{assert} function
+generates a 227 ``Assertion failed error'' error code upon failure.
 
 \label{MizAssert}
 
-@p
-procedure MizAssert( ErrorCode:word; Cond: boolean );
+@<Interface for \texttt{errhan.pas}@>=
+procedure @? MizAssert (ErrorCode:word; Cond: Boolean);
+
+@ @<Implementation for \texttt{errhan.pas}@>=
+procedure MizAssert( ErrorCode:word; Cond: Boolean );
 begin
  if not Cond then
   begin
@@ -195,7 +238,11 @@ end;
 
 @ Last, we have a catchall for runtime errors encountered.
 
-@p
+
+@<Interface for \texttt{errhan.pas}@>=
+procedure @? RunTimeError(ErrorCode:word);
+
+@ @<Implementation for \texttt{errhan.pas}@>=
 procedure RunTimeError(ErrorCode:word);
 begin
  RTErrorCode:=ErrorCode;

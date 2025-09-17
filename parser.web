@@ -1358,12 +1358,15 @@ uses pcmizver,mizenv;
 @ We want to have a method which allows us to flag an error
 (\\{fErrNbr}) on a given line of the article being processed. But the
 user may request Mizar to silence these messages. We can facilitate
-this by 
+this by having a \\{DisplayLine} procedure constant.
+
+\label{DisplayLine}
 
 @<|DisplayLine| global constant@>=
 const@+DisplayLine:@+procedure(fLine,fErrNbr: integer) = NoDisplayLine; @t\2@>
 
-@ Now, we have accommodator specific options.
+@* [S] Parsing command-line arguments.
+Now, we have accommodator specific options.
 
 @<Interface for accommodator command line options@>=
 {Accommodator specific options:}
@@ -1384,7 +1387,7 @@ var {The environ-specifical Accommodator options}
  NotationsProcessing, {Accommodator processes \.{notations} directive}
  ConstructorsProcessing, {Will the Accommodator determine which constructor to use for identifier?}
  DefinitionsProcessing,EqualitiesProcessing,ExpansionsProcessing, {Definition environs}
- TheoremsProcessing,SchemesProcessing: Boolean;
+ TheoremsProcessing,SchemesProcessing: Boolean; {unused variables}
 
 @ Among the state variables introduced in the \texttt{mconsole} unit,
 there is one for handling \.{SIGINT}, \.{SIGQUIT}, and \.{SIGTERM} signals. \Ithink{The other \UNIX/
@@ -1407,8 +1410,10 @@ var
 
  AxiomsAllowed: Boolean = false;
 
-@ \endinterface
-The implementation begins by initializing the Accommodator specific options.
+@ The implementation begins by initializing the Accommodator specific options.
+The default situation is every configuration option is \\{true}
+except for the unused variables \\{TheoremListsProcessing} and \\{SchemeListsProcessing} (both
+are false).
 
 @ @<Interface for accommodator command line options@>=
 procedure @? InitAccOptions;
@@ -1436,8 +1441,11 @@ begin
 end;
 
 @ Similarly, we want to be able to \emph{reset} the configuration for
-the accommodator to the default (initial) values. This is a private
-helper function for other things in the \texttt{mconsole}.
+the accommodator make everything false. The motivation is that we want
+to enable only certain specific flags, and it's faster to set
+everything to \\{false} and then manually toggle the flags we want.
+
+This is a private helper function for other things in the \texttt{mconsole}.
 
 @ @<Implementation for mconsole.pas@>=
 procedure ResetAccOptions;
@@ -1546,7 +1554,6 @@ end;
 @ Similarly, we have |MakeEnv| specific options parsed from the
 command line flags.
 
-
 @ @<Interface for |MakeEnv| command line options@>=
 {MakeEnv specific options:}
 
@@ -1574,8 +1581,8 @@ end;
 @ The ``other'' options.
 
 Notably, there is a feature to allow axioms,@^Axioms@> which is completely
-undocumented (and probably for good reason!). The axioms must appear
-in ``\texttt{.axm}'' files.
+undocumented (and probably for good reason!). The user may
+automatically enable axioms by placing them all in ``\texttt{.axm}'' files.
 
 @<Interface for other command line options@>=
 procedure @? GetOptions;
@@ -1623,9 +1630,9 @@ begin
   end
 end;
 
-@ We have a number of functions useful for ``drawing'', i.e.,
+@* [S] Reporting results to the console.
+We have a number of functions useful for ``drawing'', i.e.,
 reporting progress and results (and so on).
-
 
 @<Report results to command line@>= 
 procedure @? InitDisplayLine(const aComment: string); @t\2@>
@@ -1636,6 +1643,8 @@ procedure @? NoDisplayLine(fLine,fErrNbr: integer); @t\2@> @#
 @ The \\{gComment} is used only within this module. Mizar stores the
 name of the pass (parser, MSM, analyzer, checker) in \\{gComment},
 which is used in a helper function to print the progress to the console.
+
+\label{InitDisplayLine}
 
 @<Implementation for mconsole.pas@>=
 var gComment: string = ''; {The pass currently being run}
@@ -1851,6 +1860,14 @@ begin
 end;
 
 @* [F] Error handling.
+There are a few common error reporting routines bundled together. We
+should recall Borland \PASCAL/'s \\{RunError} method stops the execution of
+the program and generates a run-time error. The other
+primitive \PASCAL/ function worth remembering is \\{Halt} which takes
+an error exit code, halts the program, and returns control to the
+calling program. For \PASCAL/ specific error codes, consult:
+
+\href{https://wiki.freepascal.org/RunError}{{\tt https://wiki.freepascal.org/RunError}}
 
 @<errhan.pas@>=
   @<GNU License@>
@@ -1871,6 +1888,14 @@ end;
 
 @ We have a few custom types and internal variables describing the
 state of the Mizar error handler.
+
+The \\{Position} type is especially important for the Parser, which
+will store the metadata in the abstract syntax tree. The starchy
+reader may wish to consult the \POSIX/ Standard's \href{https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap03.html#tag_03_75}{definition}
+(3.75 of Volume~I) for ``column position'' which states, ``Column
+positions are numbered starting from 1.'' Coincidentally, this would
+imply Mizar cannot properly parse files longer than $2^{31}-1$ columns
+wide (or $2^{63}-1$ columns wide for 64-bit computers).
 
 \label{type:Position}
 
@@ -1894,25 +1919,7 @@ var  CurPos:    Position; {current position}
 @<Declare |Position| as |record|@>=
 record Line,Col: integer end
 
-@ And we just provide the public-facing functions and procedures.
-
-\interface
-@<Interface for \texttt{errhan.pas}@>=
-procedure @? Error(Pos:Position; ErrNr:integer);
-procedure @? ErrImm(ErrNr:integer); @#
-
-procedure @? WriteError(Pos:Position; ErrNr:integer);
-procedure @? OpenErrors(FileName:String);
-procedure @? AppendErrors(FileName:String);
-procedure @? EraseErrors;
-procedure @? CloseErrors; @#
-
-procedure @? OverflowError(ErrorCode:word);
-procedure @? Mizassert (ErrorCode:word; Cond:boolean);
-procedure @? RunTimeError(ErrorCode:word);
-
-@ \endinterface
-The implementation begins as we would expect/hope. If we have
+@ The implementation begins as we would expect/hope. If we have
 a \emph{preferred} error reporter already present in |PutError|, then
 we just use it. If we have toggled |StopOnError| to true, then we
 should end the program here (with a message).
@@ -1920,9 +1927,15 @@ should end the program here (with a message).
 If we want to report an error at the |CurrPos| (current position),
 then we have a helper function do that for us.
 
+The |Error| and |ErrImm| procedures are both used in the parser.
+
 \label{ErrImm}
 
-@<Implementation for \texttt{errhan.pas}@>=
+@<Interface for \texttt{errhan.pas}@>=
+procedure @? Error(Pos:Position; ErrNr:integer); @t\2@>
+procedure @? ErrImm(ErrNr:integer);
+
+@ @<Implementation for \texttt{errhan.pas}@>=
 procedure Error(Pos:Position; ErrNr:integer);
 begin
    inc(ErrorNbr);
@@ -1946,7 +1959,12 @@ the Boolean condition |OpenedErrors|).
 Note this takes advantage of |with| to destructure |Pos| into a |Line|
 and |Col| for us.
 
-@p
+\label{WriteError}
+
+@<Interface for \texttt{errhan.pas}@>=
+procedure @? WriteError(Pos:Position; ErrNr:integer);
+
+@ @<Implementation for \texttt{errhan.pas}@>=
 var
   Errors: text; {file name for errors file}
   OpenedErrors: boolean = false; {have we opened it yet?}
@@ -1963,40 +1981,60 @@ zero and re-initialize |CurPos| to line 1 and column 1.
 
 When |PutError| is |nil|, we initialize it to be |WriteError|.
 
-@p
-procedure OpenErrors(FileName:String);
+@<Interface for \texttt{errhan.pas}@>=
+procedure @? OpenErrors(FileName: string);
+
+@ @<Implementation for \texttt{errhan.pas}@>=
+procedure OpenErrors(FileName: string);
 begin
    if ExtractFileExt(FileName)='' then FileName:=FileName+'.err';
-   Assign(Errors,FileName);
-   without_io_checking(Rewrite(Errors));
+   Assign(Errors,FileName); @/
+   without_io_checking(Rewrite(Errors)); {Open the |FileName|}
+   @<If cannot open the |FileName|, report an error and halt@>;
+   @<Initialize \texttt{errhan.pas} state variables@>; 
+   @<Set current position to first line, first column@>;
+   if @@PutError = nil then PutError:=WriteError;
+end;
+
+@ @<If cannot open the |FileName|, report an error and halt@>=
    if IOResult <> 0 then
    begin
       DrawMessage('Can''t open errors file '''+FileName+''' for writing','');
       halt(1);
-   end;
+   end
+
+@ @<Initialize \texttt{errhan.pas} state variables@>=
    OpenedErrors:=true;
-   ErrorNbr:=0;  with CurPos do begin Line:=1; Col:=1 end;
-   if @@PutError = nil then PutError:=WriteError;
-end;
+   ErrorNbr:=0
 
-@ Appending errors to the errors file.
+@ @<Set current position to first line, first column@>=
+   with CurPos do begin Line:=1; Col:=1 end
 
-@p
-procedure AppendErrors(FileName:String);
+@ Appending errors to the errors file. This isn't used anywhere in Mizar.
+It may be instructive for the reader to compare this to \\{OpenErrors}.
+
+@<Interface for \texttt{errhan.pas}@>=
+procedure @? AppendErrors(FileName: string);
+
+@ @<Implementation for \texttt{errhan.pas}@>=
+procedure AppendErrors(FileName: string); {unused}
 begin
- OpenedErrors:=true;
  if ExtractFileExt(FileName)=''  then FileName:=FileName+'.err';
- Assign(Errors,FileName);
- ErrorNbr:=0;
- with CurPos do begin Line:=1; Col:=1 end; @/
+ Assign(Errors,FileName); @/
+ @<Initialize \texttt{errhan.pas} state variables@>; @/
+ @<Set current position to first line, first column@>; @/
  without_io_checking(append(Errors));
- if ioresult<>0 then Rewrite(Errors);
+ if IOResult<>0 then Rewrite(Errors);
 end;
 
 @ We can also close the errors file and unset the |Errors| variable,
-``forgetting'' where we logged the errors.
+``forgetting'' where we logged the errors. This does not appear to be
+used anywhere in Mizar.
 
-@p
+@<Interface for \texttt{errhan.pas}@>=
+procedure @? EraseErrors;
+
+@ @<Implementation for \texttt{errhan.pas}@>=
 procedure EraseErrors;
 begin
  if OpenedErrors then
@@ -2006,9 +2044,13 @@ begin
   end;
 end;
 
-@ We can also just close the errors file.
+@ We can also just close the errors file. This is used
+in \texttt{monitor.pas}.
 
-@p
+@<Interface for \texttt{errhan.pas}@>=
+procedure @? CloseErrors;
+
+@ @<Implementation for \texttt{errhan.pas}@>=
 procedure CloseErrors;
 begin
  if OpenedErrors then
@@ -2019,9 +2061,14 @@ begin
 end;
 
 @ Like I said, overflow errors are especially problematic. If/when
-they occur, we should just bail out immediately.
+they occur, we should just bail out immediately. Curiously,
+Free \PASCAL/ uses the 202 error for stack overflow errors, and 203
+for heap overflow errors. Mizar uses the 97 error code for overflow errors.
 
-@p
+@<Interface for \texttt{errhan.pas}@>=
+procedure @? OverflowError(ErrorCode:word);
+
+@ @<Implementation for \texttt{errhan.pas}@>=
 procedure OverflowError(ErrorCode:word);
 begin
  RTErrorCode:=ErrorCode;
@@ -2030,12 +2077,17 @@ begin
 end;
 
 @ We have an assertion utility to check if a |Cond| is |true|. When it
-is |false|, we should report a runtime error.
+is |false|, we should report a runtime error (i.e., update |RTErrorCode|
+and invoke |RunError(98)|). Free \PASCAL/'s \\{assert} function
+generates a 227 ``Assertion failed error'' error code upon failure.
 
 \label{MizAssert}
 
-@p
-procedure MizAssert( ErrorCode:word; Cond: boolean );
+@<Interface for \texttt{errhan.pas}@>=
+procedure @? MizAssert (ErrorCode:word; Cond: Boolean);
+
+@ @<Implementation for \texttt{errhan.pas}@>=
+procedure MizAssert( ErrorCode:word; Cond: Boolean );
 begin
  if not Cond then
   begin
@@ -2046,7 +2098,11 @@ end;
 
 @ Last, we have a catchall for runtime errors encountered.
 
-@p
+
+@<Interface for \texttt{errhan.pas}@>=
+procedure @? RunTimeError(ErrorCode:word);
+
+@ @<Implementation for \texttt{errhan.pas}@>=
 procedure RunTimeError(ErrorCode:word);
 begin
  RTErrorCode:=ErrorCode;
@@ -2126,12 +2182,16 @@ begin
 end; @#
 
 procedure CloseInfofile;
-begin close(InfoFile) end; @#
+begin close(InfoFile) end;@t\2@> @#
 
 end.
 
 
 @* [F] Monitor.
+There is only one single public-facing procedure in
+the \texttt{monitor.pas} file: \\{InitExitProc}. This just assigns
+the |_Halt_| function (defined in this module) to the \\{ExitProc}
+pointer global variable.
 
 @<monitor.pas@>=
   @<GNU License@>
@@ -2357,6 +2417,8 @@ function CtrlSignal(aSignal: DWORD): BOOL; cdecl; @/
 
 
 @* [F] Time utilities.
+We will want to report to the user how much time Mizar takes during
+various phases of execution.
 This is another heavily ``system dependent'' library.
 
 @<mtime.pas@>=
@@ -2374,17 +2436,6 @@ implementation @; @|@/
 
 end;
 
-@ @<Interface for \texttt{mtime.pas}@>=
-procedure @? TimeMark(var W:longint);  @t\2@>
-function @? ElapsedTime(W:longint): longint; @t\2@>
-procedure @? MUnpackTime(W:longint; var H,M,S,F: word); @t\2@>
-function @? ReportTime(W:longint): String;
-
-@ We also have one global variable tracking the start time.
-
-@p
-var
-  gStartTime: longint;
 @ The implementation begins with a rather \emph{thorny} digression
 depending on which compiler we're using.
 
@@ -2398,12 +2449,20 @@ depending on which compiler we're using.
 uses windows;
 const cmSecs = 1000; @/
 @{@&$ENDIF@}
-@ FreePascal requires a bit more work, alas.
+
+@ FreePascal requires a bit more work, alas. We can use
+the \\{GetTime} procedure to populate the hours, minutes, seconds, and
+hundredths of a second. American readers forgetful of the metric
+system should know that $0.01~{\rm s}=10~{\rm ms}$ (one hundredth of a
+second is ten milliseconds).
+
+Note: the \\{wMilliseconds} parameter is misnamed, it does not measure
+in units of milliseconds but centiseconds.
 
 @<Timing utilities |uses| for FreePascal@>=
 @{@&$IFDEF FPC@}
 uses dos;
-const cmSecs = 100;
+const cmSecs = 100; {= 100 centiseconds per 1 second}
 type
    TSystemTime = @/
      record
@@ -2419,19 +2478,25 @@ end; @/
 @{@&$ENDIF@}
 
 @ Now we can happily plug along implementing the functions we need.
+This is slightly misnamed, the result will be \emph{centiseconds}
+(hundredths of a second).
 
 @<Implementation for \texttt{mtime.pas}@>=
 function SystemTimeToMiliSec(const fTime: TSystemTime): longint;
 begin
- SystemTimeToMiliSec:=fTime.wHour*(3600*cmSecs)+
-                      fTime.wMinute*longint(60*cmSecs)+
-                      fTime.wSecond*cmSecs+
+ SystemTimeToMiliSec:=fTime.wHour*(3600*cmSecs)+@|
+                      fTime.wMinute*longint(60*cmSecs)+@|
+                      fTime.wSecond*cmSecs+@|
                       fTime.wMilliseconds;
 end;
 
-@ We ``start the clock''.
+@ Time since we ``started the clock''. The result is stored in the
+variable \\{W}.
 
-@p
+@<Interface for \texttt{mtime.pas}@>=
+procedure @? TimeMark(var W:longint);
+
+@ @<Implementation for \texttt{mtime.pas}@>=
 procedure TimeMark(var W:longint);
  var @? SystemTime: TSystemTime;
 begin
@@ -2439,9 +2504,18 @@ begin
  W:=SystemTimeToMiliSec(SystemTime);
 end;
 
-@ We measure the time lapse since we ``started the clock''.
+@ When we have measured the time already $W$ since the system started
+(in ``milliseconds''), and we want to get the elapsed time \emph{since
+we measured} $W$, then this function will accomplish the task. If $W$
+is greater than the lifetime of Mizar's run, then clearly something
+has gone awry. Mizar assumes a day has passed (in that case).
 
-@p
+Note that $86400=24\times60\times60$ is the number of minutes in one day.
+
+@<Interface for \texttt{mtime.pas}@>=
+function @? ElapsedTime(W:longint): longint;
+
+@ @<Implementation for \texttt{mtime.pas}@>=
 function ElapsedTime(W:longint): longint;
  var @? T : longint;
      @? SystemTime: TSystemTime;
@@ -2452,10 +2526,13 @@ begin
  ElapsedTime:=T;
 end;
 
-@ We can transform an interval of time (in milliseconds) into hours,
-minutes, seconds, a fractional amount of time.
+@ We can transform an interval of time (in ``milliseconds'') into
+hours, minutes, seconds, a fractional amount of time. 
 
-@p
+@<Interface for \texttt{mtime.pas}@>=
+procedure @? MUnpackTime(W:longint; var H,M,S,F: word);
+
+@ @<Implementation for \texttt{mtime.pas}@>=
 procedure MUnpackTime(W:longint; var H,M,S,F: word);
 begin
  H := W div (3600*cmSecs);
@@ -2468,7 +2545,7 @@ end;
 standard conventional stuff (e.g., I have an appointment at 11:01~AM,
 not 11:1~AM).
 
-@p
+@<Implementation for \texttt{mtime.pas}@>=
 function LeadingZero(w : word) : String;
 var lStr: String;
 begin
@@ -2477,32 +2554,50 @@ begin
   LeadingZero := lStr;
 end;
 
-@
-Reporting time transforms a time interval (measured in milliseconds)
+@ Reporting time transforms a time interval (measured in milliseconds)
 into a human readable String.
 
-@p
+@<Interface for \texttt{mtime.pas}@>=
+function @? ReportTime(W:longint): String;
+
+@ @<Implementation for \texttt{mtime.pas}@>=
 function ReportTime(W:longint): String;
 var H,M,S,F: word; lTimeStr: String;
 begin
    MUnpackTime(ElapsedTime(W),H,M,S,F);
-   if F >= (cmSecs div 2) then inc(S);
+   @<Round to nearest second@>;
    if H<>0 then
-   begin Str(H,lTimeStr); lTimeStr:=lTimeStr+'.'+LeadingZero(M) end
-   else Str(M:2,lTimeStr);
-   ReportTime:=lTimeStr+':'+LeadingZero(S);
+   @<Report hours and minutes@>
+   else Str(M:2,lTimeStr); {report minutes}
+   ReportTime:=lTimeStr+':'+LeadingZero(S); {\dots and seconds}
 end;
+
+@ @<Round to nearest second@>=
+   if F >= (cmSecs div 2) then inc(S)
+
+@ @<Report hours and minutes@>=
+   begin Str(H,lTimeStr); lTimeStr:=lTimeStr+'.'+LeadingZero(M) end
+
+@ We also have one global variable tracking the start time of Mizar.
+Every time Mizar starts up, it will ``mark the time'' (i.e., assign to
+the \\{gStartTime} global variable the current time).
+
+@<Interface for \texttt{mtime.pas}@>=
+var
+  gStartTime: longint;
 
 @ When we run the program, we should mark the time.
 
-@p
+@<Implementation for \texttt{mtime.pas}@>=
 begin
  TimeMark(gStartTime);
 end.
 
 @* [F] Mizar internal state.
 As far as \emph{processing} an article, Mizar works like a ``batch compiler''
-and works in multiple ``passes''.
+and works in multiple ``passes''. We will want to report on each
+``pass'', informing the user how long it took or how many errors were
+encountered. 
 
 @<mstate.pas@>=
   @<GNU License@>
@@ -2516,33 +2611,36 @@ interface @;@|@/
 implementation @; @|@/
 
 uses mizenv, pcmizver, monitor, errhan, mconsole, mtime @/
-mdebug @+ ,info @+ end_mdebug @+; @t\1@>
-
-var PassTime: longint; @|@/
+mdebug @+ ,info @+ end_mdebug @+; @t\1@> @#
 
 @<Implementation for \texttt{mstate.pas}@>
 
 @t\2@>
 end
 
-@ @<Interface for \texttt{mstate.pas}@>=
-procedure @? InitPass(const aPassName: String); @t\2@>
-procedure @? FinishPass; @t\2@>
-procedure @? InitProcessing(const aProgName,aExt: String); @t\2@>
-procedure @? ProcessingEnding;
+@ We have a local (well, ``module''-wide) variable \\{PassTime} to
+``start the clock'' for measuring how long a pass took.
 
-@ The implementation amounts to, well, these four functions. We have a
+The implementation amounts to, well, these four functions. We have a
 couple ``private'' functions to help us: |MError| and |MizarExitProc|.
 
-@<Implementation for \texttt{mstate.pas}@>=
-procedure InitPass(const aPassName: String);
+@<Interface for \texttt{mstate.pas}@>=
+procedure @? InitPass(const aPassName: string);
+
+@ @<Implementation for \texttt{mstate.pas}@>=
+var PassTime: longint; @#
+
+procedure InitPass(const aPassName: string);
 begin
- CurPos.Line:=1;
- CurPos.Col:=1;
- InitDisplayLine(aPassName);
+ @<Set current position to first line, first column@>;
+ InitDisplayLine(aPassName); {(\section\xref{InitDisplayLine})}
  TimeMark(PassTime);
 end;
 
+@ @<Interface for \texttt{mstate.pas}@>=
+procedure @? FinishPass;
+
+@ @<Implementation for \texttt{mstate.pas}@>=
 procedure FinishPass;
 begin
  FinishingPass:=true;
@@ -2551,49 +2649,63 @@ begin
  DrawTime('  '+ReportTime(PassTime));
 end;
 
-procedure MError(Pos:Position; ErrNr:integer);
-begin
- WriteError(Pos,ErrNr);
- DisplayLine(CurPos.Line,ErrorNbr);
-end;
 @ We also have |MizarExitProc| as a private ``helper'' function.
 
-@p
-var _ExitProc: pointer;
+@ @<Implementation for \texttt{mstate.pas}@>=
+var _ExitProc: pointer; @#
+
 procedure MizarExitProc;
 begin
  ExitProc := _ExitProc; @/
  disable_io_checking;
  if IOResult<>0 then;
  if not StopOnError then DisplayLine(CurPos.Line,ErrorNbr);
- PutError:=WriteError;
- DrawVerifierExit(ReportTime(gStartTime));
-{Halt(ErrorCode);}
+ PutError:=WriteError; {(\section\xref{WriteError})}
+ DrawVerifierExit(ReportTime(gStartTime)); @/
  enable_io_checking;
 end;
 
-@ @p
-procedure InitProcessing(const aProgName,aExt: String);
+@ @<Interface for \texttt{mstate.pas}@>=
+procedure @? InitProcessing(const aProgName,aExt: String);
+
+@ @<Implementation for \texttt{mstate.pas}@>=
+procedure MError(Pos:Position; ErrNr:integer);
+begin
+ WriteError(Pos,ErrNr); {(\section\xref{WriteError})}
+ DisplayLine(CurPos.Line,ErrorNbr); {(\section\xref{DisplayLine})}
+end; @#
+
+procedure InitProcessing(const aProgName,aExt: string);
 begin
   DrawMizarScreen(aProgName);
   if ParamCount<1 then EmptyParameterList;
-  GetArticleName;
-  GetEnvironName;
-  DrawArticleName(MizFileName+aExt);
-  GetOptions;
-  InitExitProc;
-  FileExam(MizFileName+aExt);
-  _ExitProc := ExitProc;
-  ExitProc:=@@MizarExitProc;
+  @<Parse the command-line arguments for article name and options@>;
+  @<Initialize the |ExitProc|@>;
   PutError:=MError;
   OpenErrors(MizFileName); @/
   mdebug
   OpenInfoFile; @+
   end_mdebug
 end;
+
+@ @<Parse the command-line arguments for article name and options@>=
+  GetArticleName;
+  GetEnvironName;
+  DrawArticleName(MizFileName+aExt);
+  GetOptions
+
+@ @<Initialize the |ExitProc|@>=
+  InitExitProc;
+  FileExam(MizFileName+aExt);
+  _ExitProc := ExitProc;
+  ExitProc:=@@MizarExitProc
+
 @ At the end, we should report the number of errors (if any were encountered).
 
-@p
+@<Interface for \texttt{mstate.pas}@>=
+procedure @? ProcessingEnding;
+
+@ @<Implementation for \texttt{mstate.pas}@>=
 procedure ProcessingEnding;
 begin
  if ErrorNbr > 0 then
