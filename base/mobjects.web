@@ -97,7 +97,14 @@ classes for sequences and partial functions.
 
 @<Partial integers to Pair of integers Functions@>@;
 
-@ \node{Constant parameters.}
+@ \node{Constant parameters.} Note that the \\{SizeOf(Pointer)} is 4
+on 32-bit machines, and 8 on 64-bit machines. Since
+$$2\,000\,000 = 250\,000\times 8$$
+this means that a collection can have at most 250,000 items on a
+64-bit machine (whereas on a 32-bit machine they can have twice
+that). Perhaps a better approach would be to fix \\{MaxSize} to a
+fixed value, then \\{MaxSize} would be assigned
+$\\{MaxCollectionSize}*\\{SizeOf}(\\{Pointer})$. 
 
 @<Public interface for \texttt{mobjects.pas}@>=
 const
@@ -244,8 +251,8 @@ of just a string field. This amounts to a ``wrapper class''.
  @! PStr = ^MStrObj; @/
  @! MStrPtr = PStr; @/
  @! MStrObj = object(MObject) @t\1@> @/
-    @? fStr: String;
-    constructor @? Init(const aStr: String); @t\2\2\2@>
+    @? fStr: string;
+    constructor @? Init(const aStr: string); @t\2\2\2@>
  end;
 
 @ \node{Constructor.}
@@ -255,7 +262,7 @@ initializes its contents to the given string.
 @<|MStrObj| implementation@>=
 {Specyfic objects based on MObjects for collections}
 
-constructor @? MStrObj.Init(const aStr: String);
+constructor @? MStrObj.Init(const aStr: string);
 begin
    fStr:=aStr; @+
 end;
@@ -439,7 +446,7 @@ free anything from memory.
 @!@:MList.MoveList}{\\{MList.MoveList}@>
 
 @p
-constructor @? MList.MoveList(var aAnother:MList);
+constructor @? MList.MoveList(var aAnother: MList);
 begin
    MObject.Init; @/
    Count := aAnother.Count;
@@ -458,7 +465,7 @@ the other list into the current list using \\{InsertList}
 @!@:MList.CopyList}{\\{MList.CopyList}@>
 
 @p
-constructor @? MList.CopyList(var aAnother:MList);
+constructor @? MList.CopyList(var aAnother: MList);
 begin
    MObject.Init;
    Items := nil;
@@ -470,6 +477,8 @@ end;
 
 @ A list is ``done'' frees all items in the list, sets the limit to
 zero, and then invokes the superclass's |Done| method.
+
+\label{MList.Done}
 @!@:MList.Done}{\\{MList.Done}@>
 
 @p
@@ -646,7 +655,7 @@ the \emph{contents} of the object for equality.
 
 @p
 function @? MList.IndexOf(aItem: Pointer): integer;
-var i : integer;
+var i: integer;
 begin
    IndexOf := -1;
    for i := 0 to pred(Count) do
@@ -682,6 +691,7 @@ which would throw errors.
 of \\{MList}, so I think this should be a protected method.}
 
 @!@:MList.FreeItem}{\\{MList.FreeItem}@>
+\label{MList.FreeItem}
 
 @p
 procedure @? MList.FreeItem(Item: Pointer);
@@ -690,6 +700,8 @@ begin
 end;
 
 @ We delegate all the heavy work of |FreeAll| to |FreeItemsFrom|.
+
+\label{MList.FreeAll}
 @!@:MList.FreeAll}{\\{MList.FreeAll}@>
 
 @p
@@ -704,11 +716,12 @@ of the list starting from |aIndex|. Remember, the data structure for
 size, and a \emph{pointer} to the array on the heap. When freeing an
 item from the array, we dereference the pointer to look up item \\{I}
 in the array.
+
 @!@:MList.FreeItemsFrom}{\\{MList.FreeItemsFrom}@>
 
 @p
-procedure @? MList.FreeItemsFrom(aIndex:integer);
-var I:integer;
+procedure @? MList.FreeItemsFrom(aIndex: integer);
+var I: integer;
 begin
    for I:=Count-1 downto aIndex do FreeItem(Items^[I]);
    Count:=aIndex;
@@ -725,6 +738,8 @@ offset indexing).
 
 Once we have shifted everything down, we decrement the logical size of
 the dynamic array.
+
+\label{MList.Pack}
 @!@:MList.Pack}{\\{MList.Pack}@>
 
 @p
@@ -839,6 +854,14 @@ $$s(n+1)=s(n)+\\{GrowLimit}\bigl(\Delta+s(n)\bigr)$$
 where $\Delta\geq0$ is a field of the Collection object. When we move
 an |MList| into an |MCollection|, we have |Delta := 2| be the default value.
 
+
+\medbreak
+\figure
+\centerline{\graphics{img/classdiagram-10}}
+\caption{UML class diagram for MCollection class.}
+\endfigure
+\medbreak\noindent%
+
 @<Public interface for \texttt{mobjects.pas}@>=
 {MCollection object}
 
@@ -886,37 +909,56 @@ begin
   SetLimit(ALimit);
 end;
 
+@ \node{Destructor.} When the destructor for an \\{MCollection} is
+invoked, all the items are freed using \\{FreeAll}
+(\section\xref{MList.FreeAll}). 
+
+@<|MCollection| implementation@>=
 destructor MCollection.Done;
 begin
   FreeAll;
   SetLimit(0);
 end;
 
-@ When trying to delete an element at |Index|, we first check if the
+@ \node{Delete entry at an index.}
+When trying to delete an element at |Index|, we first check if the
 |Index| is within the bounds of the collection. If it's out of bounds,
 we invoke |ListError| and exit the function.
 
-Otherwise, we shift everything in the collection down by one position.
+Otherwise, we shift everything in the collection down by one position
+to the left. This means the entry at the end of the collection (when
+the caller invokes this function) stays there, but the logical size of
+the caller decrements by one.
 
-@p
-procedure MCollection.AtDelete(Index: integer);
+\label{MCollection.AtDelete}
+@:MCollection.AtDelete}{\\{MCollection.AtDelete}@>
+
+@<|MCollection| implementation@>=
+procedure @? MCollection.AtDelete(Index: integer);
  var i: integer;
 begin
-   if (Index < 0) or (Index >= Count) then
-   begin
-      ListError(coIndexError,0);
-      exit; @+
-   end;
-   if Index < pred(Count) then
-     for i:=Index to Count-2 do Items^[i]:=Items^[i+1];
+   @<Check |Index| for \\{MCollection} is within bounds, raise an error if it's out of bounds@>;
+   @<Shift entries of \\{MCollection} to the left by one@>;
    Dec(Count);
 end;
 
-@ If we want to also \emph{free} an object in a collection, we store
+@ @<Check |Index| for \\{MCollection} is within bounds, raise an error if it's out of bounds@>=
+   if (Index < 0) or (Index >= Count) then
+   begin
+      ListError(coIndexError,0);
+      exit;
+   end
+
+@ @<Shift entries of \\{MCollection} to the left by one@>=
+   if Index < pred(Count) then
+     for i:=Index to Count-2 do Items^[i]:=Items^[i+1]
+
+@ \node{Delete and free entry.}
+If we want to also \emph{free} an object in a collection, we store
 it in a temporary variable, then invoke |AtDelete(Index)| to update
 the collection, and finally |Free| the item.
 
-@p
+@<|MCollection| implementation@>=
 procedure MCollection.AtFree(Index: integer);
 var lItem: Pointer;
 begin
@@ -925,7 +967,8 @@ begin
   FreeItem(lItem); @+
 end;
 
-@ Inserting an item at an |Index|, we first need to check if the
+@ \node{Inserting an entry at a specific location.}
+Inserting an item at an |Index|, we first need to check if the
 position is within the bounds of the collection. If it's out of
 bounds, then flag a |ListError| and exit the function.
 
@@ -937,70 +980,83 @@ Now we are at the ``default'' case. Simply shift items starting at
 |Index| up by one. Then set the item at |Index| to be the new |Item|,
 and increment the count of the collection.
 
-@p
+@<|MCollection| implementation@>=
 procedure MCollection.AtInsert(Index: integer; Item: Pointer);
 begin
-  if (Index < 0) or ( Index > Count) then
-   begin
-      ListError(coIndexError,0);
-      exit; @+
-   end;
-  if Limit = Count then
-   begin
-    if Delta = 0 then
-     begin
-        ListError(coOverFlow,0);
-        exit; @+
-     end;
-     SetLimit( Limit+Delta);
-   end;
-  if Index <> Count then 
-      Move(Items^[Index], Items^[Index+1], (Count - Index)*SizeOf(pointer));
+  @<Check |Index| for \\{MCollection} is within bounds, raise an error if it's out of bounds@>;
+  @<Ensure capacity of \\{MCollection}, raise \\{coOverFlow} error if $\Delta=0$@>;
+  @<Shift entries to the right by one@>;
   Items^[Index] := Item;
   inc(Count);
 end;
 
-@ \node{Overwrite contents at index.} We can insert a new item at a
-given index without shifting the collection.
+@ @<Ensure capacity of \\{MCollection}, raise \\{coOverFlow} error if $\Delta=0$@>=
+  if Limit = Count then {grow the caller}
+  begin
+    if Delta = 0 then
+    begin
+      ListError(coOverFlow,0);
+      exit;
+    end;
+    SetLimit( Limit+Delta);
+  end
 
-@p
+@ @<Shift entries to the right by one@>=
+  if Index <> Count then 
+      Move(Items^[Index], Items^[Index+1], (Count - Index)*SizeOf(pointer))
+
+@ \node{Overwrite contents at index.} We can insert a new item at a
+given index without shifting the collection. This overwrites the
+contents of the entry at \\{Index}, which just updates the pointer's
+value to the new \\{Item}.
+
+\Ithink{This can cause a memory leak, if the object located
+at \texttt{\BS old}(|Items^[Index]|) is not ``owned'' by something else.}
+
+@<|MCollection| implementation@>=
 procedure MCollection.AtPut(Index: integer; Item: Pointer);
 begin
-   if (Index < 0) or (Index >= Count) then
-     ListError(coIndexError,0)
-   else Items^[Index] := Item;
+   @<Check |Index| for \\{MCollection} is within bounds, raise an error if it's out of bounds@>;
+   Items^[Index] := Item;
 end;
 
-@ Deleting an item finds the index of the item, then invokes
-|AtDelete| on that index.
+@ \node{Delete entry by pointer.}
+Deleting an item finds the index of the item, then invokes
+|AtDelete| (\section\xref{MCollection.AtDelete}) on that index.
 
-@p
-procedure MCollection.Delete(Item: Pointer);
+\label{MCollection.Delete}
+@!@:MCollection.Delete}{\\{MCollection.Delete}@>
+
+@<|MCollection| implementation@>=
+procedure @? MCollection.Delete(Item: Pointer);
 begin
-  AtDelete(IndexOf(Item)); @+
+  AtDelete(IndexOf(Item));
 end;
 
-@ Similarly, freeing an item is just |Delete|-ing the item, then
-calling |FreeItem| on the pointer.
+@ \node{Free element by pointer.}
+Similarly, freeing an item is just |Delete|-ing the item (\section\xref{MCollection.Delete}), then
+calling |FreeItem| (\section\xref{MList.FreeItem}) on the pointer.
 
-@p
+@<|MCollection| implementation@>=
 procedure MCollection.Free(Item: Pointer);
 begin
   Delete(Item);
-  FreeItem(Item); @+
+  FreeItem(Item);
 end;
 
-@ Inserting an item at the end of the collection.
+@ \node{Add entry at end of collection.}
+Inserting an item at the end of the collection.
 
-@p
+@<|MCollection| implementation@>=
 procedure MCollection.Insert(aItem: Pointer);
 begin
-  AtInsert(Count, aItem); @+
+  AtInsert(Count, aItem);
 end;
 
-@ We can also ``fit'' the collection by deleting all |nil| elements.
+@ \node{Delete nil pointers.}
+We can also ``fit'' the collection by deleting all |nil| elements.
 
-@p
+@<|MCollection| implementation@>=
 procedure MCollection.Pack;
  var i: integer;
 begin
@@ -1008,21 +1064,23 @@ begin
    if Items^[i] = nil then AtDelete(i);
 end;
 
-@ Move semantics for creating a new collection.
+@ \node{Move constructor.}
+Move semantics for creating a new collection.
 
-@p
+@<|MCollection| implementation@>=
 constructor MCollection.MoveCollection(var fAnother:MCollection);
 begin
  Init(0,fAnother.Delta);
  TransferItems(fAnother) @+
 end;
 
-@ Cloning a collection will simply create an empty collection, the
+@ \node{Copy constructor.}
+Cloning a collection will simply create an empty collection, the
 loop through |AAnother| inserting each item from the original
 collection into the newly minted collection.
 
-@p
-constructor MCollection.CopyCollection(var AAnother:MCollection);
+@<|MCollection| implementation@>=
+constructor MCollection.CopyCollection(var AAnother: MCollection);
 var i: integer;
 begin
    Init(AAnother.Limit,AAnother.Delta);
@@ -1030,33 +1088,37 @@ begin
       Insert(aAnother.Items^[i]);
 end;
 
-@ A singleton allocates as little as possible.
+@ \node{Singleton constructor.}
+A singleton allocates as little as possible.
 
-@p
+@<|MCollection| implementation@>=
 constructor MCollection.Singleton(fSing:PObject; fDelta:integer);
 begin Init(2,fDelta); Insert(fSing) @+ end;
 
-@ Pruning a collection merely sets its limits to zero. It does not
+@ \node{Soft delete everything.}
+Pruning a collection merely sets its limits to zero. It does not
 free the contents of the collection.
 
-@p
+@<|MCollection| implementation@>=
 procedure MCollection.Prune;
 begin SetLimit(0) @+ end;
 
-@ Moving an |MList| uses \PASCAL/'s inheritance semantics to invoke
+@ \node{Move list into caller.}
+Moving an |MList| into the caller uses \PASCAL/'s inheritance semantics to invoke
 |MList.MoveList| and then sets the |Delta| to 2.
 
-@p
+@<|MCollection| implementation@>=
 constructor MCollection.MoveList(var aAnother:MList);
 begin
    inherited MoveList(aAnother);
    Delta := 2;
 end;
 
-@ Copying a list invokes |MList.CopyList| on the collection, then sets
+@ \node{Copy constructor on a list.}
+Copying a list invokes |MList.CopyList| on the collection, then sets
 |Delta := 2|.
 
-@p
+@<|MCollection| implementation@>=
 constructor MCollection.CopyList(var aAnother:MList);
 begin
    inherited CopyList(aAnother);
@@ -1065,14 +1127,24 @@ end;
 
 
 @* [S] Simple Stacked (Extendible) Lists.
-This is used to track newly registered clusters in Mizar.
-
-The basic idea is that we partition the array into the first $N$
-entries, then the remaining $k$ entries. The last $k$ entries are the
-``extendible'' entries.
+This is used to track newly registered clusters in Mizar. We want to
+process or ``digest'' entries, and track which entries have been
+``digested'' and which ones have not. So we partition the array into
+the first $N$ entries (which have been ``digested'') and then the
+remaining $k$ ``extendible'' entries (which have yet to be ``digested'').
 
 We will eventually ``digest'' the extendible entries (by incrementing
 $N\gets N+1$ and decrementing $k\gets k-1$ until $k=0$).
+
+\medbreak
+\figure
+\centerline{\graphics{img/classdiagram-8}}
+\caption{UML class diagram for MExtList class.}
+\endfigure
+\medbreak\noindent%
+
+
+\label{MExtList:declarations}
 
 @<Public interface for \texttt{mobjects.pas}@>=
 {MExtList object}
@@ -1096,7 +1168,10 @@ $N\gets N+1$ and decrementing $k\gets k-1$ until $k=0$).
      procedure @? FreeExtItems; @t\2\2\2@>
   end;
 
-@ \node{Simple Stacked (Extendable) Collection.}
+@ \node{Empty constructor.} We can create an empty \\{MExtList}, which
+just assigns the array of items the |nil| value, the capacity is
+assigned zero, the logical size is assigned zero.
+
 @!@:MExtList.Init}{\\{MExtList.Init}@>
 
 @<|MExtList| implementation@>=
@@ -1112,56 +1187,67 @@ end;
 
 @ \node{Destructor for \texttt{MExtList}.}
 The destructor for |MExtList| invokes \\{self.FreeExtItems} and then
-calls the inherited destructor from the superclass.
+calls the inherited destructor from the superclass (\section\xref{MList.Done}).
 
 @!@:MExtList.Done}{\\{MExtList.Done}@>
 
-@p
+@<|MExtList| implementation@>=
 destructor @? MExtList.Done;
 begin
    FreeExtItems;
    inherited Done; @+
 end;
 
-@ \node{Inserting an item.} The |fExtCounter| field is unclear to me.
-But if it's nonzero, then an error has occurred and we bail out.
+@ \node{Inserting an item.} If there are ``undigested'' extendible
+items, then we have a dilemma: where is the ``end'' of the list where
+we insert the new item? Do we shift all the ``undigested'' extendible
+items to the right by 1, and insert the argument at the end of the
+list of ``digested'' items? Do we need to track segments of digested
+and undigested items? This is clearly problematic, so we seek a simple
+solution: if there are any ``undigested'' extendible items, raise an error.
 
 Otherwise, we possibly grow the extendible list, and we insert at the
 end the given pointer and increment the |Count| of items allocated.
+The new item is considered ``digested''.
 
 @!@:MExtList.Insert}{\\{MExtList.Insert}@>
 
-@p
+@<|MExtList| implementation@>=
 procedure @? MExtList.Insert(aItem: Pointer);
 begin
-   if fExtCount <> 0 then
-   begin
-      ListError(coIndexExtError,0);
-      exit; @+
-   end;
+   @<Check all extendible items have been digested, otherwise raise error@>;
    if Limit = Count then
       SetLimit(Limit+GrowLimit(Limit));
    Items^[Count] := aItem; {Append the item to the list}
    inc(Count);
 end;
-@ \node{Deleting all entries.}
-We can only call this when the extendible entries have been
-``digested'' into the underlying array (i.e., when |fExtCount = 0|).
-Otherwise we need to flag an error. Otherwise, when all the extendible
-entries have been ``digested'', we call the parent's |DeleteAll| method.
 
-@!@:MExtList.DeleteAll}{\\{MExtList.DeleteAll}@>
+@ Many methods for the \\{MExtList} class only make sense when all the
+extendible entries have been ``digested'' into the underlying array
+(i.e., when |fExtCount = 0|), otherwise we end up in a quagmire like
+the one outlined when discussing the \\{Insert} method and nothing
+makes sense anymore.
 
-@p
-procedure @? MExtList.DeleteAll;
-begin
+@<Check all extendible items have been digested, otherwise raise error@>=
    if fExtCount <> 0 then
    begin
       ListError(coIndexExtError,0);
       exit;
-   end;
-   inherited DeleteAll;
+   end
+
+@ \node{Deleting all entries.}
+When all the extendible entries have been ``digested'', we call the
+parent's |DeleteAll| method.
+
+@!@:MExtList.DeleteAll}{\\{MExtList.DeleteAll}@>
+
+@<|MExtList| implementation@>=
+procedure @? MExtList.DeleteAll;
+begin
+   @<Check all extendible items have been digested, otherwise raise error@>;
+   inherited DeleteAll; {(\section\xref{MList.DeleteAll})}
 end;
+
 @ \node{Free all entries.} Like deleting all the entries, we need to
 fully digest all the extendible entries before invoking the parent
 class's |FreeAll| method. If there are extendible entries not fully
@@ -1169,37 +1255,33 @@ digested, then we get indigestion (i.e., a list error).
 
 @!@:MExtList.FreeAll}{\\{MExtList.FreeAll}@>
 
-@p
+@<|MExtList| implementation@>=
 procedure @? MExtList.FreeAll;
 begin
-   if fExtCount <> 0 then
-   begin
-      ListError(coIndexExtError,0);
-      exit;
-   end;
-   inherited FreeAll;
+   @<Check all extendible items have been digested, otherwise raise error@>;
+   inherited FreeAll; {(\section\xref{MList.FreeAll})}
 end;
+
 @ \node{Packing.} When packing an extendible list, we assert the
 extendible items have been digested fully. If not, raise an error. If
 fully digested, then invoke the parent class's |Pack| method.
 
 @!@:MExtList.Pack}{\\{MExtList.Pack}@>
-@p
+
+@<|MExtList| implementation@>=
 procedure @? MExtList.Pack;
 begin
-   if fExtCount <> 0 then
-   begin
-      ListError(coIndexExtError,0);
-      exit;
-   end;
-   inherited Pack;
+   @<Check all extendible items have been digested, otherwise raise error@>;
+   inherited Pack; {(\section\xref{MList.Pack})}
 end;
+
 @ \node{Insert extendible items.} We can add an extendible item by
 first growing the list (if necessary), then adding an item at index
 $N+k$. Then increment the number of extendible items $k\gets k+1$.
 
 @!@:MExtList.InsertExt}{\\{MExtList.InsertExt}@>
-@p
+
+@<|MExtList| implementation@>=
 procedure @? MExtList.InsertExt(AItem: Pointer);
 begin
    if Limit = Count+fExtCount then
@@ -1207,6 +1289,7 @@ begin
    Items^[Count+fExtCount] := AItem;
    inc(fExtCount);
 end;
+
 @ \node{Ensure capacity of extendible list.}
 \enumerate
 \item When the new limit is less than the logical size $N$ and
@@ -1222,12 +1305,12 @@ Update the capacity and pointer to the items.
 \endenumerate
 
 @!@:MExtList.SetLimit}{\\{MExtList.SetLimit}@>
-@p
+
+@<|MExtList| implementation@>=
 procedure @? MExtList.SetLimit(ALimit: integer);
 var lItems: PItemList;
 begin
-   if ALimit < Count+fExtCount then ALimit := Count+fExtCount;
-   if ALimit > MaxCollectionSize then ALimit := MaxCollectionSize;
+   @<Ensure |Count+fExtCount<=ALimit<=MaxCollectionSize|@>;
    if ALimit <> Limit then
    begin
       if ALimit = 0 then lItems := nil else
@@ -1241,33 +1324,42 @@ begin
       Limit := ALimit;
    end;
 end;
-@ ``Marking'' an extendible list amounts to setting the procedure's
-variable to the capacity of the extendible list.
+
+@ @<Ensure |Count+fExtCount<=ALimit<=MaxCollectionSize|@>=
+   if ALimit < Count+fExtCount then ALimit := Count+fExtCount;
+   if ALimit > MaxCollectionSize then ALimit := MaxCollectionSize
+
+@ \node{Mark the logical size.}
+``Marking'' an extendible list amounts to setting the procedure's
+variable to the logical size of the extendible list.
+
+\Ithink{This does not appear to be used anywhere.}
 
 @!@:MExtList.Mark}{\\{MExtList.Mark}@>
-@p
+
+@<|MExtList| implementation@>=
 procedure @? MExtList.Mark(var aIndex:integer);
 begin
    aIndex:=Count;
 end;
-@ Freeing items starting at a given index requires the extendible
+
+@ \node{Hard delete ``digested'' items from an index to end.}
+Freeing items starting at a given index requires the extendible
 items to be fully digested (if not, raise an error). Then simply free
 each object using the virtual destructor |MObject.Done|.
 
 @!@:MExtList.FreeItemsFrom}{\\{MExtList.FreeItemsFrom}@>
-@p
+
+@<|MExtList| implementation@>=
 procedure @? MExtList.FreeItemsFrom(aIndex:integer);
 var I:integer;
 begin
-   if fExtCount <> 0 then
-   begin
-      ListError(coIndexExtError,0);
-      exit;
-   end;
+   @<Check all extendible items have been digested, otherwise raise error@>;
    for I:=Count-1 downto aIndex do
       if Items^[I] <> nil then Dispose(PObject(Items^[I]), Done);
    Count:=aIndex;
 end;
+
 @ \node{Digesting one extendible item.}
 We can instruct the extendible list to digest exactly one extendible
 item. This requires the number of extendible items to be positive $k>0$.
@@ -1275,7 +1367,8 @@ If not, raise an error. Otherwise increment the logical capacity
 $N\gets N+1$ and decrement the number of extendible items $k\gets k-1$.
 
 @!@:MExtList.AddExtObject}{\\{MExtList.AddExtObject}@>
-@p
+
+@<|MExtList| implementation@>=
 procedure @? MExtList.AddExtObject;
 begin
    if fExtCount <= 0 then
@@ -1286,33 +1379,41 @@ begin
    inc(Count);
    dec(fExtCount);
 end;
+
 @ \node{Digest all extendible items.} This simply updates capacity to
 be incremented by the number of extendible items. Then the number of
 extendible items is set to zero. No error is raised if there are no
 extendible items (unlike digesting one single extendible item).
 
 @!@:MExtList.AddExtItems}{\\{MExtList.AddExtItems}@>
-@p
+
+@<|MExtList| implementation@>=
 procedure @? MExtList.AddExtItems;
 begin
    Count:=Count+fExtCount;
    fExtCount:=0;
 end;
-@ Deleting all extendible items simply sets the \emph{number} of
+
+@ \node{Soft delete all extendible items.}
+Deleting all extendible items simply sets the \emph{number} of
 extendible items to zero. This is a ``soft delete'' which does not
 affect anything else on the heap.
 
 @!@:MExtList.DeleteExtItems}{\\{MExtList.DeleteExtItems}@>
-@p
+
+@<|MExtList| implementation@>=
 procedure @? MExtList.DeleteExtItems;
 begin
    fExtCount:=0;
 end;
-@ Freeing all the extendible items will ``hard delete'' each
+
+@ \node{Hard delete all extendible items.}
+Freeing all the extendible items will ``hard delete'' each
 extendible item, removing them from the heap.
 
 @!@:MExtList.FreeExtItems}{\\{MExtList.FreeExtItems}@>
-@p
+
+@<|MExtList| implementation@>=
 procedure @? MExtList.FreeExtItems;
 var I: integer;
 begin
@@ -1331,10 +1432,19 @@ of indices are sorted according to a comparison of values.
 Invariant: $\\{Length}(\\{fIndex})=\\{Length}(\\{Items})$
 
 Invariant (sorted): for each $i=0,\dots,\\{Length}(\\{Items})-2$,
-we have $\\{Items}\^[\\{fIndex}\^[i]]\leq\\{Items}\^[\\{fIndex}\^[i+1]]$.
+we have
+$$\\{Items}\^[\\{fIndex}\^[i]]\leq\\{Items}\^[\\{fIndex}\^[i+1]].$$
 
 Also, we are taking the convention that $\\{fCompare}(x,y)$ returns
 $-1$ when $x<y$; returns $0$ when $x=y$; returns $+1$ when $x>y$.
+
+
+\medbreak
+\figure
+\centerline{\graphics{img/classdiagram-7}}
+\caption{UML class diagram for MSortedList class.}
+\endfigure
+\medbreak\noindent%
 
 \label{MSortedList:declarations}
 
@@ -1357,17 +1467,18 @@ $-1$ when $x<y$; returns $0$ when $x=y$; returns $+1$ when $x>y$.
      function @? IndexOf(aItem: Pointer): integer; virtual; @t\2@>
      procedure @? Sort(aCompare: CompareProc); @t\2@>
      procedure @? SetLimit(ALimit: integer); virtual; @t\2@>
-     function @? Find(aKey: Pointer; var aIndex: integer): boolean; virtual; @t\2@>
-     function @? Search(aKey: Pointer; var aIndex: integer): boolean; virtual; @t\2@>
+     function @? Find(aKey: Pointer; var aIndex: integer): Boolean; virtual; @t\2@>
+     function @? Search(aKey: Pointer; var aIndex: integer): Boolean; virtual; @t\2@>
      procedure @? Pack; virtual; @t\2@>
      procedure @? FreeItemsFrom(aIndex:integer); virtual; @t\2\2\2@>
   end;@#
+
 @ \node{Constructors.} There are four constructors:
 \enumerate
 \item \\{Init} simply creates an empty list with a given capacity.
 \item \\{InitSorted} is like \\{Init}, but expects an ordering operator.
 \item \\{MoveList} moves all the items from another list into the
-     caller, sorting as needed. This will also empty the other list.
+     caller. This will also empty the other list.
 \item \\{CopyList} is like \\{MoveList} but leaves the other list untouched.
 \endenumerate
 
@@ -1375,6 +1486,7 @@ $-1$ when $x<y$; returns $0$ when $x=y$; returns $+1$ when $x>y$.
 
 @:MSortedList.Init}{\\{MSortedList.Init}@>
 @:MSortedList.InitSorted}{\\{MSortedList.InitSorted}@>
+
 @<|MSortedList| implementation@>=
 {MSortedList object}
 
@@ -1399,11 +1511,15 @@ begin
    fCompare:=aCompare;
    SetLimit(ALimit);
 end;
-@ \node{Move constructor.}
-When we move items from an |MList| into the caller, we also sort as we insert.
 
-@:MSortedList.MoveList}{\\{MSortedList.MoveList}@>
-@p
+@ \node{Move constructor.}
+When we move items from an |MList| into the caller. A new array will
+be allocated for the indices. No sorting will occur. But the argument
+will be mutated to delete all the elements.
+
+@! @:MSortedList.MoveList}{\\{MSortedList.MoveList}@>
+
+@<|MSortedList| implementation@>=
 constructor @? MSortedList.MoveList(var aAnother:MList);
 var I: integer;
 begin
@@ -1417,11 +1533,14 @@ begin
    aAnother.DeleteAll;
    aAnother.Limit:=0; aAnother.Items:=nil;
 end;
+
 @ The \\{CopyList} constructor is like the \\{MoveList} \textbf{except}
-that the other list is not modified.
+that the other list is not modified, and a new array will be allocated
+for the \\{Items}.
 
 @:MSortedList.CopyList}{\\{MSortedList.CopyList}@>
-@p
+
+@<|MSortedList| implementation@>=
 constructor @? MSortedList.CopyList(const aAnother:MList);
 var i: integer;
 begin
@@ -1439,11 +1558,13 @@ begin
       fIndex^[I]:=I;
    end;
 end;
+
 @ \node{Insert element at an index.} We can insert (potentially
 overwriting an existing entry) at a given index.
 
 @:MSortedList.Z}{\\{MSortedList.Z}@>
-@p
+
+@<|MSortedList| implementation@>=
 {used in CollectCluster not to repeat the search, should
   be used only when |@@fCompare <> nil|}
 procedure @? MSortedList.AtInsert(aIndex:integer; aItem: Pointer);
@@ -1456,6 +1577,7 @@ begin
    fIndex^[aIndex] := Count;
    inc(Count);
 end;
+
 @ \node{Inserting an item.}
 Inserting an item into a sorted list boils down to two cases:
 \enumerate
@@ -1470,11 +1592,18 @@ annything. Otherwise, insert the item at the start of the list.
 \endenumerate
 
 @:MSortedList.Insert}{\\{MSortedList.Insert}@>
-@p
+
+@<|MSortedList| implementation@>=
 procedure @? MSortedList.Insert(aItem: Pointer);
 var lIndex: integer;
 begin
    if @@fCompare = nil then
+   @<Insert item to the end of the caller@>;
+   if not Find(aItem, lIndex) then
+      AtInsert(lIndex,aItem);
+end;
+
+@ @<Insert item to the end of the caller@>=
    begin
       if Limit = Count then
          SetLimit(Limit+GrowLimit(Limit));
@@ -1482,10 +1611,8 @@ begin
       fIndex^[Count] := Count;
       inc(Count);
       exit;
-   end;
-   if not Find(aItem, lIndex) then
-      AtInsert(lIndex,aItem);
-end;
+   end
+
 @ \node{Resizing a sorted list.}
 The invariant is that the list is sorted when it has an ordering
 operator (and so restricting to |aLimit| preserves the list being
@@ -1494,12 +1621,12 @@ restricting to |aLimit| preserves this property of being a finite set
 without duplicate entries).
 
 @:MSortedList.SetLimit}{\\{MSortedList.SetLimit}@>
-@p
+
+@<|MSortedList| implementation@>=
 procedure @? MSortedList.SetLimit(aLimit: integer);
 var lItems: PItemList; lIndex: IndexListPtr;
 begin
-   if aLimit < Count then aLimit := Count;
-   if aLimit > MaxCollectionSize then aLimit := MaxCollectionSize;
+   @<Ensure |Count <= aLimit <= MaxCollectionSize| for sorted lists@>;
    if aLimit <> Limit then
    begin
       if aLimit = 0 then
@@ -1508,6 +1635,19 @@ begin
          lIndex:=nil; @+
       end
       else
+      @<Allocate and copy items to new sorted list@>;
+      @<Free old arrays, if any@>;
+      Items := lItems;
+      fIndex := lIndex;
+      Limit := aLimit;
+   end;
+end;
+
+@ @<Ensure |Count <= aLimit <= MaxCollectionSize| for sorted lists@>=
+   if aLimit < Count then aLimit := Count;
+   if aLimit > MaxCollectionSize then aLimit := MaxCollectionSize
+
+@ @<Allocate and copy items to new sorted list@>=
       begin
          GetMem(lItems, aLimit*SizeOf(Pointer));
          GetMem(lIndex, aLimit*SizeOf(integer));
@@ -1519,26 +1659,20 @@ begin
                Move(fIndex^, lIndex^, Count*SizeOf(integer));
             end;
          end;
-      end;
+      end
+
+@ @<Free old arrays, if any@>=
       if Limit <> 0 then
       begin
          FreeMem(Items, Limit*SizeOf(Pointer));
          FreeMem(fIndex, Limit*SizeOf(integer));
-      end;
-      Items := lItems;
-      fIndex := lIndex;
-      Limit := aLimit;
-   end;
-end;
+      end
 
 @ \node{Quick sort an array.} We have a private helper function for
 quicksorting an |IndexListPtr| (\section\xref{MSortedList:declarations}).
-Initially |L := 0| and |R := length(aList)-1|. It may be instructive
-to compare this to Algorithm Q in \emph{The Art of Computer Programming},
-third ed., volume 3, \section5.2.2. @! @^Quicksort@>
-@:The Art of Computer Programming}{\texttt{The Art of Computer Programming}@>
-Specifically Mizar appears to use Hoare partitioning. We can summarize
-its algorithm thus:
+Initially |L := 0| and |R := length(aList)-1|. 
+Specifically Mizar appears to use Hoare partitioning.
+%We can summarize its algorithm thus:
 
 \algbegin Algorithm S (Quicksort). This uses Hoare partition. We
 assume that |L <= R|, and that |aCompare| is a total order (it's
@@ -1549,12 +1683,14 @@ procedure.
   the pivot index |@t$P_{idx}$@> := (L+R) shr 1|,
   and the pivot value |P := aList^[aIndex^[(L + R) shr 1]]|.
   Observe |I <= @t$P_{idx}$@> <= J| at this point.
-\algstep S1. [Move $I$ right] While |aList[I] < P|, we increment |I := I + 1|.
+\algstep S1. [Move $I$ right] While |aList[aIndex[I]] < P|, we increment |I := I + 1|.
   This is guaranteed to terminate since |I <= @t$P_{idx}$@>|,
-  so eventually we will get to |aList[i] = P|.
+  so eventually we will get to |aList[aIndex[I]] = P|.
+  (Invariant: for all $0\leq h<I$, we have |aList^[aIndex^[h]] < P|.)
 \algstep S2. [Move $J$ left] While |P < aList[J]|, we decrement |J := J - 1|.
   This is guaranteed to terminate since |@t$P_{idx}$@> <= J|,
   so eventually we will get to |aList[J] = P|.
+  (Invariant: for all $J<k\leq\\{Count}-1$, we have |P < aList^[aIndex[k]]|.)
 \algstep S3. [Keep going?] If $I>J$, then we're done ``partitioning''
   (so everything to the left of the pivot is not greater than the
   pivot value, and everything to the right of the pivot is not lesser
@@ -1568,9 +1704,11 @@ procedure.
 \algstep S6. [Sort the right half] If |I>=R|, then terminate.
   Otherwise, set |L := I| and return to step S0. \quad\slug
 
-\medbreak\noindent%
+\smallbreak\noindent%
 %We annotate the following code snippet with comments which should be viewed as Hoare logic-like assertions.
 For readability, we also introduce a \WEB/ macro for swapping the indices.\label{ListQuickSort}
+
+@!@^Quicksort@>
 
 @d steal_from(#)== aIndex^[#];
             aIndex^[#] := T;
@@ -1578,7 +1716,7 @@ For readability, we also introduce a \WEB/ macro for swapping the indices.\label
             T := aIndex^[#];
             aIndex^[#] := steal_from
 
-@p
+@<|MSortedList| implementation@>=
 procedure ListQuickSort(aList: PItemList; aIndex: IndexListPtr;
                         L, R: integer; aCompare: CompareProc);
 var I, J, T : integer; P: Pointer;
@@ -1591,7 +1729,7 @@ begin
 @t\4@>         {|I <= (L + R) shr 1 <= J|}
          while aCompare(aList^[aIndex^[I]], P) < 0 do inc(I);@/
 @t\4@>         {|P <= aList^[aIndex^[I]]|}
-         while aCompare(aList^[aIndex^[J]], P) > 0 do Dec(J); @/
+         while aCompare(aList^[aIndex^[J]], P) > 0 do dec(J); @/
 @t\4@>         {|aList^[aIndex^[J]] <= P|}
   @t\4@> {|I <= (L + R) shr 1 <= J|}
          if I <= J then
@@ -1602,7 +1740,7 @@ begin
 @t\4@>            {|I < J| implies |inc(I) <= dec(J)|}
 @t\4@>            {|I = J| implies |inc(I) > dec(J)|}
             inc(I);
-            Dec(J);
+            dec(J);
          end;
       until I > J; @/
 @t\4@> {|J <= (L + R) shr 2 <= I| and |J < I|}
@@ -1625,6 +1763,10 @@ for quicksort to work as expected.
 partitioned (i.e., less than the pivot value) as is the entries in |I..R|.
 In particular, the maximal element in |L .. J-1| is located at |J - 1|
 while the minimal element in |I..R| is located at |I|.
+\item It may be instructive
+to compare this quicksort to Algorithm Q in \emph{The Art of Computer Programming},
+third ed., volume 3, \section5.2.2. @^Quicksort@>
+@:The Art of Computer Programming}{\texttt{The Art of Computer Programming}@>
 \item Robert Sedgewick's \emph{Quicksort} (1980) is
 literally \emph{the} book on the subject. An abbreviated reference may
 be found in Sedgewick's ``The Analysis of Quicksort Programs''
@@ -1664,7 +1806,8 @@ ordering operator. This relies on \\{ListQuickSort}
 (\section\xref{ListQuickSort}) to do the actual sorting.
 
 @:MSortedList.Sort}{\\{MSortedList.Sort}@>
-@p
+
+@<|MSortedList| implementation@>=
 procedure @? MSortedList.Sort(aCompare: CompareProc);
 var I: integer;
 begin
@@ -1673,6 +1816,7 @@ begin
    if (Count > 0) then
       ListQuickSort(Items, fIndex, 0, Count-1, aCompare);
 end;
+
 @ \node{Find item.} Finding an item in a sorted list boils down to two
 cases: do we have |fCompare| populated or not? If so, then use a
 binary search. If not, then just iterate item-by-item testing if
@@ -1686,8 +1830,9 @@ the \\{MList} class).
 \label{MSortedList.Find}
 
 @:MSortedList.Find}{\\{MSortedList.Find}@>
-@p
-function MSortedList.Find(aKey: Pointer; var aIndex: integer): boolean;
+
+@<|MSortedList| implementation@>=
+function MSortedList.Find(aKey: Pointer; var aIndex: integer): Boolean;
 var L, H, I, C: integer;
 begin
    Find := False;
@@ -1747,13 +1892,15 @@ begin
       end;
    exit;
 end
+
 @ \node{Search.} We recall that \\{Find} returns the index of
 the \\{fIndex} field matching the needle. Usually, we want to know the
 index \emph{of the value} itself. This is what \\{Search} performs.
 
 @:MSortedList.Search}{\\{MSortedList.Search}@>
+
 @<|MSortedList| implementation@>=
-function MSortedList.Search(aKey: Pointer; var aIndex: integer): boolean;
+function MSortedList.Search(aKey: Pointer; var aIndex: integer): Boolean;
 var I: integer;
 begin
    aIndex:=Count;
@@ -1764,6 +1911,7 @@ begin
       aIndex := fIndex^[I];
    end;
 end;
+
 @ \node{Index of a needle.}
 Given a ``needle'', where in the haystack is it? Well, we require the
 ordering operator be non-nil for the sorted list --- otherwise raise
@@ -1771,18 +1919,17 @@ an error. Then using \\{Find} (\section\xref{MSortedList.Find}), check
 if the entry is present. If it is, then return the index for the
 underlying array of values.
 
-If the needle is not in the haystack, return $-1$.
+If the needle is not in the haystack, return $-1$. \Ithink{The
+assertion that |fCompare| is present turns out to be unnecessary: the
+rest of the function works.}
 
 @!@:MSortedList.IndexOf}{\\{MSortedList.IndexOf}@>
-@p
+
+@<|MSortedList| implementation@>=
 function @? MSortedList.IndexOf(aItem: Pointer): integer;
 var I: integer;
 begin
-   if @@fCompare = nil then
-   begin
-      ListError(coSortedListError,0);
-      exit;
-   end;
+   @<Assert |fCompare| is present@>;
    IndexOf := -1;
    if Find(aItem, I) then
    begin
@@ -1790,18 +1937,28 @@ begin
       IndexOf := fIndex^[I];
    end;
 end;
+
+@ @<Assert |fCompare| is present@>=
+   if @@fCompare = nil then
+   begin
+      ListError(coSortedListError,0);
+      exit;
+   end
+
 @ \node{Packing a sorted list.} Use the superclass's \\{Pack}
 method. Then, when there is an ordering operator present, sort the list.
 
 @!@:MSortedList.Pack}{\\{MSortedList.Pack}@>
-@p
+
+@<|MSortedList| implementation@>=
 procedure @? MSortedList.Pack;
 var lCount: integer;
 begin
    lCount:=Count;
-   inherited Pack;
+   inherited Pack; {(\section\xref{MList.Pack})}
    if(@@fCompare <> nil) and (lCount > Count) then Sort(fCompare);
 end;
+
 @ \node{Free items starting at an index.}
 When we want to remove all items starting at index $a$, we simply
 iterate through the array of indices starting at entry $i=a$ and
@@ -1810,7 +1967,8 @@ delete the value associated with \\{Items[i]} when it is non-|nil|.
 This will also keep the indices for the non-deleted entries.
 
 @!@:MSortedList.FreeItemsFrom}{\\{MSortedList.FreeItemsFrom}@>
-@p
+
+@<|MSortedList| implementation@>=
 procedure @? MSortedList.FreeItemsFrom(aIndex:integer);
 var I,k:integer;
 begin
@@ -1834,7 +1992,7 @@ end;
 
 @* [S] Sorted extendible lists.
 We want to handle a sorted (\section\xref{MSortedList:declarations})
-version of extendible lists --- an \\{MSortedExtList}. It's used in
+version of extendible lists (\section\xref{MExtList:declarations}) --- an \\{MSortedExtList}. It's used in
 the correlator for functorial registrations and inferred definition
 constants.
 
@@ -1845,6 +2003,14 @@ items.
 An important invariant: the ordering operator (\\{fCompare}) must be
 non-|nil|. 
 
+
+\medbreak
+\figure
+\centerline{\graphics{img/classdiagram-9}}
+\caption{UML class diagram for MSortedExtList class.}
+\endfigure
+\medbreak\noindent%
+
 @!@:MSortedExtList.Z}{\\{MSortedExtList.Z}@>
 @<Public interface for \texttt{mobjects.pas}@>=
 @!  MSortedExtList = object(MExtList) @t\1@> @/
@@ -1853,9 +2019,9 @@ non-|nil|.
      constructor @? Init(ALimit: integer); @t\2@>
      constructor @? InitSorted(aLimit: integer; aCompare: CompareProc); @t\2@>
      destructor @? Done; virtual; @t\2@>
-     function @? Find(aKey: Pointer; var aIndex: integer): boolean; virtual; @t\2@>
-     function @?  FindRight(aKey: Pointer; var aIndex: integer): boolean; virtual; @t\2@>
-     function @? FindInterval(aKey: Pointer; var aLeft,aRight: integer): boolean; virtual; @t\2@>
+     function @? Find(aKey: Pointer; var aIndex: integer): Boolean; virtual; @t\2@>
+     function @?  FindRight(aKey: Pointer; var aIndex: integer): Boolean; virtual; @t\2@>
+     function @? FindInterval(aKey: Pointer; var aLeft,aRight: integer): Boolean; virtual; @t\2@>
      function @? AtIndex( aIndex: integer): Pointer; virtual; @t\2@>
      procedure @? Insert(aItem: Pointer); virtual; @t\2@>
      procedure @? Pack; virtual; @t\2@>
@@ -1876,23 +2042,26 @@ extendible list with a given ordering operator.
 
 @<|MSortedExtList| implementation@>=
 {MSortedExtList always with possible duplicate keys, always sorted}
-constructor MSortedExtList.Init(ALimit: integer);
+constructor @? MSortedExtList.Init(ALimit: integer);
 begin ListError(coIndexExtError,0); @+ end; @#
 
-constructor MSortedExtList.InitSorted(aLimit: integer; aCompare: CompareProc);
+constructor @? MSortedExtList.InitSorted(aLimit: integer; aCompare: CompareProc);
 begin
    inherited Init( aLimit);
    fCompare := aCompare;
 end;
-@ \node{destructor} The destructor for sorted extendible lists is just
+
+@ \node{Destructor} The destructor for sorted extendible lists is just
 the inherited destructor from extendible lists.
 
 @!@:MSortedExtList.Done}{\\{MSortedExtList.Done}@>
-@p
-destructor MSortedExtList.Done;
+
+@<|MSortedExtList| implementation@>=
+destructor @? MSortedExtList.Done;
 begin
    inherited Done; @+
 end;
+
 @ \node{Finding a needle in the haystack.} We require \\{fCompare} to
 be non-|nil| and enforce that invariant by raising an error when it is |nil|.
 
@@ -1900,11 +2069,29 @@ Then we just use bisection search to find the needle in the haystack.
 Once found, we mutate \\{aIndex} to the index $L$ of the \\{fIndex} array
 which indexes the needle.
 
+The claim is that this will find the left-most index for the
+needle. To see this claim, work out the result of searching for
+``$d$'' in the list $[a,b,c,d,d,d,d,e,f,g]$ where indices range from 0
+to 9, using the usual ordering $a<b<c<d<e<f<g$.
+
+It is also instructive to work out the case searching for $c$ in the
+list $[a,b,c,c,d]$ indexed from 0 to 4. Again, the ordering is $a<b<c<d$.
+The first iteration will set |I:=2|, which points to the first entry
+with a $c$. (I have written a unit test for this case, it is
+true: \\{Find} will return \\{true} and mutate |aIndex:=2|.)
+
+Ensures: if the result is \\{true}, then \\{aIndex} will be the
+left-most index for \\{aKey}.
+
 @!@:MSortedExtList.Find}{\\{MSortedExtList.Find}@>
-@p
+
+@<|MSortedExtList| implementation@>=
 @t\4\4@> {find the left-most if duplicates}
-function MSortedExtList.Find(aKey: Pointer; var aIndex: integer): boolean;
-var L,H,I,C: integer;
+function @? MSortedExtList.Find(aKey: Pointer; var aIndex: integer): Boolean;
+var L, {low index}
+  H, {high index}
+  I, {index of candidate entry}
+  C: integer; {result comparing entry $I$ to \\{aKey}}
 begin
    if not Assigned(fCompare) then ListError(coIndexExtError,0);
    Find := False;
@@ -1914,7 +2101,7 @@ begin
    begin
       I := (L + H) shr 1;
       C := fCompare(Items^[fIndex^[I]], aKey);
-      if C < 0 then L := I + 1
+      if C < 0 then L := I + 1 {needle is in right half of haystack}
       else
       begin
          H := I - 1;
@@ -1923,6 +2110,7 @@ begin
    end;
    aIndex := L;
 end;
+
 @ \node{Find the rightmost index for a needle in the haystack.}
 Since the underlying array is sorted, we check to see if the needle is
 in the haystack. If it is, we keep incrementing \\{aIndex} until it is
@@ -1932,40 +2120,45 @@ So upon return, if it returns \\{True}, then the \\{aIndex} parameter
 is mutated to equal the rightmost index for the needle's appearance in
 the haystack.
 
-@p
+Ensures: if the result is \\{true}, then the entry at $\\{aIndex}-1$ will be equal
+to the \\{aKey} but the entry at \\{aIndex} will not be equal to \\{aKey}.
+
+@d scan_right(#) == @+ while (# < Count)
+            and (0 = fCompare(Items^[fIndex^[#]], aKey)) do inc(#)
+
+@<|MSortedExtList| implementation@>=
 @t\4\4@> {find the left-most with higher aKey, this is where we can insert}
-function MSortedExtList.FindRight(aKey: Pointer; var aIndex: integer): boolean;
+function @? MSortedExtList.FindRight(aKey: Pointer; var aIndex: integer): Boolean;
 begin
    if Find(aKey, aIndex) then
    begin
-      while (aIndex < Count)
-            and (0 = fCompare(Items^[fIndex^[ aIndex]], aKey)) do inc( aIndex);
+      scan_right(aIndex);
       FindRight := true;
    end
    else FindRight := false;
 end;
-@ Since we allow duplicate values in a sorted extendible list, we will
+
+@ \node{Finding all instances of a needle.}
+Since we allow duplicate values in a sorted extendible list, we will
 sometimes wish to know the ``interval'' of entries equal to a
 needle. This will mutate \\{aLeft} and \\{aRight} to point to the
-beginning and end of the interval.
+beginning and end of the interval. When present, the result will have
+|aLeft <= aRight| and for any $i$ such that |aLeft <= i <= aRight| we
+will have |compare(Items^[fIndex^[i]], aKey) = 0|.
 
 When the needle is not in the haystack, the function will mutate the
 variables to ensure |aRight < aLeft| to stress the point.
 
-\textbf{Possible bug:} This assumes the \\{MSortedExtList.Find}
-returns the left-most index where the needle appears in the haystack.
-
 \label{MsortedExtList.FindInterval}
 
-@p
+@<|MSortedExtList| implementation@>=
 @t\4\4@> {find the interval of equal guys}
-function MSortedExtList.FindInterval(aKey: Pointer; var aLeft,aRight: integer): boolean;
+function @? MSortedExtList.FindInterval(aKey: Pointer; var aLeft,aRight: integer): Boolean;
 begin
    if Find(aKey, aLeft) then
    begin
       aRight:= aLeft + 1;
-      while (aRight < Count)
-            and (0 = fCompare(Items^[fIndex^[aRight]], aKey)) do inc(aRight);
+      scan_right(aRight);
       dec(aRight);
       FindInterval := true;
    end
@@ -1979,13 +2172,14 @@ Otherwise, the default course of action, we simply lookup the entry
 $\\{fIndex}[i]$ and then lookup the entry in the array of values
 located with that index.
 
-@p
+@<|MSortedExtList| implementation@>=
 function MSortedExtList.AtIndex( aIndex: integer): Pointer;
 begin
    if (aIndex < 0) or (aIndex >= Count) then
       ListError(coIndexExtError,0);
    AtIndex:= Items^[fIndex^[ aIndex]];
 end;
+
 @ \node{Inserting items.}
 We can only insert an item into an extendible list when it has fully
 digested all its extendible items. This requirement carries over to
@@ -1993,10 +2187,10 @@ sorted extendible lists.
 
 When there are no extendible items, we delegate the work to |InsertExt|.
 
-@p
+@<|MSortedExtList| implementation@>=
 procedure MSortedExtList.Insert(aItem: Pointer);
 begin
-   if fExtCount <> 0 then ListError(coIndexExtError,0);
+   @<Check all extendible items have been digested, otherwise raise error@>;
    InsertExt(aItem);
    AddExtObject;
 end;
@@ -2004,7 +2198,7 @@ end;
 @ Packing a sorted extendible list is unsupported, so just raise an
 error if anyone tries to use it.
 
-@p
+@<|MSortedExtList| implementation@>=
 procedure MSortedExtList.Pack;
 begin ListError(coIndexExtError,0); end;
 
@@ -2013,7 +2207,7 @@ We ensure there is sufficient capacity in the underlying array of
 items, then add |AItem| at the position located by the logical size of
 the array of items. We also increment the number of extendible items.
 
-@p
+@<|MSortedExtList| implementation@>=
 procedure MSortedExtList.InsertExt(AItem: Pointer);
 begin
    if Limit = Count+fExtCount then
@@ -2031,13 +2225,12 @@ extendible list, we allocate new arrays and copy over the old
 data. More importantly: we keep the last |fExtCount| items as (``undigested'')
 extendible items.
 
-@p
+@<|MSortedExtList| implementation@>=
 procedure MSortedExtList.SetLimit(ALimit: integer);
 var lItems: PItemList; lIndex: IndexListPtr;
 begin
    Count:= Count + fExtCount;
-   if aLimit < Count then aLimit := Count;
-   if aLimit > MaxCollectionSize then aLimit := MaxCollectionSize;
+   @<Ensure |Count <= ALimit <= MaxCollectionSize|@>;
    if aLimit <> Limit then
    begin
       if aLimit = 0 then
@@ -2045,24 +2238,8 @@ begin
          lItems:=nil;
          lIndex:=nil;
       end
-      else
-      begin {Allocate new arrays for indices and items}
-         GetMem(lItems, aLimit*SizeOf(Pointer));
-         GetMem(lIndex, aLimit*SizeOf(integer));
-         if Count <> 0 then {Copy items and indices from old arrays to new ones}
-         begin
-            if Items <> nil then
-            begin
-               Move(Items^, lItems^, Count*SizeOf(Pointer));
-               Move(fIndex^, lIndex^, Count*SizeOf(integer));
-            end;
-         end;
-      end;
-      if Limit <> 0 then {Free old arrays}
-      begin
-         FreeMem(Items, Limit*SizeOf(Pointer));
-         FreeMem(fIndex, Limit*SizeOf(integer));
-      end;
+      else @<Allocate and copy items to new sorted list@>;
+      @<Free old arrays, if any@>;
       Items := lItems;
       fIndex := lIndex;
       Limit := aLimit; {Update the caller to use new arrays}
@@ -2079,7 +2256,7 @@ sorted extendible list, then we terminate early (since there is
 nothing to do).
 \endenumerate
 
-@p
+@<|MSortedExtList| implementation@>=
 procedure MSortedExtList.FreeItemsFrom(aIndex:integer);
 var I,k:integer;
 begin
@@ -2113,7 +2290,7 @@ as needed.
 Note that the need to shift |fIndex| down by 1 is needed to keep the
 array of items sorted.
 
-@p
+@<|MSortedExtList| implementation@>=
 procedure MSortedExtList.AddExtObject;
 var lIndex: integer;
 begin
@@ -2123,14 +2300,14 @@ begin
       Move(fIndex^[lIndex], fIndex^[lIndex+1],(Count-lIndex)*SizeOf(integer));
    fIndex^[lIndex] := Count; {extendible item's index}
    inc(Count);
-   Dec(fExtCount);
+   dec(fExtCount);
 end;
 
 @ \node{Digest all extendible items.}
 We can simply iterate through all the extendible items, digesting them
 one-by-one.
 
-@p
+@<|MSortedExtList| implementation@>=
 procedure MSortedExtList.AddExtItems;
 begin while fExtCount > 0 do AddExtObject; end;
 
@@ -2138,11 +2315,19 @@ begin while fExtCount > 0 do AddExtObject; end;
 This is used in the kernel to track directives, as well
 as \texttt{makenv} and \texttt{accdict} needs it.
 
+\medbreak
+\figure
+\centerline{\graphics{img/classdiagram-6}}
+\caption{UML class diagram for MSortedStrList class.}
+\endfigure
+\medbreak\noindent%
+
+
 @<Public interface for \texttt{mobjects.pas}@>=
 @!  MSortedStrList = object(MSortedList) @t\1@>
      constructor @? Init(ALimit: integer); @t\2@>
-     function @? IndexOfStr(const aStr: String): integer; virtual; @t\2@>
-     function @? ObjectOf(const aStr: String): PObject; virtual; @t\2\2\2@>
+     function @? IndexOfStr(const aStr: string): integer; virtual; @t\2@>
+     function @? ObjectOf(const aStr: string): PObject; virtual; @t\2\2\2@>
   end;
 
 @ \node{Pointer comparison.}
@@ -2186,11 +2371,7 @@ function @? MSortedStrList.IndexOfStr(const aStr: string): integer;
 var I: integer; lStringObj: MStrObj;
 begin
    IndexOfStr := -1;
-   if @@fCompare = nil then {Invariant violation}
-   begin
-      ListError(coSortedListError,0);
-      exit;
-   end;
+   @<Assert |fCompare| is present@>; {Invariant violation}
    lStringObj.Init(aStr);
    if Find(@@lStringObj, I) then
    begin
@@ -2214,13 +2395,27 @@ end;
 
 
 @* [S] Sorted collections.
+With \\{MSortedList}, it was cheaper to move indices around than
+moving object around. But the goal was to have an array which we could
+sort ``fast enough''.
+
+What we want to consider now is a ``finite set''-like collection. The
+usual way to implement such a data structure is to use a sorted list,
+and to avoid inserting duplicate entries.
+
+\medbreak
+\figure
+\centerline{\graphics{img/classdiagram-11}}
+\caption{UML class diagram for MSortedCollection class.}
+\endfigure
+\medbreak\noindent%
 
 @<Public interface for \texttt{mobjects.pas}@>=
 {MSortedCollection object}
 
 @!  PSortedCollection = ^MSortedCollection; @/
 @!  MSortedCollection = object(MCollection)  @t\1@> @/
-     Duplicates: boolean;
+     Duplicates: Boolean;
      fCompare: CompareProc;
      constructor @? Init(ALimit, ADelta: integer); @t\2@>
      constructor @? InitSorted(ALimit, ADelta: integer; aCompare: CompareProc); @t\2@>
@@ -2229,7 +2424,7 @@ end;
      procedure @? Insert(aItem: Pointer); virtual; @t\2@>
      procedure @? InsertD(Item: Pointer); virtual; @t\2@>
      function @? KeyOf(Item: Pointer): Pointer; virtual; @t\2@>
-     function @? Search(Key: Pointer; var Index: integer): boolean; virtual; @t\2\2\2@>
+     function @? Search(Key: Pointer; var Index: integer): Boolean; virtual; @t\2\2\2@>
   end;
 
 @ \node{Constructors.}
@@ -2333,7 +2528,7 @@ If there are duplicates, this will return the left-most index.
 \label{MSortedCollection.Search}
 
 @p
-function MSortedCollection.Search(Key: Pointer; var Index: integer): boolean;
+function MSortedCollection.Search(Key: Pointer; var Index: integer): Boolean;
 var
    L, H, I, C: integer;
 begin
@@ -2580,45 +2775,46 @@ begin Abstract1; end;
      fList: PStringItemList;
      fCount: integer;
      fCapacity: integer;
-     fSorted: boolean;
+     fSorted: Boolean;
      fDuplicate: MDuplicates;
      
      constructor @? Init(aCapacity: integer); @t\2@>
-     constructor @? MoveStringList(var aAnother:MStringList); @t\2@>
+     constructor @? MoveStringList(var aAnother:MStringList); @# @t\2@>
+ @t\hskip-1.5em@>    @<Declare internal methods for \\{StringList}@>@#
      
-     {-- Internal methods- do not use them directly --}
-     procedure @? StringListError(Code, Info: integer); virtual; @t\2@>
-     procedure @? Grow; @t\2@>
-     procedure @? QuickSort(L, R: integer); @t\2@>
-     procedure @? ExchangeItems(Index1, Index2: integer); @t\2@>
-     procedure @? InsertItem(aIndex: integer; const aStr: String); @t\2@>
-     {--                                            --}
-     
-     procedure @? SetSorted(aValue: boolean); @t\2@>
+     procedure @? SetSorted(aValue: Boolean); @t\2@>
      procedure @? Sort; virtual; @t\2@>
-     function @? GetString(aIndex: integer): String; virtual; @t\2@>
+     function @? GetString(aIndex: integer): string; virtual; @t\2@>
      function @? GetObject(aIndex: integer): PObject; virtual; @t\2@>
-     procedure @? PutString(aIndex: integer; const aStr: String); virtual; @t\2@>
+     procedure @? PutString(aIndex: integer@+;@+ const aStr: string); virtual; @t\2@>
      procedure @? PutObject(aIndex: integer; aObject: PObject); virtual; @t\2@>
      procedure @? SetCapacity(aCapacity: integer); virtual; @t\2@>
      
      destructor @? Done; virtual; @t\2@>
      
-     function @? AddString(const aStr: String): integer; virtual; @t\2@>
-     function @? AddObject(const aStr: String; aObject: PObject): integer; virtual; @t\2@>
+     function @? AddString(const aStr: string): integer; virtual; @t\2@>
+     function @? AddObject(const aStr: string;@+ aObject: PObject): integer; virtual; @t\2@>
      procedure @? AddStrings(var aStrings: MStringList); virtual; @t\2@>
      procedure @? Clear; virtual; @t\2@>
      procedure @? Delete(aIndex: integer); virtual; @t\2@>
      procedure @? Exchange(Index1, Index2: integer); virtual; @t\2@>
      procedure @? MoveObject(CurIndex, NewIndex: integer); virtual; @t\2@>
      
-     function @? Find(const aStr: String; var aIndex: integer): boolean; virtual; @t\2@>
-     function @? IndexOf(const aStr: String): integer; virtual; @t\2@>
-     function @? ObjectOf(const aStr: String): PObject; virtual; @t\2@>
+     function @? Find(@+const aStr: string@+;@+ var aIndex: integer): Boolean; virtual; @t\2@>
+     function @? IndexOf(const aStr: string): integer; virtual; @t\2@>
+     function @? ObjectOf(const aStr: string): PObject; virtual; @t\2@>
      function @? IndexOfObject(aObject: PObject): integer; @t\2@>
-     procedure @? Insert(aIndex: integer; const aStr: String); virtual; @t\2@>
-     procedure @? InsertObject(aIndex: integer; const aStr: String; aObject: PObject); @t\2\2\2@>
+     procedure @? Insert(aIndex: integer@+;@+ const aStr: string); virtual; @t\2@>
+     procedure @? InsertObject(aIndex: integer@+;@+ const aStr: string;@+ aObject: PObject); @t\2\2\2@>
   end;
+
+@ @<Declare internal methods for \\{StringList}@>=
+     {-- Internal methods- do not use them directly --}
+     procedure @? StringListError(Code, Info: integer); virtual; @t\2@>
+     procedure @? Grow; @t\2@>
+     procedure @? QuickSort(L, R: integer); @t\2@>
+     procedure @? ExchangeItems(Index1, Index2: integer); @t\2@>
+     procedure @? InsertItem(aIndex: integer@+;@+ const aStr: string); @t\2@>
 
 @ \node{Constructors.}
 We can construct an empty string collection using |Init|. We can also
@@ -2820,10 +3016,10 @@ We can use bisection search to find the needle in the haystack.
 @:MStringList.Find}{\\{MStringList.Find}@>
 
 @p
-function @? MStringList.Find(@+const aStr: string; @+ var aIndex: integer): boolean;
+function @? MStringList.Find(@+const aStr: string; @+ var aIndex: integer): Boolean;
 var
    L, H, I, C: integer;
-   lResult: boolean; @t\2@>
+   lResult: Boolean; @t\2@>
 begin
    lResult := False;
    L := 0;
@@ -3149,7 +3345,7 @@ be sure to sort the string list.
 @:MStringList.SetSorted}{\\{MStringList.SetSorted}@>
 
 @p
-procedure @? MStringList.SetSorted(aValue: boolean);
+procedure @? MStringList.SetSorted(aValue: Boolean);
 begin
    if fSorted <> aValue then
    begin
@@ -3186,7 +3382,7 @@ equal to |S|.
 @p
 @t\4\4@> {Dynamic string handling routines}
 
-function @? NewStr(const S: String): PString;
+function @? NewStr(const S: string): PString;
 var
    P: PString;
 begin
@@ -3358,11 +3554,11 @@ the analyzer, and a polynomial library.
       procedure Insert(const aItem: IntPair); virtual; @t\2@>
       procedure AtInsert(aIndex: integer; const aItem: IntPair); virtual; @t\2@>
       
-      function Search(X,Y: integer; var aIndex: integer): boolean; virtual; @t\2@>
+      function Search(X,Y: integer; var aIndex: integer): Boolean; virtual; @t\2@>
       function IndexOf(X,Y:integer): integer; @t\2@>
       constructor CopyIntRel(var aFunc: IntRel); @t\2@> @#
       
-      function IsMember(X,Y:integer): boolean; virtual; @t\2@>
+      function IsMember(X,Y:integer): Boolean; virtual; @t\2@>
       procedure AssignPair(X,Y:integer); virtual; @t\2\2\2@>
    end;
 
@@ -3426,7 +3622,7 @@ Mutates the |aIndex|. If the relation is missing, |aIndex| will return
 where it \emph{should} be.
 
 @p
-function IntRel.Search(X,Y: integer; var aIndex: integer): boolean;
+function IntRel.Search(X,Y: integer; var aIndex: integer): Boolean;
 var
    L, H, I, C: integer;
 begin
@@ -3478,7 +3674,7 @@ end;
 the caller.
 
 @p
-function IntRel.IsMember(X,Y:integer): boolean;
+function IntRel.IsMember(X,Y:integer): Boolean;
 var I: integer;
 begin
    IsMember:=Search(X,Y, I); @+
@@ -3497,12 +3693,12 @@ end;
    NatSetPtr = ^NatSet; @/
    NatSet = object(IntRel) @t\1@> @/
       Delta: integer;
-      Duplicates: boolean;
+      Duplicates: Boolean;
       constructor Init(aLimit, aDelta: integer); @t\2@>
       constructor InitWithElement(X:integer); @t\2@>
       destructor Done; virtual; @t\2@>
       procedure Insert(const aItem: IntPair); virtual; @t\2@>
-      function SearchPair(X: integer; var Index: integer): boolean; virtual; @t\2@>
+      function SearchPair(X: integer; var Index: integer): Boolean; virtual; @t\2@>
       function ElemNr(X:integer): integer; @t\2@> @/
       {********************************************}
       constructor CopyNatSet(const fFunc: NatSet); @t\2@>
@@ -3512,11 +3708,11 @@ end;
       procedure ComplementOf(const fAnother: NatSet); @t\2@>
       procedure IntersectWith(const fAnother: NatSet); @t\2@> @/
       {********************************************}
-      function HasInDom(fElem:integer): boolean; virtual; @t\2@>
-      function IsEqualTo(const fFunc: NatSet): boolean; @t\2@>
-      function IsSubsetOf(const fFunc: NatSet): boolean; @t\2@>
-      function IsSupersetOf(const fFunc: NatSet): boolean; @t\2@>
-      function Misses(const fFunc: NatSet): boolean; @t\2@>
+      function HasInDom(fElem:integer): Boolean; virtual; @t\2@>
+      function IsEqualTo(const fFunc: NatSet): Boolean; @t\2@>
+      function IsSubsetOf(const fFunc: NatSet): Boolean; @t\2@>
+      function IsSupersetOf(const fFunc: NatSet): Boolean; @t\2@>
+      function Misses(const fFunc: NatSet): Boolean; @t\2@>
       constructor MoveNatSet(var fFunc: NatSet); @t\2\2\2@>
    end;
 
@@ -3593,7 +3789,7 @@ end;
 This just tests the componentwise equality of two |IntPair| objects.
 
 @p
-function Equals(Key1, Key2: IntPair): boolean;
+function Equals(Key1, Key2: IntPair): Boolean;
 begin
    Equals := (Key1.X = Key2.X) and (Key1.Y = Key2.Y);
 end;
@@ -3604,7 +3800,7 @@ form $X = Y$ for some $Y$.
 \label{NatSet.SearchPair}
 
 @p
-function NatSet.SearchPair(X: integer; var Index: integer): boolean;
+function NatSet.SearchPair(X: integer; var Index: integer): Boolean;
 var
    L, H, I, C: integer;
 begin
@@ -3716,7 +3912,7 @@ end;
 \label{NatSet.HasInDom}
 
 @p
-function NatSet.HasInDom(fElem:integer): boolean;
+function NatSet.HasInDom(fElem:integer): Boolean;
 var I: integer;
 begin
    HasInDom:=SearchPair(fElem, I);
@@ -3726,7 +3922,7 @@ end;
 duplicate entries in a |NatSet| data structure.
 
 @p
-function NatSet.IsEqualTo(const fFunc: NatSet): boolean;
+function NatSet.IsEqualTo(const fFunc: NatSet): Boolean;
 var I: integer;
 begin
    IsEqualTo:=false;
@@ -3742,7 +3938,7 @@ commenting it out might be better.'' There is a commented out function
 which I removed.
 
 @p
-function NatSet.IsSubsetOf(const fFunc: NatSet): boolean;
+function NatSet.IsSubsetOf(const fFunc: NatSet): Boolean;
 var i,j,k,c: integer;
  {Jezeli sprawdzamy, czy mala funkcja jest zawarta w duzej, to to wykomentowane
    moze byc lepsze}
@@ -3765,7 +3961,7 @@ that $Y\supseteq X$ is the same as $X\subseteq Y$, then use the subset
 predicate. 
 
 @p
-function NatSet.IsSupersetOf(const fFunc: NatSet): boolean;
+function NatSet.IsSupersetOf(const fFunc: NatSet): Boolean;
 begin
    IsSupersetOf:=fFunc.IsSubsetOf(Self);
 end;
@@ -3775,7 +3971,7 @@ This iterates over the smaller of the two sets, checking if every
 element in the smaller set \emph{does not} appear in the larger set.
 
 @p
-function NatSet.Misses(const fFunc: NatSet): boolean;
+function NatSet.Misses(const fFunc: NatSet): Boolean;
 var I,k: integer;
 begin
    if Count > fFunc.Count then
@@ -3812,7 +4008,7 @@ and elsewhere. Its destructor is the only place where |nConsistent := false|.
 @<Public interface for \texttt{mobjects.pas}@>=
    NatFuncPtr = ^NatFunc; @/
    NatFunc = object(NatSet) @t\1@> @/
-      nConsistent: boolean;
+      nConsistent: Boolean;
       constructor InitNatFunc(ALimit, ADelta: integer); @t\2@>
       constructor CopyNatFunc(const fFunc: NatFunc); @t\2@>
       constructor MoveNatFunc(var fFunc: NatFunc); @t\2@>
@@ -3826,8 +4022,8 @@ and elsewhere. Its destructor is the only place where |nConsistent := false|.
       procedure EnlargeBy(fAnother:NatFuncPtr); {? virtual;?} @t\2@>
       function JoinAtom(fLatAtom:NatFuncPtr): NatFuncPtr; @t\2@>
       function CompareWith(const fNatFunc:NatFunc): integer; @t\2@>
-      function WeakerThan(const fNatFunc:NatFunc): boolean; @t\2@>
-      function IsMultipleOf(const fNatFunc:NatFunc): boolean; @t\2@>
+      function WeakerThan(const fNatFunc:NatFunc): Boolean; @t\2@>
+      function IsMultipleOf(const fNatFunc:NatFunc): Boolean; @t\2@>
       procedure Add(const aFunc:NatFunc); @t\2@>
       function CountAll: integer; virtual; @t\2\2\2@>
    end;
@@ -4125,7 +4321,7 @@ If there is some $x\in\dom(f)$ such that $x\in\dom(g)$ and $f(x)\neq g(x)$,
 then $f$ is not weaker than $g$.
 
 @p
-function NatFunc.WeakerThan(const fNatFunc:NatFunc): boolean;
+function NatFunc.WeakerThan(const fNatFunc:NatFunc): Boolean;
 var i,k:integer;
 begin
    WeakerThan:=false;
@@ -4149,7 +4345,7 @@ $x\in\dom(g)$ we have $x\in\dom(f)$ and $g(x)\leq f(x)$.
 There was some commented code for this function, which I removed.
 
 @p
-function NatFunc.IsMultipleOf(const fNatFunc:NatFunc): boolean;
+function NatFunc.IsMultipleOf(const fNatFunc:NatFunc): Boolean;
 var k,l: integer;
 begin
    IsMultipleOf:=false;
@@ -4593,14 +4789,14 @@ end;
    IntSet = object(IntSequence)  @t\1@> @/
       function Insert(aInt: integer): integer; virtual; @t\2@>
       function DeleteInt(aInt: integer): integer; virtual; @t\2@>
-      function Find(aInt: integer; var aIndex: integer): boolean; virtual; @t\2@>
+      function Find(aInt: integer; var aIndex: integer): Boolean; virtual; @t\2@>
       function IndexOf(aInt: integer): integer; virtual; @t\2@>
       procedure AtInsert(aIndex,aInt: integer); virtual; @t\2@>
-      function IsInSet(aInt:integer): boolean; virtual; @t\2@>
-      function IsEqualTo(const aSet: IntSet): boolean; virtual; @t\2@>
-      function IsSubsetOf(const aSet: IntSet): boolean; virtual; @t\2@>
-      function IsSupersetOf(var aSet: IntSet): boolean; virtual; @t\2@>
-      function Misses(var aSet: IntSet): boolean; virtual; @t\2\2\2@>
+      function IsInSet(aInt:integer): Boolean; virtual; @t\2@>
+      function IsEqualTo(const aSet: IntSet): Boolean; virtual; @t\2@>
+      function IsSubsetOf(const aSet: IntSet): Boolean; virtual; @t\2@>
+      function IsSupersetOf(var aSet: IntSet): Boolean; virtual; @t\2@>
+      function Misses(var aSet: IntSet): Boolean; virtual; @t\2\2\2@>
    end;
 
 @ When inserting an element $x$ into a set $A$, we check if $x\in A$
@@ -4643,7 +4839,7 @@ be, and return |true| if the element is a member of the set (and
 |false| otherwise).
 
 @p
-function IntSet.Find(aInt: integer; var aIndex: integer): boolean;
+function IntSet.Find(aInt: integer; var aIndex: integer): Boolean;
 var L, H, I, C: integer;
 begin
    Find := False;
@@ -4690,7 +4886,7 @@ end;
 piggie-backing off bisection search.
 
 @p
-function IntSet.IsInSet(aInt: integer): boolean;
+function IntSet.IsInSet(aInt: integer): Boolean;
 var I: integer;
 begin
    IsInSet:=Find(aInt, I);
@@ -4701,7 +4897,7 @@ requires $\card{A}=\card{B}$ and for each $x\in A$ we have $x\in B$.
 If these conditions are not both met, then $A\neq B$.
 
 @p
-function IntSet.IsEqualTo(const aSet: IntSet): boolean;
+function IntSet.IsEqualTo(const aSet: IntSet): Boolean;
 var I: integer;
 begin
    IsEqualTo:=false;
@@ -4716,7 +4912,7 @@ We can test $A\subset B$ by $\card{A}\leq\card{B}$ and for each $a\in A$
 we have $a\in B$. 
 
 @p
-function IntSet.IsSubsetOf(const aSet: IntSet): boolean;
+function IntSet.IsSubsetOf(const aSet: IntSet): Boolean;
 var i,j,lInt: integer;
 begin
    IsSubsetOf:=false;
@@ -4734,7 +4930,7 @@ end;
 @ \node{Superset predicate.} We have $A\supset B$ if $B\subset A$.
 
 @p
-function IntSet.IsSupersetOf(var aSet: IntSet): boolean;
+function IntSet.IsSupersetOf(var aSet: IntSet): Boolean;
 begin
    IsSupersetOf:=aSet.IsSubsetOf(Self);
 end;
@@ -4743,7 +4939,7 @@ end;
 $a\in A$ is such that $a\notin B$.
 
 @p
-function IntSet.Misses(var aSet: IntSet): boolean;
+function IntSet.Misses(var aSet: IntSet): Boolean;
 var k: integer;
 begin
    if fCount > aSet.fCount then
@@ -4781,11 +4977,11 @@ triples of integers.
       procedure AtDelete(aIndex: integer); @t\2@>
       procedure SetCapacity(aLimit: integer); virtual; @t\2@>
       procedure DeleteAll; @t\2@>
-      function Search(X1,X2: integer; var aIndex: integer): boolean; virtual; @t\2@>
+      function Search(X1,X2: integer; var aIndex: integer): Boolean; virtual; @t\2@>
       function IndexOf(X1,X2:integer): integer; @t\2@>
       constructor CopyBinIntFunc(var aFunc: BinIntFunc); @t\2@> @#
       
-      function HasInDom(X1,X2:integer): boolean; virtual; @t\2@>
+      function HasInDom(X1,X2:integer): Boolean; virtual; @t\2@>
       procedure Assign(X1,X2,Y:integer); virtual; @t\2@>
       procedure Up(X1,X2:integer); virtual; @t\2@>
       procedure Down(X1,X2:integer); virtual; @t\2@>
@@ -4902,7 +5098,7 @@ end;
 that $(x_{1},x_{2})\in\dom(f)$.
 
 @p
-function BinIntFunc.Search(X1,X2: integer; var aIndex: integer): boolean;
+function BinIntFunc.Search(X1,X2: integer; var aIndex: integer): Boolean;
 var
    L, H, I, C: integer;
 begin
@@ -4952,7 +5148,7 @@ end;
 @ Test if $(x_{1},x_{2})\in\dom(f)$.
 
 @p
-function BinIntFunc.HasInDom(X1,X2:integer): boolean;
+function BinIntFunc.HasInDom(X1,X2:integer): Boolean;
 var I: integer;
 begin
    HasInDom:=Search(X1,X2, I);
@@ -5080,11 +5276,11 @@ end;
       procedure AtDelete(aIndex: integer); @t\2@>
       procedure SetCapacity(aLimit: integer); virtual; @t\2@>
       procedure DeleteAll; @t\2@>
-      function Search(X: integer; var aIndex: integer): boolean; virtual; @t\2@>
+      function Search(X: integer; var aIndex: integer): Boolean; virtual; @t\2@>
       function IndexOf(X:integer): integer; @t\2@>
       constructor CopyInt2PairOfIntFunc(var aFunc: Int2PairOfIntFunc); @t\2@> @#
       
-      function HasInDom(X:integer): boolean; virtual; @t\2@>
+      function HasInDom(X:integer): Boolean; virtual; @t\2@>
       procedure Assign(X,Y1,Y2:integer); virtual; @t\2@>
       function Value(X:integer): IntPair; virtual; @t\2\2\2@>
    end;
@@ -5194,7 +5390,7 @@ end;
 @ We can bisection search on the domain.
 
 @p
-function Int2PairOfIntFunc.Search(X: integer; var aIndex: integer): boolean;
+function Int2PairOfIntFunc.Search(X: integer; var aIndex: integer): Boolean;
 var
    L, H, I, C: integer;
 begin
@@ -5242,7 +5438,7 @@ end;
 @ Test if $x\in\dom(f)$.
 
 @p
-function Int2PairOfIntFunc.HasInDom(X:integer): boolean;
+function Int2PairOfIntFunc.HasInDom(X:integer): Boolean;
 var I: integer;
 begin
    HasInDom:=Search(X, I);
@@ -5283,12 +5479,12 @@ end;
    function CompareStringPtr(aKey1, aKey2: Pointer): integer; @t\2@> @#
 
    {Comparing Strings and integers}
-   function CompareStr(aStr1, aStr2: String): integer; @t\2@>
+   function CompareStr(aStr1, aStr2: string): integer; @t\2@>
    function CompareIntPairs(X1, Y1, X2,Y2: Longint): integer; @t\2@> @#
    
    {Dynamic String handling routines}
 
-   function NewStr(const S: String): PString; @t\2@>
+   function NewStr(const S: string): PString; @t\2@>
    procedure DisposeStr(P: PString); @t\2@> @#
    
    function GrowLimit(aLimit: integer): integer; @t\2@>

@@ -160,5 +160,95 @@ beginfig(5)
   link(inheritance)(extItem.w -- ItemObj.e);
 endfig;
 
+Class.MList("MList")("+ Items : ^Pointer[0 .. Limit-1]",
+    "+ Count : integer",
+    "+ Limit : integer")();
+
+Class.MSortedList("MSortedList")("+ Items : ^Pointer[0 .. Limit-1]",
+    "+ Count : integer",
+    "+ Limit : integer",
+    "+ fIndex : Index[0 .. Limit - 1]",
+    "+ fCompare: CompareProc")();
+
+Class.MSortedStrList("MSortedStrList")("+ Items : ^Pointer[0 .. Limit-1]",
+    "+ Count : integer",
+    "+ Limit : integer",
+    "+ fIndex : Index[0 .. Limit - 1]",
+    "+ fCompare: CompareProc")();
+
+beginfig(6) % MSortedStrList
+  MList.w = MObject.e + (30,0);
+  MSortedList.w = MList.e + (30,0);
+  MSortedStrList.w = MSortedList.e + (30,0);
+  drawObjects(MObject, MList,MSortedList,MSortedStrList);
+  link(inheritance)(MList.w -- MObject.e);
+  link(inheritance)(MSortedList.w -- MList.e);
+  link(inheritance)(MSortedStrList.w -- MSortedList.e);
+endfig;
+
+beginfig(7) % MSortedList
+  MList.w = MObject.e + (30,0);
+  MSortedList.w = MList.e + (30,0);
+  MSortedStrList.w = MSortedList.e + (30,0);
+  drawObjects(MObject, MList, MSortedList);
+  link(inheritance)(MList.w -- MObject.e);
+  link(inheritance)(MSortedList.w -- MList.e);
+endfig;
+
+Class.MExtList("MExtList")("+ Items : ^Pointer[0 .. Limit-1]",
+    "+ Count : integer",
+    "+ Limit : integer",
+    "+ fIndex : Index[0 .. Limit - 1]",
+    "+ fExtCount : integer")();
+
+beginfig(8) % MExtList
+  MExtList.w = MList.e + (30,0);
+  drawObjects(MObject, MList, MExtList);
+  link(inheritance)(MList.w -- MObject.e);
+  link(inheritance)(MExtList.w -- MList.e);
+endfig;
+
+Class.MSortedExtList("MSortedExtList")("+ Items : ^Pointer[0 .. Limit-1]",
+    "+ Count : integer",
+    "+ Limit : integer",
+    "+ fExtCount : integer",
+    "+ fIndex : ",
+    "+ fCompare : CompareProc")();
+
+beginfig(9) % MExtList
+  MSortedExtList.w = MExtList.e + (30,0);
+  drawObjects(MObject, MList, MExtList, MSortedExtList);
+  link(inheritance)(MList.w -- MObject.e);
+  link(inheritance)(MExtList.w -- MList.e);
+  link(inheritance)(MSortedExtList.w -- MExtList.e);
+endfig;
+
+Class.MCollection("MCollection")("+ Items : ^Pointer[0 .. Limit-1]",
+    "+ Count : integer",
+    "+ Limit : integer",
+    "+ Delta : integer")();
+
+beginfig(10) % MExtList
+  MCollection.w = MList.e + (30,0);
+  drawObjects(MObject, MList, MCollection);
+  link(inheritance)(MList.w -- MObject.e);
+  link(inheritance)(MCollection.w -- MList.e);
+endfig;
+
+Class.MSortedCollection("MSortedCollection")("+ Items : ^Pointer[0 .. Limit-1]",
+    "+ Count : integer",
+    "+ Limit : integer",
+    "+ Delta : integer",
+    "+ Duplicates : Boolean",
+    "+ fCompare : CompareProc")();
+
+beginfig(11) % MExtList
+  MSortedCollection.w = MCollection.e + (30,0);
+  drawObjects(MObject, MList, MCollection, MSortedCollection);
+  link(inheritance)(MList.w -- MObject.e);
+  link(inheritance)(MCollection.w -- MList.e);
+  link(inheritance)(MSortedCollection.w -- MCollection.e);
+endfig;
+
 %outputtemplate := "%j%c.eps";
 end;
