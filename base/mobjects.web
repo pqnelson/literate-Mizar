@@ -3,7 +3,20 @@
 This is one of the largest files in Mizar (it clocks in at 6594 lines
 of code). Its interface consists of 552 lines alone (roughly 1/13 of
 the file).
-\def\keepgtitle{\gtitle={Mizar Objects and Data Structures}}
+
+We should remind the reader \PASCAL/ has ``typed pointers'', meaning
+an object with type |^Foo| is a pointer to a |Foo| object. We lookup
+the object for a pointer |p : ^Foo| by dereferencing it as |p^|. If
+|foo : Foo| is an instance, we can have |p| point to it by writing |p := @@foo|.
+
+Further, it is idiomatic \PASCAL/ to have for each type |Foo| a
+pointer type |PFoo = ^Foo|.
+
+@ We will refer to ``some data allocated in memory'' as an \define{Object}.
+Alexander Stepanov and Paul McJones's \emph{Elements of Programming} 
+(\href{https://www.elementsofprogramming.com/}{{\tt elementsofprogramming.com}})
+discuss object-oriented programming from a rather baroque
+philosophical perspective, which the reader may find enjoyable.
 
 @<mobjects.pas@>=
   @<GNU License@>
@@ -17,12 +30,12 @@ uses numbers; @|@#
 implementation @|@#
 
 mdebug
-  uses info;
-end_mdebug@; @#
+  uses info; @+
+end_mdebug @#
 
 @<Implementation for \texttt{mobjects.pas}@>@;
 
-end;
+end.
 
 @ We have an error method for situations when a method is not
 implemented, for example when there is no ordering operator when the
@@ -36,11 +49,17 @@ begin
   RunError(211);
 end; @#
 
+@ The ``roadmap'' for the data structures implemented in this library
+may be summed up loosely as: we introduce a base ``object'' class,
+then we introduce a family of collections, then we conclude with
+classes for sequences and partial functions.
+
+@<Implementation for \texttt{mobjects.pas}@>=
 @<|MObject| implementation@>@;
 
 @<|MStrObj| implementation@>@;
 
-@<|MList| implementation@>@;
+@<|MList| implementation@>@; {start of collections classes}
 
 @<|MCollection| implementation@>@;
 
@@ -62,7 +81,7 @@ end; @#
 
 @<String list implementation@>@;
 
-@<Int relation implementation@>@;
+@<Int relation implementation@>@; {start of partial functions}
 
 @<Partial integer function implementation@>@;
 
@@ -87,11 +106,9 @@ const
   @! MaxSize = 2000000; @/
   @! MaxCollectionSize = MaxSize div SizeOf(Pointer); @/
 
-{Maximum MStringList size}
-  @! MaxListSize = MaxSize  div (SizeOf(Pointer)*2); @/
+  @! MaxListSize = MaxSize  div (SizeOf(Pointer)*2); {Maximum MStringList size}
 
-{Maximum IntegerList size}
-  @! MaxIntegerListSize = MaxSize  div (SizeOf(integer)); @/
+  @! MaxIntegerListSize = MaxSize  div (SizeOf(integer)); {Maximum IntegerList size}
 
 {MCollection error codes}
   @! coIndexError = -1;              {Index out of range}
@@ -107,7 +124,7 @@ const
 type @/
 
 {String pointers}
-  @! PString = ^ShortString; @/
+  @! PString = ^ShortString; {|ShortString = String[255]|}
 
 {Character set type}
   @! PCharSet = ^TCharSet; @/
@@ -136,24 +153,27 @@ function named \\{CopyObject}, and a ``move'' function called \\{MCopy}.
   @! ObjectPtr = PObject; @/
   @! MObject = object @t\1@> @| @/
     constructor @? Init;  @t\2@>
-    procedure @? Free; @t\2@>
+    procedure @? Free; @t\2@> {unused}
     destructor @? Done; virtual; @t\2@>
     function @? CopyObject: PObject; @t\2@>
     function @? MCopy: PObject; virtual;  @t\2\2\2@>
   end;
 
 @ Note that the \\{VER70} conditional compilation only plays a role
-here, in \\{MObject.Init}.
+here, in the constructor \\{MObject.Init}. And nowhere else.
 
 The constructor will initialize the memory allocated for the \\{MObject}
-to be zero.
+to be zero. This is true when \\{VER70} is not defined, too, because
+the Free \PASCAL/ compiler will allocate 1 word for the virtual
+methods table and 1 word for the data (``self'') and the default constructor (``\texttt{fpc\_help\_constructor}'') for Free \PASCAL/ initializes the
+memory allocated with zeros.
 
 \label{MObject.Init}
 
 @<|MObject| implementation@>=
 {MObject}
 
-constructor MObject.Init; @|@/
+constructor @? MObject.@!Init; @|@/
 @{@&$IFDEF VER70@}
 type Image = record Link: word; Data: record @+ end; end; @/
 @{@&$ENDIF@}
@@ -164,38 +184,41 @@ begin @|@/
 end; @#
 
 @ \node{Destructor.}
-The \\{MObject.Free} procdure frees all the memory allocated to the
-caller.
-
 The destructor is, well, what \CPLUSPLUS/ programmers would call an
 ``abstract method''.
 
+The \\{MObject.Free} procdure frees all the memory allocated to the
+caller. It isn't used anywhere.
+
 @p
-procedure MObject.Free;
+procedure @? MObject.Free; {unused}
 begin
    Dispose(PObject(@@Self), Done); @+
 end; @#
 
-destructor MObject.Done;
+destructor @? MObject.@!Done;
 begin
 end; @#
 
 @ Copying an object allocates new memory using the Free \PASCAL/
-\\{GetMem} function, then \emph{moves} the contents of the caller to the
-new region. It \textbf{does not} ``copy'' the contents of the caller
-to the new region. If we wanted to copy the contents of the caller, we
-should call something like \\{Fillchar} or \\{Fillword}.
+\\{GetMem} function, then \emph{copies} the contents of the caller to the
+new region. The \\{move} primitive function is poorly named (blame
+Borland): it is a copy function.
 
 It then returns a pointer to the newly allocated object.
+
+Note that this function is used in only two places: once in \\{MCopy},
+and later in \\{MList.MCopy} (\section\xref{MList.MCopy}).
+
 \label{MObject.CopyObject} 
 
 @p
 
-function MObject.CopyObject: PObject;
+function @? MObject.CopyObject: PObject;
 var lObject:PObject;
 begin
-   GetMem(lObject,SizeOf(Self));
-   Move(Self,lObject^,SizeOf(Self));
+   GetMem(lObject,SizeOf(Self)); @/
+   Move(Self,lObject^,SizeOf(Self)); @/
    CopyObject:=lObject;
 end; @#
 
@@ -204,13 +227,15 @@ can be overridden by subclasses. But the default method is just \\{CopyObject}.
 \label{MObject.MCopy} 
 
 @p
-function MObject.MCopy: PObject;
+function @? MObject.@!MCopy: PObject;
 begin
    MCopy:=CopyObject; @+
 end;
 
-@* [S] Mizar String Object. 
-Strings in Mizar amount to a wrapper around the underlying string data type.
+@* [S] Mizar String Object.
+We want to treat strings as \\{MObject}s, and the way object-oriented
+programming handles this situation is to create a subclass consisting
+of just a string field. This amounts to a ``wrapper class''.
 
 \label{MStrObj}
 
@@ -219,7 +244,7 @@ Strings in Mizar amount to a wrapper around the underlying string data type.
  @! PStr = ^MStrObj; @/
  @! MStrPtr = PStr; @/
  @! MStrObj = object(MObject) @t\1@> @/
-     fStr: String;
+    @? fStr: String;
     constructor @? Init(const aStr: String); @t\2\2\2@>
  end;
 
@@ -230,7 +255,7 @@ initializes its contents to the given string.
 @<|MStrObj| implementation@>=
 {Specyfic objects based on MObjects for collections}
 
-constructor MStrObj.Init(const aStr: String);
+constructor @? MStrObj.Init(const aStr: String);
 begin
    fStr:=aStr; @+
 end;
@@ -268,9 +293,9 @@ $p\^\K\\{newValue}$.
 
 @^Address of@>
 @^Dereferencing@>
-@^Pointer@> 
+@^Pointer@>
 
-@<Public interface for \texttt{mobjects.pas}@>=
+@ @<Public interface for \texttt{mobjects.pas}@>=
 {MCollection types}
 
   @! PItemList = ^MItemList; @/
@@ -315,6 +340,10 @@ Java programmers would know thas as an ArrayList.
      procedure @? CopyItems(var fOrigin:MList); virtual; @t\2\2\2@>
   end;
 
+@ It's worth pointing out that an \\{MList} does not ``own'' the items
+in it, in the sense that: when we delete an \\{MList} instance, we do
+not need to delete each item in it.
+
 @ \node{Growth factor.}
 How quickly an Dynamic Array grows is a subject of debate. Just for a
 table of the growth factors:\label{growth-factor}
@@ -358,6 +387,10 @@ growth factors like $\alpha\geq2$ can cause dynamic array expansion to
 run out of memory even though a significant amount of memory may still
 be available. For a discussion about this point, see:
 \item{$\bullet$} \pdfURL{{\tt http://www.gahcep.com/cpp-internals-stl-vector-part-1/}}{https://web.archive.org/web/20150806162750/http://www.gahcep.com/cpp-internals-stl-vector-part-1/}\par\noindent%
+The reader wondering what strategy Free \PASCAL/ uses should
+consult \section8.4.1 of the ``Free \PASCAL/ Programmer's Guide''
+(\href{https://www.freepascal.org/docs-html/current/prog/progsu171.html}{eprint}).
+
 It seems that a growth factor $\alpha\leq\varphi=(1+\sqrt{5})/2$ must
 be not bigger than the golden ratio. To see this, we need a dyanmic
 array of size $S$ to have its first growth to allocate $\alpha S$,
@@ -382,7 +415,9 @@ begin
    else if aLimit > 8 then GrowLimit := 16;
 end;
 
-@ \node{Constructor.} The constructor creates an empty list.
+@ \node{Constructor.} The constructor creates an empty list. The
+initial capacity and initial size are both set to zero.
+
 @!@:MList.Init}{\\{MList.Init}@>
 
 @p
@@ -395,7 +430,12 @@ begin
    SetLimit(aLimit); @+
 end;
 
-@ Moving a list into the caller.
+@ Moving a list into the caller. Since an \\{MList} does not own its
+contents, moving its contents around amounts to updating
+pointers. The \\{DeleteAll} (\section\xref{MList.DeleteAll}) method
+just updates the capacity of the caller to zero, it does not
+free anything from memory.
+
 @!@:MList.MoveList}{\\{MList.MoveList}@>
 
 @p
@@ -412,7 +452,9 @@ end;
 
 @ Copying the contents of |aAnother| list into the current list will
 essentially reinitialize the current list, the insert all items from
-the other list into the current list.
+the other list into the current list using \\{InsertList}
+(\section\xref{MList.InsertList}).
+
 @!@:MList.CopyList}{\\{MList.CopyList}@>
 
 @p
@@ -443,8 +485,14 @@ This will copy the base object using |CopyObject|
 (\section\xref{MObject.CopyObject}), allocate a new array of pointers, copy
 over the contents of the caller, and
 then returns the new list.
+
+Importantly, this \emph{will} allocate new objects on the heap,
+duplicating every entry in the caller \emph{and} the caller's data
+(capacity and size).
+
 @!@:MList.MCopy}{\\{MList.MCopy}@>
 
+\label{MList.MCopy}
 @p
 function @? MList.MCopy: PObject;
 var lList: PObject; i: integer;
@@ -456,8 +504,10 @@ begin
    MCopy:=lList;
 end;
 
-@ This is the same as |MList.GetObject| (\section\xref{mlist.getobject}), and I am not sure why we have
-two versions of the same function.
+@ This is the same as |MList.GetObject|
+(\section\xref{mlist.getobject}),
+and I am not sure why we have two versions of the same function.
+
 @!@:MList.At}{\\{MList.At}@>
 
 @p
@@ -488,7 +538,7 @@ space to the list, then sets the first spot to the item.
 procedure @? MList.Insert(aItem: Pointer);
 begin
    if Limit = Count then
-      SetLimit(Limit+GrowLimit(Limit));
+      SetLimit(Limit+GrowLimit(Limit)); {ensure capacity}
    Items^[Count] := aItem;
    inc(Count);
 end;
@@ -501,6 +551,15 @@ error using |ListError|, and exit.
 \item Check if the index is larger than the logical size of the
 dynamic array; if so, then we grow the dynamic array using |SetLimit|
 \endenumerate
+
+\medbreak\PUZZLE/: What happens if the user calls
+$\\{AtInsert}(\\{caller.Count}-n, \\{object})$? The code will set
+every pointer in \\{Items}[$\\{Caller.Count}-n\to\\{Caller.Count}-1$] to \&{nil},
+which seems buggy.
+
+\SOLUTION/: The \\{SetLimit} method \emph{does not} update
+the \\{Count} field of the caller, so the problem just stated will
+never happen.
 
 @!@:MList.AtInsert}{\\{MList.AtInsert}@>
 @p
@@ -530,6 +589,13 @@ end;
 iterate through all the other list's items, and insert (a copy of the
 pointer to) each one into the current list. This should leave
 |aAnother| list unmodified.
+
+Observe that this has, for each item in the argument supplied,
+the caller \\{Insert} a pointer to a copy of each item. That is to
+say, the caller \emph{pushes} a new item to the end of the caller's
+contents. 
+
+\label{MList.InsertList}
 @!@:MList.InsertList}{\\{MList.InsertList}@>
 
 @p
@@ -556,7 +622,9 @@ begin
    else GetObject := Items^[aIndex];
 end;
 
-@ We have a default error code for lists. @!@:MList.ListError}{\\{MList.ListError}@>
+@ We have a default error code for lists.
+
+@!@:MList.ListError}{\\{MList.ListError}@>
 
 @p
 procedure @? MList.ListError(aCode, aInfo: integer);
@@ -569,7 +637,12 @@ item of the list, until we find the needle in the hay stack. Once
 found, we return the index for the needle.
 
 If the needle is not in the haystack, return
-$-1$. @!@:MList.IndexOf}{\\{MList.ListError}@>
+$-1$.
+
+Note: this uses pointer comparison, so it will not compare
+the \emph{contents} of the object for equality.
+
+@!@:MList.IndexOf}{\\{MList.ListError}@>
 
 @p
 function @? MList.IndexOf(aItem: Pointer): integer;
@@ -585,9 +658,14 @@ begin
 end;
 
 @ Deleting all items from a list simply updates the list's logical
-size (i.e., |Count|) to zero.
-This will not alter the underlying array allocated for the dynamic array.
+size (i.e., |Count|) to zero. Important contracts which hold about
+this:
+\bul This will not alter the underlying array allocated for the dynamic array.
+\bul This will not free any allocated objects from memory.
+
 @!@:MList.DeleteAll}{\\{MList.DeleteAll}@>
+
+\label{MList.DeleteAll}
 
 @p
 procedure @? MList.DeleteAll;
@@ -599,7 +677,11 @@ end;
 function (which frees up the memory in heap). This is a helper
 function to avoid accidentally invoking |Dispose(PObject(nil), Done)|
 which would throw errors.
-@!@:Mlist.FreeItem}{\\{Mlist.FreeItem}@>
+
+\Ithink{This method appears to be used only by subclasses
+of \\{MList}, so I think this should be a protected method.}
+
+@!@:MList.FreeItem}{\\{MList.FreeItem}@>
 
 @p
 procedure @? MList.FreeItem(Item: Pointer);
@@ -678,21 +760,27 @@ move them. Be sure to free up the pointers, and update the variables.
 procedure @? MList.SetLimit(ALimit: integer);
 var lItems: PItemList;
 begin
-   if ALimit < Count then ALimit := Count;
-   if ALimit > MaxCollectionSize then ALimit := MaxCollectionSize;
+   @<Ensure |Count <= ALimit <= MaxCollectionSize|@>;
    if ALimit <> Limit then
    begin
       if ALimit = 0 then lItems := nil else
-      begin
-         GetMem(lItems, ALimit * SizeOf(Pointer));
-         if ((Count) <> 0) and (Items <> nil) then
-            Move(Items^, lItems^, Count*SizeOf(Pointer));
-      end;
+      @<Allocate a new array, and copy old contents into new array@>;
       if Limit <> 0 then FreeMem(Items, Limit*SizeOf(Pointer));
       Items := lItems;
       Limit := ALimit;
    end;
 end;
+
+@ @<Ensure |Count <= ALimit <= MaxCollectionSize|@>=
+   if ALimit < Count then ALimit := Count;
+   if ALimit > MaxCollectionSize then ALimit := MaxCollectionSize
+
+@ @<Allocate a new array, and copy old contents into new array@>=
+      begin
+         GetMem(lItems, ALimit * SizeOf(Pointer));
+         if ((Count) <> 0) and (Items <> nil) then
+            Move(Items^, lItems^, Count*SizeOf(Pointer));
+      end
 
 @ Appending another list to the current list will expand the current
 list to support the new items, insert the other list's items at the
@@ -708,12 +796,14 @@ begin
    fAnother.DeleteAll; fAnother.Done;
 end;
 
-@ There is a comment in Polish at the beginning of this function stating ``Przeznaczeniem tej procedury jest uzycie jej w konstruktorach Move, ktore wykonuja jakgdyby pelna instrukcje przypisania (razem z VMTP)''
-which Google translates as ``The purpose of this procedure is to be used in Move constructors, which execute a full assignment statement (including VMTP).''
+@ There is a comment in Polish at the beginning of this function stating ``Przeznaczeniem tej procedury jest uzycie jej w konstruktorach \\{Move}, ktore wykonuja jakgdyby pelna instrukcje przypisania (razem z VMTP)''
+which Google translates as ``The purpose of this procedure is to be
+used in \\{Move} constructors, which execute a full assignment statement
+(including VMTP [virtual method table pointer]).''
 
-There is also another comment in Polish, ``Nie wolno uzyc SetLimit, bo
+There is also another comment in Polish, ``Nie wolno uzyc \\{SetLimit}, bo
 rozdysponuje Items'' which I translated into English and kept inline
-(``You cannot use SetLimit because it will distribute the Items'').
+(``You cannot use \\{SetLimit} because it will distribute the Items'').
 
 The semantics of |Object := Object| will \emph{copy} the right-hand
 side to the left-hand side.
@@ -779,6 +869,9 @@ an |MList| into an |MCollection|, we have |Delta := 2| be the default value.
 
 @ \node{Constructor.} When constructing a new Collection, we allocate
 an array of the desired limit (using the |SetLimit| (\section\xref{MList.SetLimit}) to handle this allocation).
+
+\Ithink{We should have preconditions that |ADelta>=0| and |ALimit>=0|,
+enforced by assertions.}
 
 @<|MCollection| implementation@>=
 {MCollection}
