@@ -38,11 +38,14 @@ it with (the possibly non-portable) |FormatDateTime('YYYY',Now)|.
 
 @ The directory separator for the file system supports Windows
 and \UNIX/-like file systems. So Classic \macOS/ and \QNX/ users would
-have to request this changed. 
+have to request this changed.
+
+Note: it might be wiser, for Free \PASCAL/ users, to use the \href{https://www.freepascal.org/docs-html/rtl/system/directoryseparator.html}{\\{DirectorySeparator}}
+constant from the \\{system} unit.
 
 @<Constants for \texttt{pcmizver.pas}@>=
 @{@&$IFDEF WIN32@}
-   DirSeparator = '\'; @/
+  @! DirSeparator = '\'; @/
 @{@&$ELSE@}
    DirSeparator = '/'; @/
 @{@&$ENDIF@}
