@@ -185,6 +185,13 @@ Springer, \doi{10.1007/978-3-540-74591-4_28}
   Artur Korni\l{}owicz, and
   Adam Naumowicz's ``Mizar in a Nutshell''\hfill\break
   (\doi{10.6092/issn.1972-5787/1980})
+\item  Christoph Schwarzweller,
+  ``Mizar attributes: A technique to encode mathematical knowledge into type systems''.
+   \emph{Studies in Logic, Grammar and Rhetoric} \textbf{10} no.23 (2007) 387--400.
+\item Adam Naumowicz,
+  ``Enhanced Processing of Adjectives in Mizar''.
+  \emph{Studies in Grammar, Logic, and Rhetoric} \textbf{18} no.31
+  (2009) 89--91 --- for details about the Analyzer handling attributes
 \item Artur Korni\l{}owicz's
   ``Registrations vs Redefinitions in Mizar''
   (in A.\ Kohlhase, P.\ Libbrecht, BR.\ Miller, A.\ Naumowicz, W.\ Neuper, P.\ Quaresma, F.\ Wm.\ Tompa, M.\ Suda
@@ -420,12 +427,10 @@ me to identify a number of situations where things can ``go
 badly''. But they are not all bugs (some are impossible to occur).
 
 \startbugs%\par\advance\leftskip\parindent%
-\bug In \section\xref{MsortedExtList.FindInterval},
-|MSortedExtList.FindInterval| appears to assume that
- |MSortedExtList.Find| returns the left-most index.
-\bug In \section\xref{MSortedCollection.Search}, |MSortedCollection.Search|
-may not return the correct index when there are duplicates.
-This is not terrible, since |IndexOf| corrects for this possibility.
+\bug In \section\xref{MSortedCollection.IndexOf},
+\\{MSortedCollection.IndexOf} returns $-1$ when duplicate entries are allowed.
+Since Mizar does not seem to enable duplicate entries, this bug would
+never have been experienced or caught.
 \bug In \section\xref{TXTStreamObj.Done}, I think |TXTStreamObj.Done|
 needs to close the associated file.
 \bug In \section\xref{TSymbol.Init}, |TSymbol.Init| expects an

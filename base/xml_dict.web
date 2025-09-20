@@ -5,7 +5,7 @@ These are enumerated types, and string constants for their names.
 
 \label{XMLDictionary}
 
-@<xml\_dict.pas@>=
+@<\texttt{xml\_dict.pas}@>=
   @<GNU License@>
 
 unit xml_dict;
@@ -15,7 +15,15 @@ interface @|@#
 uses mobjects; @|@#
 
 @t\4\4@> {known (and only allowed) \XML/ elements}
-type
+type @<Types of \texttt{xml\_dict.pas}@>@;
+
+const @<Constants of \texttt{xml\_dict.pas}@>@;
+
+implementation @t\2@> @|@/
+
+end.
+
+@ @<Types of \texttt{xml\_dict.pas}@>=
    XMLElemKind =
    (
     elUnknown,
@@ -64,53 +72,9 @@ type
     elVariables,
     elVocabularies,
     elVocabulary
-    ); @#
-
-@t\4\4@> {known \XML/ attributes}
-   XMLAttrKind =
-   (
-    atUnknown,
-    atAid,
-    atArgNr,
-    atArticleId,
-    atArticleExt,
-    atCol,
-    atCondition,
-    atConstrNr,
-    atIdNr,
-    atInfinitive,
-    atKind,
-    atLabelNr,
-    atLeftArgNr,
-    atLine,
-    atMizfiles,
-    atName,
-    atNegated,
-    atNr,
-    atNumber,
-    atOrigin,
-    atPosLine,
-    atPosCol,
-    atPriority,
-    atProperty,
-    atRightSymbolNr,
-    atSchNr,
-    atSerialNr,
-    atShape,
-    atSpelling,
-    atSymbolNr,
-    atValue,
-    atVarNr,
-    atVarSort,
-    atX,
-    atX1,
-    atX2,
-    atY,
-    atY1,
-    atY2
     );
 
-const
+@ @<Constants of \texttt{xml\_dict.pas}@>=
    XMLElemName: array[XMLElemKind] of string =
    (
     'Unknown',
@@ -161,6 +125,54 @@ const
     'Vocabulary'
     );
 
+@ Note that \\{atX1} and \\{atX2} are not used anywhere in Mizar,
+but \\{atY1} and \\{atY2} are used in the \texttt{first\_identification.pas}.
+@<Types of \texttt{xml\_dict.pas}@>=
+@t\4\4@> {known \XML/ attributes}
+   XMLAttrKind =
+   (
+    atUnknown,
+    atAid,
+    atArgNr,
+    atArticleId,
+    atArticleExt,
+    atCol,
+    atCondition,
+    atConstrNr,
+    atIdNr,
+    atInfinitive,
+    atKind,
+    atLabelNr,
+    atLeftArgNr,
+    atLine,
+    atMizfiles,
+    atName,
+    atNegated,
+    atNr,
+    atNumber,
+    atOrigin,
+    atPosLine,
+    atPosCol,
+    atPriority,
+    atProperty,
+    atRightSymbolNr,
+    atSchNr,
+    atSerialNr,
+    atShape,
+    atSpelling,
+    atSymbolNr,
+    atValue,
+    atVarNr,
+    atVarSort,
+    atX,
+    atX1, {unused}
+    atX2, {unused}
+    atY,
+    atY1,
+    atY2
+    );
+
+@ @<Constants of \texttt{xml\_dict.pas}@>=
 XMLAttrName:array[XMLAttrKind] of string =
    (
     'unknown',
@@ -202,8 +214,4 @@ XMLAttrName:array[XMLAttrKind] of string =
     'y',
     'y1',
     'y2'
-    ); @#
-
-implementation @t\2@> @|@/
-
-end.
+    );

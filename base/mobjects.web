@@ -939,7 +939,7 @@ procedure @? MCollection.AtDelete(Index: integer);
 begin
    @<Check |Index| for \\{MCollection} is within bounds, raise an error if it's out of bounds@>;
    @<Shift entries of \\{MCollection} to the left by one@>;
-   Dec(Count);
+   dec(Count);
 end;
 
 @ @<Check |Index| for \\{MCollection} is within bounds, raise an error if it's out of bounds@>=
@@ -2083,6 +2083,7 @@ true: \\{Find} will return \\{true} and mutate |aIndex:=2|.)
 Ensures: if the result is \\{true}, then \\{aIndex} will be the
 left-most index for \\{aKey}.
 
+\label{MSortedExtList.Find}
 @!@:MSortedExtList.Find}{\\{MSortedExtList.Find}@>
 
 @<|MSortedExtList| implementation@>=
@@ -2278,6 +2279,7 @@ begin
    if k <> aIndex then ListError(coSortedListError, 0);
    Count:=aIndex;
 end;
+
 @ \node{Digest an extendible object.} When there are extendible
 objects left to digest among the values (i.e., when |fExtCount > 0|), 
 When |fExtCount <= 0|, then raise an error (there's nothing left to digest).
@@ -2465,10 +2467,75 @@ begin
    Compare := fCompare(Key1, Key2);
 end;
 
+@ We treat the item itself as the key, so return the item. That is to
+say, this is the identity function.
+
+It does not mutate the caller.
+
+\label{MSortedCollection.KeyOf}
+
+@p
+function MSortedCollection.KeyOf(Item: Pointer): Pointer;
+begin
+   KeyOf := Item;
+end;
+
+@ \node{Binary search.}
+This is binary search through a sorted collection. This will mutate
+the \\{Index} argument to point to where the \\{Key} is located if it
+is present (or where it should be located if it is absent).
+If there are duplicates, this will assign \\{Index} the left-most
+index.
+
+When the \\{Key} is present in the collection, this function will
+return \\{true}. Otherwise, it will return \\{false}.
+
+It may be instructive for the reader to compare this
+to \\{MSortedExtList}'s \\{Find} method (\section\xref{MSortedExtList.Find}).
+
+\Ithink{I think if there are no duplicates, then ``|begin; Index := L; exit; end;|''
+should be the body of the \&{if} statement. Nothing changes, but it
+avoids needless iterations.}
+
+\label{MSortedCollection.Search}
+
+@p
+function MSortedCollection.Search(Key: Pointer; var Index: integer): Boolean;
+var
+   L, H, I, C: integer;
+begin
+   Search := False;
+   L := 0;
+   H := Count - 1;
+   while L <= H do
+   begin
+      I := (L + H) shr 1;
+      C := Compare(KeyOf(Items^[I]), Key);
+      if C < 0 then L := I + 1 else
+      begin
+         H := I - 1;
+         if C = 0 then
+         begin
+            Search := True;
+            if not Duplicates then L := I;
+         end;
+      end;
+   end;
+   Index := L;
+end;
+
 @ Find the right-most index for an item in the collection.
 Searching (\section\xref{MSortedCollection.Search}) for the |KeyOf| (\section\xref{MSortedCollection.KeyOf}).
-This function corrects for the possible bug in |Search| (\section\xref{MSortedCollection.Search})
-which will return the index \emph{just to the left} of an item.
+
+I have just unit tested this, the branch incrementing $I$ is buggy. It
+should be something like:
+$$\&{while}\ (I+1<\\{Count})\W(\\{aItem}=\\{Items}\^[I+1])\ \&{do}\ \\{inc}(I);\ \\{IndexOf}\K I;$$
+This will scan to the right until we get to the end of the collection,
+or the next item is no longer the same thing the user is searching
+for.
+
+\label{MSortedCollection.IndexOf}
+
 @!@:MSortedCollection.IndexOf}{\\{MSortedCollection.IndexOf}@>
 
 @p
@@ -2507,51 +2574,6 @@ begin
    else Dispose(PObject(Item),Done);
 end;
 
-@ We treat the item itself as the key, so return the item. That is to
-say, this is the identity function.
-
-It does not mutate the caller.
-
-\label{MSortedCollection.KeyOf}
-
-@p
-function MSortedCollection.KeyOf(Item: Pointer): Pointer;
-begin
-   KeyOf := Item;
-end;
-
-@ \node{Binary search.}
-This is binary search through a sorted collection.
-
-If there are duplicates, this will return the left-most index.
-
-\label{MSortedCollection.Search}
-
-@p
-function MSortedCollection.Search(Key: Pointer; var Index: integer): Boolean;
-var
-   L, H, I, C: integer;
-begin
-   Search := False;
-   L := 0;
-   H := Count - 1;
-   while L <= H do
-   begin
-      I := (L + H) shr 1;
-      C := Compare(KeyOf(Items^[I]), Key);
-      if C < 0 then L := I + 1 else
-      begin
-         H := I - 1;
-         if C = 0 then
-         begin
-            Search := True;
-            if not Duplicates then L := I;
-         end;
-      end;
-   end;
-   Index := L;
-end;
-
 @ Perform the lexicographic ordering of $(x_{1},y_{1})$ against
 $(x_{2},y_{2})$.
 
@@ -2566,6 +2588,8 @@ begin
 end;
 
 @* [S] String collection.
+The \texttt{librenv.pas} module uses both the \\{MStringCollection} 
+and \\{StringColl} data structures.
 
 @<Public interface for \texttt{mobjects.pas}@>=
 {MStringCollection object}
@@ -2729,7 +2753,9 @@ end;
 
 
 @* [S] Stacked list of objects.
-``Stacked'' lists are really linked lists.
+``Stacked'' lists are really linked lists. This is an abstract class,
+so the methods are not implemented (and trying to use them will raise
+an error).
 
 \label{StackedObj}
 
@@ -2755,17 +2781,23 @@ destructor StackedObj.Done;
 begin Abstract1; end;
 
 @* [S] String list.
+We will want to use a dictionary whose keys are strings, and values
+are pointers to \\{MObject}s. The \\{MStringList} is such a dictionary.
+It's little more than an array of \\{MStringItem} entries, sorted
+according to key.
 
 @<Public interface for \texttt{mobjects.pas}@>=
 {MStringList object}
 
-@!  MDuplicates = (dupIgnore, dupAccept, dupError); @#
 
 @!  PStringItem = ^MStringItem; @/
 @!  MStringItem = record
-     fString: PString;
-     fObject: PObject; 
+     fString: PString; {key}
+     fObject: PObject; {value}
   end; @#
+
+@ @<Public interface for \texttt{mobjects.pas}@>=
+@!  MDuplicates = (dupIgnore, dupAccept, dupError); @#
 
 @!  PStringItemList = ^MStringItemList; @/
 @!  MStringItemList = array[0..MaxListSize] of MStringItem; @#
@@ -2773,10 +2805,10 @@ begin Abstract1; end;
 @!  PStringList = ^MStringList; @/
 @!  MStringList = object(MObject) @t\1@> @/
      fList: PStringItemList;
-     fCount: integer;
-     fCapacity: integer;
+     fCount: integer; {logical size}
+     fCapacity: integer; {capacity of array}
      fSorted: Boolean;
-     fDuplicate: MDuplicates;
+     fDuplicate: MDuplicates; {how to handle duplicates}
      
      constructor @? Init(aCapacity: integer); @t\2@>
      constructor @? MoveStringList(var aAnother:MStringList); @# @t\2@>
@@ -2808,7 +2840,10 @@ begin Abstract1; end;
      procedure @? InsertObject(aIndex: integer@+;@+ const aStr: string;@+ aObject: PObject); @t\2\2\2@>
   end;
 
-@ @<Declare internal methods for \\{StringList}@>=
+@ \Ithink{These methods should be declared `private', to enforce the
+implicit constraint that these methods should not be used directly.}
+
+@<Declare internal methods for \\{StringList}@>=
      {-- Internal methods- do not use them directly --}
      procedure @? StringListError(Code, Info: integer); virtual; @t\2@>
      procedure @? Grow; @t\2@>
@@ -2824,7 +2859,7 @@ using |MoveStringList|.
 @<String list implementation@>=
 {--------------------  MStringList ---------------------------------}
 
-constructor MStringList.Init(aCapacity: integer);
+constructor MStringList.Init(aCapacity: integer); {empty dictionary constructor}
 begin
    MObject.Init;
    fList := nil;
@@ -2851,7 +2886,9 @@ end;
 
 @ \node{Destructor.} Since a |MStringItem| is a pointer to a string
 and a pointer to an |MObject|, freeing an |MStringItem| should free
-both of these (when they are present).
+both of these (when they are present). This hard deletes each string
+using \\{DisposeStr} (\section\xref{DisposeStr}).
+
 @:MStringList.Done}{\\{MStringList.Done}@>
 
 @p
@@ -2860,14 +2897,17 @@ var I: integer;
 begin
    inherited Done;
    for I:=0 to fCount-1 do
+      @<Hard delete entry $I$@>;
+   fCount := 0;
+   SetCapacity(0);
+end;
+
+@ @<Hard delete entry $I$@>=
       with fList^[I] do {free |fList^[I]|}
    begin
       DisposeStr(fString);
       if fObject <> nil then Dispose(fObject,Done);
-   end;
-   fCount := 0;
-   SetCapacity(0);
-end;
+   end
 
 @ \node{Adding a string.}
 This boils down to determining the position where we will insert the
@@ -2877,7 +2917,7 @@ returning the index to the user.
 \label{MStringList.AddString}
 @:MStringList.AddString}{\\{MStringList.AddString}@>
 
-@p
+@<String list implementation@>=
 function @? MStringList.AddString(const aStr: string): integer;
 var lResult: integer;
 begin
@@ -2934,12 +2974,13 @@ begin
    AddObject:=lResult; {Return index}
 end;
 
-@ \node{Appending a string list.}
+@ \node{Merging a string list.}
 We can add all the entries from another |MStringList| to the caller,
 which is what we do in the |AddStrings| function. It does not mutate
 |aStrings|.
 
 @:MStringList.AddStrings}{\\{MStringList.AddStrings}@>
+
 @p
 procedure @? MStringList.AddStrings(var aStrings: MStringList);
 var I,r: integer;
@@ -2949,7 +2990,7 @@ begin
 end;
 
 @ \node{Clear a string list.}
-We can delete all the strings from a string list. This \emph{will not}
+We can hard delete all the strings from a string list. This \emph{will not}
 free the ``values'' in each key-value pair.
 
 @:MStringList.Clear}{\\{MStringList.Clear}@>
@@ -2966,20 +3007,23 @@ begin
    end;
 end;
 
-@ \node{Deleting an entry by index.}
+@ \node{Hard delete an entry by index.}
 When given an index which is within the bounds of the caller, we free
 the string located at that index, decrement the size, and then shift
 all entries after it down by one.
 
 @:MStringList.Delete}{\\{MStringList.Delete}@>
 
+@d assert_valid_index(#) == @+
+   if (# < 0) or (# >= fCount) then
+      StringListError(coIndexError, #)
+
 @p
 procedure @? MStringList.Delete(aIndex: integer);
 begin
-   if (aIndex < 0) or (aIndex >= fCount) then
-      StringListError(coIndexError, aIndex);
+   assert_valid_index(aIndex);
    DisposeStr(fList^[aIndex].fString);
-   Dec(fCount);
+   dec(fCount);
    if aIndex < fCount then
       Move(fList^[aIndex + 1], fList^[aIndex],
            (fCount - aIndex) * SizeOf(MStringItem));
@@ -2995,10 +3039,8 @@ string list, then |ExchangeItems| swaps the items around.
 @p
 procedure @? MStringList.Exchange(Index1, Index2: integer);
 begin
-   if (Index1 < 0) or (Index1 >= fCount) then
-      StringListError(coIndexError, Index1);
-   if (Index2 < 0) or (Index2 >= fCount) then
-      StringListError(coIndexError, Index2);
+   assert_valid_index(Index1);
+   assert_valid_index(Index2);
    ExchangeItems(Index1, Index2);
 end; @#
 
@@ -3011,7 +3053,13 @@ begin
 end;
 
 @ \node{Find an entry by bisection search.}
-We can use bisection search to find the needle in the haystack.
+We can use bisection search to find the needle in the
+haystack. Note that this implementation seeks
+the \emph{leftmost occurrence} of the needle when duplicates are
+allowed.
+
+\Ithink{The \&{if} $\\{fDuplicate} \neq \\{dupAccept}$ statement
+should have an \&{else} branch to break the loop, to avoid needless searching.}
 
 @:MStringList.Find}{\\{MStringList.Find}@>
 
@@ -3029,8 +3077,8 @@ begin
       I := (L + H) shr 1;
       C := CompareStr(fList^[I].fString^, aStr);
       if C < 0 then L := I + 1 else
-      begin
-         H := I - 1;
+      begin {current item in haystack $\geq\\{aStr}$}
+         H := I - 1; {so look in left-half of haystack}
          if C = 0 then
          begin
             lResult := True;
@@ -3064,8 +3112,7 @@ there. If there is no string located at that entry, return the empty string.
 @p
 function @? MStringList.GetString(aIndex: integer): string;
 begin
-   if (aIndex < 0) or (aIndex >= fCount) then
-      StringListError(coIndexError, aIndex);
+   assert_valid_index(aIndex);
    GetString:='';
    if fList^[aIndex].fString <> nil then
       GetString := fList^[aIndex].fString^;
@@ -3079,8 +3126,7 @@ We can get the object at an index, provided it is within bounds.
 @p
 function @? MStringList.GetObject(aIndex: integer): PObject;
 begin
-   if (aIndex < 0) or (aIndex >= fCount) then
-      StringListError(coIndexError, aIndex);
+   assert_valid_index(aIndex);
    GetObject := fList^[aIndex].fObject;
 end;
 
@@ -3152,12 +3198,11 @@ This seems to involve duplicate code as |AddString|
 @!@:MStringList.Insert}{\\{MStringList.Insert}@>
 
 @p
-procedure @? MStringList.Insert(aIndex: integer; const aStr: string);
+procedure @? MStringList.Insert(aIndex: integer@+;@+ const aStr: string);
 begin
    if fSorted then
       StringListError(coSortedListError, 0);
-   if (aIndex < 0) or (aIndex > fCount) then
-      StringListError(coIndexError, aIndex);
+   assert_valid_index(aIndex);
    InsertItem(aIndex, aStr);
 end;
 
@@ -3166,9 +3211,17 @@ We ensure the capacity of the string list. Then we shift the entries
 to the right by 1, if needed. We insert the string associated with no
 object. Then increment the logical size of the dynamic array.
 
+There is a mirage the reader must take care about: although it
+superficially appears like there's bug here when the user gives |aIndex > fCapacity|,
+this private method is called only after checking the index is
+within bounds.
+
+This procedure appears not to be used anywhere.
+
 @:MStringList.InsertItem}{\\{MStringList.InsertItem}@>
 @p
-procedure @? MStringList.InsertItem(aIndex: integer; const aStr: string);
+{REQUIRES: \\{aIndex} is within bounds}
+procedure @? MStringList.InsertItem(aIndex: integer@+;@+ const aStr: string); {private}
 begin
    if fCount = fCapacity then Grow; @/
    @t\4@> {Shift existing entries to right by 1}
@@ -3204,12 +3257,12 @@ begin
    IndexOfObject := -1;
 end;
 
-@ \node{Inserting an object associated with a string.}
+@ \node{Insert a key-value entry at a specific index.}
 
 @p
-procedure @? MStringList.InsertObject(aIndex: integer; 
- const aStr: string;
-@t\quad @> aObject: PObject);
+procedure @? MStringList.InsertObject(aIndex: integer@+;@+ 
+ const aStr: string@+;@+
+ aObject: PObject);
 begin
    Insert(aIndex, aStr);
    PutObject(aIndex, aObject);
@@ -3252,11 +3305,10 @@ the entry indexed by |aIndex| is identical to |aStr|.
 @:MStringList.PutString}{\\{MStringList.PutString}@>
 
 @p
-procedure @? MStringList.PutString(aIndex: integer; const aStr: string);
+procedure @? MStringList.PutString(aIndex: integer@+;@+ const aStr: string);
 begin
    if fSorted then StringListError(coSortedListError, 0);
-   if (aIndex < 0) or (aIndex >= fCount) then
-      StringListError(coIndexError, aIndex);
+   assert_valid_index(aIndex);
    fList^[aIndex].fString := NewStr(aStr);
 end;
 
@@ -3270,13 +3322,13 @@ mutates the caller.
 @p
 procedure @? MStringList.PutObject(aIndex: integer; aObject: PObject);
 begin
-   if (aIndex < 0) or (aIndex >= fCount) then
-      StringListError(coIndexError, aIndex);
+   assert_valid_index(aIndex);
    fList^[aIndex].fObject := aObject;
 end;
 
-@ \node{Quicksorting a string list.} See also \section\xref{ListQuickSort}
-and \section\xref{IntQuickSort}.
+@ \node{Quicksorting a string list.} We have discussed quicksort to
+death earlier (\section\xref{ListQuickSort}), so I will omit the discussion.
+Also, quicksort occurs in one other place (\section\xref{IntQuickSort}).
 
 \label{MStringList.QuickSort}
 
@@ -3295,16 +3347,20 @@ begin
       P := fList^[(L + R) shr 1].fString^;
       repeat
          while CompareStr(fList^[I].fString^, P) < 0 do inc(I);
-         while CompareStr(fList^[J].fString^, P) > 0 do Dec(J);
+         while CompareStr(fList^[J].fString^, P) > 0 do dec(J);
+ @t\4@>        {Invariant: for |0<=h<I| we have |CompareStr(fList^[h].fString^, P) < 0|}
+ @t\4@>         {Invariant: for |J<k<=Count-1| we have |CompareStr(fList^[k].fString^, P) > 0|}
          if I <= J then
          begin
             ExchangeItems(I, J);
             inc(I);
-            Dec(J); @+
+            dec(J); @+
          end;
+ @t\4@>  {Invariants: for |0<=h<=I| we have |CompareStr(fList^[h].fString^, P) < 0|}
+ @t\4@>         {Invariant: for |J<=k<=Count-1| we have |CompareStr(fList^[k].fString^, P) > 0|}
       until I > J; 
-      if L < J then QuickSort(L, J);
-      L := I;
+      if L < J then QuickSort(L, J); {quicksort the left half}
+      L := I; {quicksort the right half}
    until I >= R;
 end;
 
@@ -3397,6 +3453,8 @@ end;
 @ \node{Deleting a string.} A convenience function to avoid
 accidentally freeing a |nil| string pointer.
 
+\label{DisposeStr}
+
 @p
 procedure DisposeStr(P: PString);
 begin
@@ -3404,43 +3462,55 @@ begin
 end;
 
 @* [S] Tuples of integers.
+The remainder of \texttt{mobjects.pas} focuses on finite sets of
+integers, finite maps of integers, and similar structures for tuples
+of integers. We introduce a collection of pairs of
+integers \emph{specifically} to introduce the \\{IntRel} subclass
+(needed for the Equalizer, Analyzer, and Identify modules).
+
+Also, despite the name ``sequence'', we should resist the intuition of
+``sequences from Mathematical Analysis'' like
+$x_{n}=(-1)^{n}/n!$. Instead we should ``think like programmers'' and
+use the computer science intuition that a ``sequence is a [finite] list''.
 
 @<Public interface for \texttt{mobjects.pas}@>=
 {Partial integers Functions}
 
-  IntTriplet = record
+ @! IntTriplet = record
      X1,X2,Y : integer;
   end; @#
 
 const
-   MaxIntPairSize = MaxSize div SizeOf(IntPair);
-   MaxIntTripletSize = MaxSize div SizeOf(IntTriplet);
+  @! MaxIntPairSize = MaxSize div SizeOf(IntPair);
+  @! MaxIntTripletSize = MaxSize div SizeOf(IntTriplet);
 
 @ Now, this is the remainder of the interface
 
 @<Public interface for \texttt{mobjects.pas}@>=
 type
-   IntPairListPtr = ^IntPairList;
-   IntPairList = array[0..MaxIntPairSize- 1] of IntPair; @#
+  @! IntPairListPtr = ^IntPairList; @/
+  @! IntPairList = array[0..MaxIntPairSize- 1] of IntPair; @#
 
-   IntPairSeqPtr = ^BinIntFunc;
-   IntPairSeq = object(MObject) @t\1@> @/
-      Items: IntPairListPtr;
-      Count: integer;
-      Limit: integer;
-      constructor Init(aLimit: integer); @t\2@>
-      procedure NatSetError(Code, Info: integer); virtual; @t\2@>
-      destructor Done; virtual; @t\2@>
-      procedure SetLimit(aLimit: integer); virtual; @t\2@> @#
+  @! IntPairSeqPtr = ^IntPairSeq; @/
+  @! IntPairSeq = object(MObject) @t\1@> @/
+     @? Items: IntPairListPtr;
+     @? Count: integer; {logical size}
+     @? Limit: integer; {capacity}
+      constructor @? Init(aLimit: integer); @t\2@>
+      procedure @? NatSetError(Code, Info: integer); virtual; @t\2@>
+      destructor @? Done; virtual; @t\2@>
+      procedure @? SetLimit(aLimit: integer); virtual; @t\2@> @#
       
-      procedure Insert(const aItem: IntPair); virtual; @t\2@>
-      procedure AtDelete(aIndex: integer); @t\2@>
-      procedure DeleteAll; @t\2@> @#
+      procedure @? Insert(const aItem: IntPair); virtual; @t\2@>
+      procedure @? AtDelete(aIndex: integer); @t\2@>
+      procedure @? DeleteAll; @t\2@> @#
       
-      procedure AssignPair(X,Y:integer); virtual; @t\2\2\2@>
+      procedure @? AssignPair(X,Y:integer); virtual; @t\2\2\2@>
    end;
 
-@ First, we have a helper function for flagging errors.
+@ First, we have a helper function for flagging errors. This should be
+a protected method, since it's used internally by the \\{IntPairList}
+class and its subclasses but \emph{should not} be used by anyone else.
 
 @<Tuples of integers@>=
 {Pairs of an integers}
@@ -3450,9 +3520,14 @@ begin
    RunError(212 - Code); @+
 end;
 
-@ \node{Constructor.}
+@ \node{Constructor.} The empty sequence constructor, initialized to
+have its capacity be \\{aLimit}. Note that \\{SetLimit}
+ensures \\{aLimit} is non-negative (the \\{SetLimit} method will not
+allow |aLimit < Count| and, if this occurs, updates |aLimit := Count|).
 
-@p
+\label{IntPairSeq.Init}
+
+@<Tuples of integers@>=
 constructor IntPairSeq.Init(aLimit: integer);
 begin
    MObject.Init;
@@ -3462,17 +3537,24 @@ begin
    SetLimit(aLimit);
 end;
 
-@ \node{Destructor.}
+@ \node{Destructor.} Hard delete the contents of the
+caller. Specifically, this will free the array of pointers, but not
+dispose the objects whose addresses are stored in the pointers.
 
-@p
+@<Tuples of integers@>=
 destructor IntPairSeq.Done;
 begin
    Count := 0;
    SetLimit(0);
 end;
-@ \node{Insert an element.}
 
-@p
+@ \node{Insert an element.} We begin by asserting the logical size is
+less than the \\{MaxIntPairSize}. We ensure the capacity of the
+caller's array. Then we append the \\{IntPair} to the collection of
+items, and increment the logical size of the caller's array. No
+sorting occurs. Duplicates are allowed.
+
+@<Tuples of integers@>=
 procedure IntPairSeq.Insert(const aItem: IntPair);
 begin
    if Count >= MaxIntPairSize then NatSetError(coOverflow,0);
@@ -3482,48 +3564,63 @@ begin
    inc(Count);
 end;
 
-@ \node{Delete an element at an index.}
+@ \node{Soft delete an element at an index.} We soft delete an element
+by a specific index. We assert the index is valid. Assuming so, if the
+index is not the last element, we just shift all entries in the
+underlying array to the left by one. Then we decrement the logical
+size of the caller.
 
-@p
+@d assert_valid_index_for_nat_set(#) == if (# < 0) or (# > Count) then
+      begin
+         NatSetError(coIndexError,0);
+         exit; @+
+      end
+
+@<Tuples of integers@>=
 procedure IntPairSeq.AtDelete(aIndex: integer);
 var i: integer;
 begin
-   if (aIndex < 0) or (aIndex >= Count) then
-   begin
-      NatSetError(coIndexError,0);
-      exit; @+
-   end;
-   if aIndex < Count-1 then
+   assert_valid_index_for_nat_set(aIndex);
+   if aIndex < Count-1 then {shift everything to left by 1}
       for i:=aIndex to Count-2 do Items^[i]:=Items^[i+1];
-   Dec(Count);
+   dec(Count);
 end;
 
-@ \node{Resizing an IntPair sequence.}
+@ \node{Ensure capacity for an IntPair sequence.} As per usual, when
+ensuring the capacity of a dynamic array, we monotonically increase
+its size. We can use this to delete all elements of the array by
+manually assigning the logical size |Count := 0| before invoking |SetLimit(0)|.
 
-@p
+@<Tuples of integers@>=
 procedure IntPairSeq.SetLimit(aLimit: integer);
 var aItems: IntPairListPtr;
-begin
+begin {ensure |Count <= aLimit <= MaxIntPairSize|}
    if aLimit < Count then aLimit := Count;
    if aLimit > MaxIntPairSize then ALimit := MaxIntPairSize;
    if aLimit <> Limit then
    begin
       if ALimit = 0 then AItems := nil else
-      begin
-         GetMem(AItems, ALimit * SizeOf(IntPair));
-         if (Count <> 0) and (Items <> nil) then
-            Move(Items^, aItems^, Count * SizeOf(IntPair));
-      end;
-      if Limit <> 0 then FreeMem(Items, Limit * SizeOf(IntPair));
+      @<Allocate a new array for |IntPairSeq|, and copy the contents over@>;
+      @<Free the old array, if it isn't \&{nil}@>;
       Items := aItems;
       Limit := aLimit;
    end;
 end;
 
-@ \node{Deleting all entries.} We just set the logical size to zero.
+@ @<Allocate a new array for |IntPairSeq|, and copy the contents over@>=
+      begin
+         GetMem(AItems, ALimit * SizeOf(IntPair));
+         if (Count <> 0) and (Items <> nil) then
+            Move(Items^, aItems^, Count * SizeOf(IntPair));
+      end
+
+@ @<Free the old array, if it isn't \&{nil}@>=
+      if Limit <> 0 then FreeMem(Items, Limit * SizeOf(IntPair))
+
+@ \node{Soft delete all entries.} We just set the logical size to zero.
 It leaves everything else untouched.
 
-@p
+@<Tuples of integers@>=
 procedure IntPairSeq.DeleteAll;
 begin
    Count := 0; @+
@@ -3532,7 +3629,9 @@ end;
 @ \node{Append a pair of integers.} We create a new |IntPair| using
 $X$ and $Y$, then append it to the caller.
 
-@p
+\label{IntPairSeq.AssignPair}
+
+@<Tuples of integers@>=
 procedure IntPairSeq.AssignPair(X,Y:integer);
 var lIntPair: IntPair;
 begin
@@ -3541,10 +3640,16 @@ begin
    Insert(lIntPair);
 end;
 
-@* [S] Int rel.
-This is used in
-the \texttt{iocorrel.pas}, \texttt{identify.pas}, \texttt{equalizer.pas},
-the analyzer, and a polynomial library.
+@* [S] Relations of Integers as finite sets.
+The basic idea is we want have a finite relation over integers
+$R\subset\ZZ\times\ZZ$ implemented in \PASCAL/ as a sorted finite list
+of \\{IntPair} objects. One possible use for such a thing: we will
+translate identifiers into numbers (think ``de Bruijn indices''), and
+we want to track attribute implication. This could be handled with
+an \\{IntRel} object.
+
+This is used in the \texttt{iocorrel.pas}, \texttt{identify.pas}, the
+Equalizer, the Analyzer, and a polynomial library.
 
 @<Public interface for \texttt{mobjects.pas}@>=
    IntRelPtr = ^IntRel; @/
@@ -3552,7 +3657,7 @@ the analyzer, and a polynomial library.
       constructor Init(aLimit: integer); @t\2@>@#
       
       procedure Insert(const aItem: IntPair); virtual; @t\2@>
-      procedure AtInsert(aIndex: integer; const aItem: IntPair); virtual; @t\2@>
+      procedure AtInsert(aIndex: integer@+;@+ const aItem: IntPair); virtual; @t\2@>
       
       function Search(X,Y: integer; var aIndex: integer): Boolean; virtual; @t\2@>
       function IndexOf(X,Y:integer): integer; @t\2@>
@@ -3562,7 +3667,7 @@ the analyzer, and a polynomial library.
       procedure AssignPair(X,Y:integer); virtual; @t\2\2\2@>
    end;
 
-@ \node{Constructor.} This is just the inherited constructor.
+@ \node{Constructor.} This is just the inherited constructor (\section\xref{IntPairSeq.Init}).
 
 @<Int relation implementation@>=
 @t\4\4@> {IntRel}
@@ -3572,19 +3677,24 @@ begin
    inherited Init(aLimit);
 end;
 
-@ \node{Inserting an entry.}
+@ \node{Inserting an entry.} Since we are trying to describe a binary
+relation of integers, we want to avoid duplicate entries in the
+underlying array. So we need to check that \\{aItem} is not already
+present in the caller's array, and then (assuming its absence) insert
+the item.
 
-@p
+An important invariant: If the caller's array of \\{Items} was sorted
+before this function was called, then it will remain sorted after the
+function has returned control to the caller.
+
+@<Int relation implementation@>=
 procedure IntRel.Insert(const aItem: IntPair);
 var I: integer; @t\2@>
 begin
    if not Search(aItem.X,aItem.Y, I) then
-   begin
-      if (I < 0) or ( I > Count) then
-      begin
-         NatSetError(coIndexError,0);
-         exit; @+
-      end;
+   begin {Assert: index $I$ must be within bounds}
+      assert_valid_index_for_nat_set(I); @/
+      {Note: this should be |AtInsert(I, aItem)|}
       if Count >= MaxIntPairSize then NatSetError(coOverflow,0); @/
       {Finished with the possible errors}
       if Limit = Count then
@@ -3593,16 +3703,21 @@ begin
          Move(Items^[I], Items^[I+1],(Count - I)*SizeOf(IntPair));
       Items^[I] := aItem;
       inc(Count);
-   end; @t\2@>
+   end;
 end;
 
-@ \node{Insert at a specific index.}
+@ \node{Insert at a specific index.} We can insert an entry at a
+specific location in the underlying array, but this breaks the
+contract that the underlying array is sorted using
+the \\{CompareIntPairs} function. This violates the assumption
+underlying the \\{Search} function.
 
-@p
-procedure IntRel.AtInsert(aIndex: integer; const aItem: IntPair);
+It is used by the \texttt{polynom.pas} module, so we can't just ignore it.
+
+@<Int relation implementation@>=
+procedure IntRel.AtInsert(aIndex: integer@+;@+ const aItem: IntPair);
 begin
-   if (aIndex < 0) or (aIndex > Count) then
-      NatSetError(coIndexError, aIndex);
+   assert_valid_index_for_nat_set(aIndex);
    if Count = Limit then
       SetLimit(Limit + GrowLimit(Limit)); @/
    {Shift everything to the right by 1}
@@ -3614,14 +3729,16 @@ begin
 end;
 
 @ \node{Bisection search for a relation.}
-Search through |IntRel| for a relation $X = Y$. Note that this is not
-symmetric, i.e., if we have $Y = X$ in the |IntRel|, then it will not
+Search through |IntRel| for an entry (X, Y). Note that this is not
+symmetric, i.e., if we have $(Y, X)$ in the |IntRel|, then it will not
 match.
 
 Mutates the |aIndex|. If the relation is missing, |aIndex| will return
 where it \emph{should} be.
 
-@p
+Assumes the underlying array is sorted using \\{CompareIntPairs}.
+
+@<Int relation implementation@>=
 function IntRel.Search(X,Y: integer; var aIndex: integer): Boolean;
 var
    L, H, I, C: integer;
@@ -3650,7 +3767,7 @@ end;
 caller. It will mutate the caller \emph{but not} the argument supplied.
 The \\{Move} function copies the contents of one region of memory to another.
 
-@p
+@<Int relation implementation@>=
 constructor IntRel.CopyIntRel(var aFunc: IntRel);
 begin
    Init(aFunc.Limit);
@@ -3659,10 +3776,10 @@ begin
 end;
 
 @ \node{Index of a relation.}
-This will return the index of the $X = Y$ entry. If it is absent from
+This will return the index of the $(X, Y)$ entry. If it is absent from
 the caller, then return $-1$.
 
-@p
+@<Int relation implementation@>=
 function IntRel.IndexOf(X,Y:integer): integer;
 var I: integer;
 begin
@@ -3670,24 +3787,37 @@ begin
    if Search(X,Y, I) then IndexOf:=I;
 end;
 
-@ \node{Test for membership.} This just tests if $X=Y$ is contained in
+@ \node{Test for membership.} This just tests if $(X,Y)$ is contained in
 the caller.
 
-@p
+@<Int relation implementation@>=
 function IntRel.IsMember(X,Y:integer): Boolean;
 var I: integer;
 begin
    IsMember:=Search(X,Y, I); @+
 end;
 
-@ @p
+@ If $(X,Y)$ belongs to the caller, then we're good: we do not need to
+do anything. Otherwise, the parent class's \\{AssignPair}
+(\section\xref{IntPairSeq.AssignPair}) method is invoked, which will
+just invoke the \\{Insert} method for inserting the pair to the caller.
+
+An important invariant: if the array of \\{Items} is sorted before the
+function is called, then it remains sorted when this function is
+terminated. 
+
+@<Int relation implementation@>=
 procedure IntRel.AssignPair(X,Y:integer);
 begin
    if IsMember(X,Y) then exit;
    inherited AssignPair(X,Y);
 end;
 
-@* [S] Partial integers functions.
+@* [S] Finite sets of integers.
+We treat a finite relation of integers as a set, ignoring the second
+component of the entries, assigning them to zero when inserting a
+number. So we have $\LB\,(x,0), \dots, (x', 0)\,\RB$ encoded by a
+sorted array of integer pairs.
 
 @<Public interface for \texttt{mobjects.pas}@>=
    NatSetPtr = ^NatSet; @/
@@ -3764,11 +3894,7 @@ var
 begin
    if not SearchPair(aItem.X, I) or Duplicates then
    begin
-      if (I < 0) or ( I > Count) then {Out of bounds, raise an error}
-      begin
-         NatSetError(coIndexError,0);
-         exit; @+
-      end;
+      assert_valid_index_for_nat_set(I);
       if Limit = Count then {Grow the capacity, if possible}
       begin
          if Delta = 0 then
@@ -3786,7 +3912,8 @@ begin
 end;
 
 @ \node{Equality of IntPair objects.}
-This just tests the componentwise equality of two |IntPair| objects.
+This private function just tests the componentwise equality of two
+|IntPair| objects.
 
 @p
 function Equals(Key1, Key2: IntPair): Boolean;
@@ -3795,7 +3922,8 @@ begin
 end;
 
 @ \node{Search.} This is a bisection search for any relation of the
-form $X = Y$ for some $Y$.
+form $(X, Y)$ for some $Y$. Assumes the array is sorted by the first
+component.
 
 \label{NatSet.SearchPair}
 
@@ -3886,7 +4014,7 @@ begin
       else inc(k);
 end;
 
-@ \node{Insert an element.} We can insert $X = 0$ into the caller.
+@ \node{Insert an element.} We can insert $(X, 0)$ into the caller.
 
 @p
 procedure NatSet.InsertElem(X:integer);
@@ -3898,7 +4026,7 @@ begin
 end;
 
 @ \node{Deleting an element.} Similarly, we can delete the first
-element of the form $X=Y$ for some $Y$.
+element of the form $(X,Y)$ for some $Y$.
 
 @p
 procedure NatSet.DeleteElem(fElem:integer);
@@ -3975,25 +4103,30 @@ function NatSet.Misses(const fFunc: NatSet): Boolean;
 var I,k: integer;
 begin
    if Count > fFunc.Count then
+   @<Return \\{false} if any item of |fFunc| is in |Self|@>
+   else @<Return \\{false} if any item of |Self| is in |fFunc|@>;
+   Misses:=true;
+end;
+
+@ @<Return \\{false} if any item of |fFunc| is in |Self|@>=
    begin
       for k:=0 to fFunc.Count-1 do
          if SearchPair(fFunc.Items^[k].X,I) then begin Misses:=false; exit @+ end
    end
-   else
+
+@ @<Return \\{false} if any item of |Self| is in |fFunc|@>=
    begin
       for k:=0 to Count-1 do
          if fFunc.SearchPair(Items^[k].X,I) then begin Misses:=false; exit @+ end;
-   end;
-   Misses:=true;
-end;
+   end
 
 @ \node{Index for an element.} This searches for the index associated
-with relations of the form $X = Y$. If any such relation appears,
+with relations of the form $(X, Y)$. If any such relation appears,
 return its index. Otherwise, return $-1$.
 
 It leaves the caller unmodified, so it is a pure function.
 
-@p
+@<Partial integer function implementation@>=
 function NatSet.ElemNr(X:integer): integer;
 var I: integer;
 begin
@@ -4065,10 +4198,14 @@ $\lcm(x,y)$ and $y$ divides $\lcm(x,y)$ --- moreover, $\lcm(x,y)$ is
 the smallest such quantity, in the sense that $\lcm(x,y)$ divides any
 other such quantity).
 
-For the ring (or ringoid) $\NN^{\NN}$, this amounts to
-$$\lcm(f,g)=\{\,(x,y)\mid \exists y_{1},y_{2}, (x,y_{1})\in f, (x,y_{2})\in g, y=\lcm(y_{1},y_{2})\,\},$$
+%For the ring (or ringoid) $\NN^{\NN}$, this amounts to
+The implementation amounts to something like,
+$$\lcm(f,g)=\{\,(x,y)\mid \exists y_{1},y_{2}, (x,y_{1})\in f, (x,y_{2})\in g, y=\max(y_{1},y_{2})\,\}\cup(f\mathbin{\Delta}g),$$
 with the condition that when $y_{1}=0$, $y=y_{2}$ (and similarly
-$y_{2}=0$ implies $y=y_{1}$).
+$y_{2}=0$ implies $y=y_{1}$), and the symmetric difference
+$$f\mathbin{\Delta}g=(f\setminus g)\cup(g\setminus f).$$
+This is not quite the same as the least common multiple in the ring
+$\NN^{\NN}$. 
 
 @p
 constructor NatFunc.LCM(const aFunc1,aFunc2: NatFunc);
@@ -4132,12 +4269,14 @@ begin
    begin
       if SearchPair(X, I) then
          inc(Items^[I].Y)
-      else
-      begin lIntPair.X:=X; lIntPair.Y:=1;
-      Insert(lIntPair);
-      end;
+      else @<Insert $(X,1)$@>;
    end;
 end;
+
+@ @<Insert $(X,1)$@>=
+      begin lIntPair.X:=X; lIntPair.Y:=1;
+      Insert(lIntPair);
+      end
 
 @ \node{Decrement $f(x)$.}
 Given a |NatFunc| object $f$, and an integer $x$, |f.Down(x)| will
@@ -4149,7 +4288,7 @@ Given a |NatFunc| object $f$, and an integer $x$, |f.Down(x)| will
   natural-valued. So we raise an error.
 \endenumerate
 
-@p
+@<|NatFunc| implementation@>=
 procedure NatFunc.Down(X: integer);
 var I: integer;
 begin
@@ -4222,6 +4361,7 @@ begin
          else Insert(fFunc.Items^[k]);
    end;
 end;
+
 @ This function performs the same task as the previous one (i.e., it
 merges another partial function into the caller, provided it is
 consistent on overlap).
@@ -4363,13 +4503,13 @@ end;
 @ \node{Comparing partial functions.} Let $f\colon\NN\pto\NN$ and
 $g\colon\NN\pto\NN$ be partial functions.
 
-If $\magnitude{f}\leq\magnitude{g}$, for each $x\in\dom(f)$ if
+If there are more elements in the caller $f$ than the other function $g$, $\magnitude{f}\leq\magnitude{g}$, for each $x\in\dom(f)$ if
 $x\notin\dom(g)$, then return 0.
 If $f(x)\neq g(x)$, then return 0. Otherwise return $-1$.
 
-Else if $\magnitude{g}\leq\magnitude{f}$, for each $x\in\dom(g)$ if
+Otherwise, if there are more elements in the other function $g$ than the caller $\magnitude{g}\leq\magnitude{f}$, for each $x\in\dom(g)$ if
 $x\notin\dom(f)$, then return 0.
-If $f(x)\neq g(x)$, then return 0. Otherwise return $+1$.
+If $f(x)\neq g(x)$, then this will return 0. Otherwise return $+1$.
 
 This is difficult for me to grasp. It does not seem to adequately
 satisfy |compare(f,g) = -compare(g,f)|, which is catastrophic. It is
@@ -4394,8 +4534,8 @@ begin
       for k:=0 to Count-1 do
       begin
          i:=Items^[k].X;
-         if not fNatFunc.HasInDom(i) then exit;
-         if Items^[k].Y <> fNatFunc.Value(i) then exit;
+         if not fNatFunc.HasInDom(i) then exit; {returns 0}
+         if Items^[k].Y <> fNatFunc.Value(i) then exit; {returns 0}
       end;
       CompareWith:=-1; exit;
    end;
@@ -4404,8 +4544,8 @@ begin
       for k:=0 to fNatFunc.Count-1 do
       begin
          i:=fNatFunc.Items^[k].X;
-         if not HasInDom(i) then exit;
-         if fNatFunc.Items^[k].Y <> Value(i) then exit;
+         if not HasInDom(i) then exit; {returns 0}
+         if fNatFunc.Items^[k].Y <> Value(i) then exit; {returns 0}
       end;
       CompareWith:=1; exit;
    end;
@@ -4460,6 +4600,11 @@ begin
 end;
 
 @* [S] Sequences of natural numbers.
+A finite sequence of natural numbers is a kind of finite partial
+function between natural numbers.
+
+This is used in the \texttt{first\_identification.pas}, \texttt{inlibr.pas},
+and \texttt{impobjs.pas}.
 
 @<Public interface for \texttt{mobjects.pas}@>=   
    NatSeq = object(NatFunc) @t\1@> @/
@@ -4516,6 +4661,9 @@ begin
 end;
 
 @* [S] Integer sequences.
+Note: this is another class describing integer sequences, and it
+derives directly as a subclass of \\{MObject}. It's another dynamic
+array. 
 
 @<Public interface for \texttt{mobjects.pas}@>=
    IntegerListPtr = ^IntegerList; @/
@@ -4565,15 +4713,19 @@ begin
       P := aList^[(L + R) shr 1];
       repeat
          while CompareInt(aList^[I], P) < 0 do inc(I);
-         while CompareInt(aList^[J], P) > 0 do Dec(J);
+         {Invariant: for |L<=h<I|, we have |CompareInt(aList^[h], P)<0|}
+         while CompareInt(aList^[J], P) > 0 do dec(J);
+         {Invariant: for |J<k<=R| we have |CompareInt(aList^[k], P) > 0|}
          if I <= J then
          begin
             lTemp := aList^[I];
             aList^[I] := aList^[J];
             aList^[J] := lTemp;
             inc(I);
-            Dec(J);
-         end;
+            dec(J);
+         end; @/
+         {Invariant: for |L<=h<=I|, we have |CompareInt(aList^[h], P)<0|}
+         {Invariant: for |J<=k<=R| we have |CompareInt(aList^[k], P) > 0|}
       until I > J;
       if L < J then IntQuickSort(aList, L, J);
       L := I;
@@ -4593,7 +4745,9 @@ begin
    SetCapacity(aCapacity);
 end;
 
-@ \node{Copy constructor.} We can copy an existing sequence.
+@ \node{Copy constructor.} We can copy an existing sequence by simply
+creating an empty sequence and inserting everything from \\{aSeq} into
+the newly created \\{IntSequence} object.
 
 @p
 constructor IntSequence.CopySequence(const aSeq: IntSequence);
@@ -4604,6 +4758,9 @@ end;
 
 @ \node{Move constructor.} We can create a new array in heap, and move
 all the elements from a given sequence over, then free up the given sequence.
+This just updates \\{aSeq}'s logical size and capacity parameters,
+moves pointers around, and assigns |aSeq.fList:=nil|. Nothing is
+``lost'', but the data is ``under new management''.
 
 @p
 constructor IntSequence.MoveSequence(var aSeq: IntSequence);
@@ -4617,7 +4774,8 @@ begin
    aSeq.fList:=nil;
 end;
 
-@ \node{Destructor.}
+@ \node{Destructor.} Free the inherited data, set the logical size to
+zero, then resize the array (to free up the array data).
 
 @p
 destructor IntSequence.Done;
@@ -4656,7 +4814,8 @@ begin
       r:=Insert(aSeq.fList^[I]);
 end;
 
-@ \node{Clearing a sequence.}
+@ \node{Clearing a sequence.} Update the caller's logical size to
+zero, then resize the underlying array to consist of zero elements.
 
 @p
 procedure IntSequence.Clear;
@@ -4668,10 +4827,10 @@ begin
    end;
 end;
 
-@ \node{Delete entry in sequence.}
+@ \node{Soft delete entry in sequence.}
 Removing the $i^{th}$ entry in the sequence
-$(a_{0},\dots,a_{i-1},a_{i},a_{i+1},\dots,a_{n-1})$ yields the finite
-sequence $(a_{0},\dots,a_{i-1},a_{i+1},\dots,a_{n-1})$.
+$$(a_{0},\dots,a_{i-1},a_{i},a_{i+1},\dots,a_{n-1})$$
+yields the finite sequence $(a_{0},\dots,a_{i-1},a_{i+1},\dots,a_{n-1})$.
 If $i<0$ or $n-1<i$, then we raise an error.
 
 @p
@@ -4679,7 +4838,7 @@ procedure IntSequence.AtDelete(aIndex: integer);
 begin
    if (aIndex < 0) or (aIndex >= fCount) then
       IntListError(coIndexError, aIndex);
-   Dec(fCount);
+   dec(fCount);
    if aIndex < fCount then
       Move(fList^[aIndex+1], fList^[aIndex], (fCount-aIndex)*SizeOf(integer));
 end;
@@ -4704,8 +4863,10 @@ begin
 end;
 
 @ For a finite sequence $(a_{0},\dots,a_{n-1})$ and a value $x$, if
-there is some entry $a_{i}=x$ with $a_{j}\neq x$ for $j<i$, then
-return $i$. Otherwise return $-1$.
+there is some entry $a_{i}=x$ with $a_{j}\neq x$ for all $j<i$, then
+return $i$. Otherwise return $-1$. That is to say, returns the first
+index of an entry matching the given value (if any), defaults to $-1$
+when there is no entry.
 
 @p
 function IntSequence.IndexOf(aInt: integer): integer;
@@ -4782,6 +4943,9 @@ begin
 end;
 
 @* [S] Integer sets.
+A finite set of integers is represented by a finite sequence of
+integers which has no duplicate entries. In other words, an injective
+finite sequence of integers.
 
 @<Public interface for \texttt{mobjects.pas}@>=
    PIntSet = ^IntSet; @/
@@ -4799,12 +4963,16 @@ end;
       function Misses(var aSet: IntSet): Boolean; virtual; @t\2\2\2@>
    end;
 
-@ When inserting an element $x$ into a set $A$, we check if $x\in A$
+@ \node{Insert an element.}
+When inserting an element $x$ into a set $A$, we check if $x\in A$
 is already a member. If so, then we're done.
 
 Otherwise, we ensure the capacity of the set can handle adding another
 element. Then we shift all elements greater than $x$ over to the right
 by 1. We finally insert $x$ into the underlying array.
+
+Ensures the resulting array is sorted, provided it was sorted before
+this function was called.
 
 @<|IntSet| Implementation@>=
 function IntSet.Insert(aInt: integer): integer;
@@ -4821,7 +4989,8 @@ begin
    Insert:=lIndex;
 end;
 
-@ Removing an element from a set. This will return the former index of
+@ \node{Soft delete an element.}
+Removing an element from a set. This will return the former index of
 the element in the underlying array.
 
 @p
@@ -4833,7 +5002,8 @@ begin
    begin DeleteInt:=lIndex; AtDelete(lIndex) @+ end
 end;
 
-@ We can use bisection search to find an element |aInt| in the
+@ \node{Finding an element.}
+We can use bisection search to find an element |aInt| in the
 underlying array. It will mutate |aIndex| to be where the entry should
 be, and return |true| if the element is a member of the set (and
 |false| otherwise).
@@ -4862,7 +5032,8 @@ begin
    aIndex := L;
 end;
 
-@ We can find the index of an element (if it is present) by using
+@ \node{Index of element}.
+We can find the index of an element (if it is present) by using
 bisection search.
 
 @p
@@ -4882,7 +5053,8 @@ begin
    IntListError(coSortedListError, 0);
 end;
 
-@ We can test if an integer is an element of the set, again just
+@ \node{Test for membership.}
+We can test if an integer is an element of the set, again just
 piggie-backing off bisection search.
 
 @p
@@ -4892,9 +5064,11 @@ begin
    IsInSet:=Find(aInt, I);
 end;
 
-@ Testing if two finite sets $A$ and $B$ of integers are equal
+@ \node{Set equality.}
+Testing if two finite sets $A$ and $B$ of integers are equal
 requires $\card{A}=\card{B}$ and for each $x\in A$ we have $x\in B$.
-If these conditions are not both met, then $A\neq B$.
+If these conditions are not both met, then $A\neq B$. (This is
+established by Theorem~\href{https://mizar.uwb.edu.pl/version/current/html/card_2.html#T102}{\texttt{CARD\_2:102}}.)
 
 @p
 function IntSet.IsEqualTo(const aSet: IntSet): Boolean;
@@ -4909,7 +5083,7 @@ end;
 
 @ \node{Subset predicate.}
 We can test $A\subset B$ by $\card{A}\leq\card{B}$ and for each $a\in A$
-we have $a\in B$. 
+we have $a\in B$. (This is a consequence of Theorem~\href{https://mizar.uwb.edu.pl/version/current/html/card_2.html#T48}{\texttt{CARD\_2:48}}.)
 
 @p
 function IntSet.IsSubsetOf(const aSet: IntSet): Boolean;
@@ -4936,7 +5110,9 @@ begin
 end;
 
 @ \node{Test for disjointness.} We have $A\cap B=\emptyset$ if every
-$a\in A$ is such that $a\notin B$.
+$a\in A$ is such that $a\notin B$. There are fewer iterations in the
+loop if we test every element in the smaller set is not a member ofthe
+larger set. This trick works because ``misses'' is a symmetric predicate.
 
 @p
 function IntSet.Misses(var aSet: IntSet): Boolean;
@@ -4960,6 +5136,8 @@ We want to describe partial functions like $f\colon\ZZ\times\ZZ\pto\ZZ$.
 These are encoded as finite sets of triples
 $\{(x,y,f(x,y))\in\ZZ\times\ZZ\times\ZZ\}$. So we need to introduce
 triples of integers.
+
+We stress the class hierarchy: the parent class is \\{MObject} itself.
 
 @<Public interface for \texttt{mobjects.pas}@>=
    IntTripletListPtr = ^IntTripletList; @/
@@ -4998,7 +5176,8 @@ begin
    RunError(212 - aCode); @+
 end;
 
-@ \node{Constructor.} We initialize the empty partial function.
+@ \node{Constructor.} We initialize the empty partial function, and
+create an array whose capacity is initialized to \\{aLimit}.
 
 @p
 constructor BinIntFunc.Init(aLimit: integer);
@@ -5010,7 +5189,8 @@ begin
    SetCapacity(aLimit);
 end;
 
-@ \node{Destructor.}
+@ \node{Destructor.} We assign the logical size of the caller to zero,
+then resize the underlying array to zero elements (i.e., free everything).
 
 @p
 destructor BinIntFunc.Done;
@@ -5019,18 +5199,20 @@ begin
    SetCapacity(0);
 end;
 
-@ If we have a partial function $f\colon\ZZ\times\ZZ\pto\ZZ$ and a
-triple $(x,y,z)$, then check if $(x,y)\in\dom(f)$. If so, we're done.
+@ \node{Insert an entry.}
+If we have a partial function $f\colon\ZZ\times\ZZ\pto\ZZ$ and a
+triple $(x_{1},x_{2},y)$, then check if $(x_{1},x_{2})\in\dom(f)$. If
+so, we're done --- this will not overwrite the value at that argument.
 
-Otherwise we add $f(x,y)=z$ to the partial function.
+Otherwise we add $f(x_{1},x_{2})=y$ to the partial function.
 
 @p
 procedure BinIntFunc.Insert(const aItem: IntTriplet);
 var I: integer;
 begin
-   if not Search(aItem.X1,aItem.X2, I) then
+   if not Search(aItem.X1,aItem.X2, I) then {$(x_{1},x_{2})\notin\dom(f)$} 
    begin
-      if (I < 0) or ( I > fCount) then
+      if (I < 0) or ( I > fCount) then {index out of bounds}
       begin
          BinIntFuncError(coIndexError,0);
          exit; @+
@@ -5044,7 +5226,8 @@ begin
    end;
 end;
 
-@ Given $f\colon\ZZ\times\ZZ\pto\ZZ$, we represent it as an array of
+@ \node{Delete an entry.}
+Given $f\colon\ZZ\times\ZZ\pto\ZZ$, we represent it as an array of
 $\ZZ\times\ZZ\times\ZZ$. So we can remove the entry at index $i$ when
 $0\leq i<\magnitude{f}$. Otherwise when $i<0$ or $\magnitude{f}\leq i$,
 raise an error.
@@ -5060,20 +5243,29 @@ begin
    end;
    if aIndex < fCount-1 then
       for i:=aIndex to fCount-2 do fList^[i]:=fList^[i+1];
-   Dec(fCount);
+   dec(fCount);
 end;
 
-@ \node{Ensure capacity.}
+@ \node{Ensure capacity.} We need to ensure |fCount <= aLimit <= MaxIntTripletSize|,
+by assigning |aLimit| to be |fCount| (when |aLimit<fCount|) or
+|MaxIntTripletSize| (when |aLimit| is bigger).
+
+We allocate a new array (when the new capacity is nonzero) and copy
+the data over to the new array. Then we delete the old array if it
+exists (tested by |fCapacity <> 0|). Then we just update the caller's
+|fList| pointer and capacity field.
 
 @p
 procedure BinIntFunc.SetCapacity(aLimit: integer);
 var aItems: IntTripletListPtr;
 begin
+   {Ensure |fCount <= aLimit <= MaxIntTripletSize|}
    if aLimit < fCount then aLimit := fCount;
    if aLimit > MaxIntTripletSize then ALimit := MaxIntTripletSize;
-   if aLimit <> fCapacity then
+   if aLimit <> fCapacity then {allocate a new array, copy data over}
    begin
-      if ALimit = 0 then AItems := nil else
+      if ALimit = 0 then AItems := nil
+      else
       begin
          GetMem(AItems, ALimit * SizeOf(IntTriplet));
          if (fCount <> 0) and (fList <> nil) then
@@ -5085,7 +5277,8 @@ begin
    end;
 end;
 
-@ Deleting all entries in a partial function $\ZZ\times\ZZ\pto\ZZ$
+@ \node{Hard delete all entries.}
+Deleting all entries in a partial function $\ZZ\times\ZZ\pto\ZZ$
 amounts to setting the logical size of the underlying dynamic array to zero.
 
 @p
@@ -5094,7 +5287,8 @@ begin
    fCount := 0; @+
 end;
 
-@ We can use bisection search to find an entry $(x_{1},x_{2})$ such
+@ \node{Search for entry.}
+We can use bisection search to find an entry $(x_{1},x_{2})$ such
 that $(x_{1},x_{2})\in\dom(f)$.
 
 @p
@@ -5123,7 +5317,8 @@ begin
 end;
 
 @ \node{Copy constructor.} This leaves |aFunc| unchanged, and clones
-|aFunc|.
+|aFunc|. Remember \\{Move} is misnamed because of Borland, it really
+copies data (despite what the name would lead you to believe).
 
 @p
 constructor BinIntFunc.CopyBinIntFunc(var aFunc: BinIntFunc);
@@ -5133,7 +5328,8 @@ begin
    fCount:=aFunc.fCount;
 end;
 
-@ Given $f\colon\ZZ\times\ZZ\pto\ZZ$ and $(x_{1},x_{2})$, find the
+@ \node{Index of entry.}
+Given $f\colon\ZZ\times\ZZ\pto\ZZ$ and $(x_{1},x_{2})$, find the
 index for the underlying dynamic array $i$ such that it contains
 $(x_{1},x_{2},f(x_{1},x_{2}))$. If there is no such entry, $i=-1$ is returned.
 
@@ -5145,7 +5341,8 @@ begin
    if Search(X1,X2, I) then IndexOf:=I;
 end;
 
-@ Test if $(x_{1},x_{2})\in\dom(f)$.
+@ \node{Test if defined on pair.}
+Test if $(x_{1},x_{2})\in\dom(f)$.
 
 @p
 function BinIntFunc.HasInDom(X1,X2:integer): Boolean;
@@ -5154,7 +5351,8 @@ begin
    HasInDom:=Search(X1,X2, I);
 end;
 
-@ Given $f\colon\ZZ\times\ZZ\pto\ZZ$, and
+@ \node{Insert an entry.}
+Given $f\colon\ZZ\times\ZZ\pto\ZZ$, and
 $(x_{1},x_{2})\in\ZZ\times\ZZ$ and $y\in\ZZ$, try setting
 $f(x_{1},x_{2})=y$ provided $(x_{1},x_{2})\notin\dom(f)$ or if
 $(x_{1},x_{2},y)\in f$ already. If $f(x_{1},x_{2})\neq y$ already
@@ -5175,7 +5373,8 @@ begin
    Insert(lIntTriplet);
 end;
 
-@ Given $f\colon\ZZ\times\ZZ\pto\ZZ$ and $(x_{1},x_{2})\in\ZZ\times\ZZ$.
+@ \node{Increment value at argument.}
+Given $f\colon\ZZ\times\ZZ\pto\ZZ$ and $(x_{1},x_{2})\in\ZZ\times\ZZ$.
 If $(x_{1},x_{2})\in\dom(f)$, then set $f(x_{1},x_{2})\gets f(x_{1},x_{2})+1$.
 Otherwise set $f(x_{1},x_{2})\gets1$.
 
@@ -5194,7 +5393,8 @@ begin
    end;
 end;
 
-@ Given $f\colon\ZZ\times\ZZ\pto\ZZ$ and $(x_{1},x_{2})\in\ZZ\times\ZZ$.
+@ \node{Decrement value at argument.}
+Given $f\colon\ZZ\times\ZZ\pto\ZZ$ and $(x_{1},x_{2})\in\ZZ\times\ZZ$.
 If $(x_{1},x_{2})\in\dom(f)$, then set $f(x_{1},x_{2})\gets f(x_{1},x_{2})-1$.
 Further, if $f(x_{1},x_{2})=0$, then remove it from the underlying
 dynamic array.
@@ -5213,7 +5413,8 @@ begin
    else BinIntFuncError(coConsistentError,0);
 end;
 
-@ Given $f\colon\ZZ\times\ZZ\pto\ZZ$, and $(x_{1},x_{2})\in\ZZ\times\ZZ$,
+@ \node{Return value for argument.}
+Given $f\colon\ZZ\times\ZZ\pto\ZZ$, and $(x_{1},x_{2})\in\ZZ\times\ZZ$,
 if $(x_{1},x_{2})\notin\dom(f)$ then raise an error.
 Otherwise when $(x_{1},x_{2})\in\dom(f)$, return $f(x_{1},x_{2})$.
 
@@ -5225,7 +5426,8 @@ begin
    else BinIntFuncError(coDuplicate,0);
 end;
 
-@ Given two partial functions $f,g\colon\ZZ\times\ZZ\pto\ZZ$, compute
+@ \node{Add two partial functions together.}
+Given two partial functions $f,g\colon\ZZ\times\ZZ\pto\ZZ$, compute
 $f+g\colon\ZZ\times\ZZ\pto\ZZ$. This is defines by:
 \enumerate
 \item For $(x_{1},x_{2})\in\dom(f)\cap\dom(g)$, set $(f+g)(x_{1},x_{2})=f(x_{1},x_{2})+g(x_{1},x_{2})$
@@ -5246,7 +5448,7 @@ begin
       else Assign( aFunc.fList^[k].X1, aFunc.fList^[k].X2, aFunc.fList^[k].Y);
 end;
 
-@ \node{Sum.} For $f\colon\ZZ\times\ZZ\pto\ZZ$, we compute
+@ \node{Sum all values.} For $f\colon\ZZ\times\ZZ\pto\ZZ$, we compute
 $$\\{CountAll}(f)=\sum_{(m,n)\in\dom(f)}f(m,n).$$
 
 @p
@@ -5259,6 +5461,9 @@ begin
 end;
 
 @* [S] Partial integers to Pair of integers Functions.
+Partial functions of the form $f\colon\ZZ\pto\ZZ\times\ZZ$. Note the
+class hierarchy: this is a direct subclass of \\{MObject}. This is
+used only in the \texttt{first\_identification.pas} file.
 
 @<Public interface for \texttt{mobjects.pas}@>=
    Int2PairOfInt = record X,Y1,Y2: integer; end; @#
@@ -5309,7 +5514,8 @@ begin
    SetCapacity(aLimit);
 end;
 
-@ \node{Destructor.}
+@ \node{Destructor.} We set the logical size to zero, then ensure the
+capacity of the underlying array is zero (thereby hard deleting the array).
 
 @p
 destructor Int2PairOfIntFunc.Done;
@@ -5318,7 +5524,8 @@ begin
    SetCapacity(0);
 end;
 
-@ Inserting $(x,y_{1},y_{2})$ into $f\colon\ZZ\pto\ZZ\times\ZZ$
+@ \node{Insert an entry.}
+Inserting $(x,y_{1},y_{2})$ into $f\colon\ZZ\pto\ZZ\times\ZZ$
 amounts to checking if $(x,y_{1},y_{2})\in f$. If not, then insert the
 entry.
 
@@ -5326,6 +5533,8 @@ Otherwise, if $(x,y_{1},y_{2})\notin f$ but $x\in\dom(f)$, then raise
 an error.
 
 Otherwise do nothing.
+
+\label{Int2PairOfIntFunc.Insert}
 
 @p
 procedure Int2PairOfIntFunc.Insert(const aItem: Int2PairOfInt);
@@ -5352,14 +5561,15 @@ begin
    end;
 end;
 
-@ Delete an entry from the underlying dynamic array. Raise an error if
+@ \node{Hard delete an entry.}
+Delete an entry from the underlying dynamic array. Raise an error if
 the index given is out of bounds.
 
 @p
 procedure Int2PairOfIntFunc.AtDelete(aIndex: integer);
 var i: integer;
 begin
-   if (aIndex < 0) or (aIndex >= fCount) then
+   if (aIndex < 0) or (aIndex >= fCount) then {index out of bounds}
    begin
       Int2PairOfIntFuncError(coIndexError,0);
       exit;
@@ -5369,7 +5579,10 @@ begin
    dec(fCount);
 end;
 
-@ 
+@ \node{Ensure capacity.} There is no test that |aLimit| is less than
+some maximum size, unlike every other similar ``ensure capacity''
+function in this file. And we use the built-in \\{SetLength} primitive
+function from \PASCAL/ to resize the dynamic array.
 
 @p
 procedure Int2PairOfIntFunc.SetCapacity(aLimit: integer);
@@ -5379,7 +5592,8 @@ begin
    fCapacity := aLimit;
 end;
 
-@ We can ``soft delete'' all entries in the partial function.
+@ \node{Soft delete all entries.}
+We can ``soft delete'' all entries in the partial function.
 
 @p
 procedure Int2PairOfIntFunc.DeleteAll;
@@ -5387,7 +5601,9 @@ begin
    fCount := 0;
 end;
 
-@ We can bisection search on the domain.
+@ \node{Search for entry.} We can bisection search on the
+domain. Observe: once the needle has been found in the haystack, we
+have |H:=I-1| and |L:=I|, which means the loop will terminate.
 
 @p
 function Int2PairOfIntFunc.Search(X: integer; var aIndex: integer): Boolean;
@@ -5415,6 +5631,7 @@ begin
 end;
 
 @ \node{Copy constructor.} This leaves the argument |aFunc| unchanged.
+\Ithink{The argument should be a |const| not a |var|?}
 
 @p
 constructor Int2PairOfIntFunc.CopyInt2PairOfIntFunc(var aFunc: Int2PairOfIntFunc);
@@ -5424,7 +5641,8 @@ begin
    fCount:=aFunc.fCount;
 end;
 
-@ Find the index in the underlying dynamic array for $x\in\dom(f)$.
+@ \node{Index of argument.}
+Find the index in the underlying dynamic array for $x\in\dom(f)$.
 If $x\notin\dom(f)$, then return $-1$.
 
 @p
@@ -5435,7 +5653,7 @@ begin
    if Search(X, I) then IndexOf:=I;
 end;
 
-@ Test if $x\in\dom(f)$.
+@ \node{Test if defined at point.} Test if $x\in\dom(f)$.
 
 @p
 function Int2PairOfIntFunc.HasInDom(X:integer): Boolean;
@@ -5444,7 +5662,10 @@ begin
    HasInDom:=Search(X, I);
 end;
 
-@ Attempt to insert $(x,y_{1},y_{2})$ into $f\colon\ZZ\pto\ZZ\times\ZZ$.
+@ \node{Assign an entry.}
+Attempt to insert $(x,y_{1},y_{2})$ into $f\colon\ZZ\pto\ZZ\times\ZZ$.
+This will not overwrite a pre-existing entry, as per the contract
+of \\{Int2PairOfIntFunc.Insert} (\section\xref{Int2PairOfIntFunc.Insert}).
 
 @p
 procedure Int2PairOfIntFunc.Assign(X, Y1,Y2:integer);
@@ -5456,7 +5677,8 @@ begin
    Insert(lInt2PairOfInt);
 end;
 
-@ Given $f\colon\ZZ\pto\ZZ\times\ZZ$ and $x\in\ZZ$, if $x\in\dom(f)$
+@ \node{Determine value at argument.}
+Given $f\colon\ZZ\pto\ZZ\times\ZZ$ and $x\in\ZZ$, if $x\in\dom(f)$
 return $f(x)$. Otherwise raise an error.
 
 @p
@@ -5471,7 +5693,8 @@ begin
    else Int2PairOfIntFuncError(coDuplicate,0);
 end;
 
-@ We have a myriad of random declarations, so we just stick them all here.
+@ \node{Lingering random declarations in the interface.}
+We have a myriad of random declarations, so we just stick them all here.
 
 @<Public interface for \texttt{mobjects.pas}@>=
    {Comparing Strings wrt MStrObj}
