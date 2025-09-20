@@ -2,12 +2,21 @@
 @* [F] Environment library.
 We have a library to handle accessing the Mizar mathematical library
 files. This is used in \texttt{makeenv.dpr} and using
-local \texttt{prel/} directories.
+local \texttt{./prel/} directories.
 
 This will execute |InitLibrEnv| (\section\xref{InitLibrEnv}) and
 |CheckCompatibility| (\section\xref{CheckCompatibility}).
 
-@<librenv.pas@>=
+Here the assumption that there's an environment variable
+``\texttt{\$MIZFILES}'' set to the directory containing the Mizar
+Mathematical library. We discussed environment variables earlier
+(\section\xref{GetEnvStr}). 
+
+@! @:MIZFILES}{\texttt{\$MIZFILES}@>
+@^Environment variable@>
+@^Variable, Environment@>
+
+@<\texttt{base/librenv.pas}@>=
   @<GNU License@>
 
 unit librenv;
@@ -16,49 +25,53 @@ interface @|@#
 
 uses mobjects; @|@#
 
-@<Interface for \.{MIZFILES} library@>@; @#
-
-implementation @|@#
-
-uses @|@/
-   @{@&$IFDEF WIN32@}
-   windows, @/
-   @{@&$ENDIF@}
-   mizenv,pcmizver,mconsole; @#
-
-@<Implementation for \texttt{librenv.pas}@>@; @#
-
-begin
-   InitLibrEnv;
-   CheckCompatibility; @t\2@>
-end.
-
-@ @<Interface for \.{MIZFILES} library@>=
 const
    MML = 'mml';
-   EnvMizFiles = 'MIZFILES';
+   EnvMizFiles = 'MIZFILES'; @#
 
-var MizPath, MizFiles: string;
+@t\4@> @<Public function declarations for \texttt{librenv.pas}@>@;  @#
 
-function LibraryPath(fName,fExt: string): string; @t\2@>@#
-
-procedure GetSortedNames(fParam:byte; var fList:MStringCollection); @t\2@>
-procedure GetNames(fParam:byte; var fList: StringColl); @t\2@>@#
-
-procedure ReadSortedNames(fName:string; var fList:MStringCollection); @t\2@>
-procedure ReadNames(fName:string; var fList: StringColl); @t\2@>
-
-@ There are two public-facing classes.
-
-@<Interface for \.{MIZFILES} library@>=
 type
    @<Declare \\{FileDescr} data type@>@;
    @<Declare \\{FileDescrCollection} data type@>@;@#
 
-var LocFilesCollection: FileDescrCollection;
+var @<Global variables declared in \texttt{librenv.pas}@>@; @#
 
-@ \node{File descriptors.} We use file descriptors for things. These
-are just ``a file name'' and ``a timestamp''.
+implementation @|@#
+
+uses @|@/
+   if_def(WIN32) @t\enspace @> windows, @+ end_if @/
+   mizenv,pcmizver,mconsole; @#
+
+@<Implementation for \texttt{librenv.pas}@>@t\2@>@; @#
+
+begin
+   InitLibrEnv;
+   CheckCompatibility;
+end.
+
+@ @<Global variables declared in \texttt{librenv.pas}@>=
+  MizPath: string; {path to where Mizar binaries are located}
+  MizFiles: string; {the ``\texttt{\$MIZFILES}'' environment variable}
+  LocFilesCollection: FileDescrCollection;
+
+@* [S] File descriptors.
+We use file descriptors for things. These
+are just ``a file name'' and ``a timestamp''. The ``file name'' is
+either an absolute path to a file in the Mizar mathematical library,
+or a relative path to a file in the user's local ``\texttt{./prel/}''
+subdirectory.
+
+Historically, the notion of ``file descriptors'' pre-dates \UNIX/. For
+example, R.F. Clippinger's ``FACT---A Business Compiler: Description
+and Comparison with COBOL and Commercial Translator'' (\textit{Int.\ Tracts Comput.\ Sci.\ Technol.\ Their Appl.}
+\textbf{2} (1961) 231--292, \doi{10.1016/B978-1-4831-9779-1.50014-8})
+seems to be among the earliest use of the term.
+
+\CAUTION/: \PASCAL/'s \\{LongInt} is a 32-bit signed integer, which
+means that Mizar will experience the 2038 ``Y2k'' bug on 03:14:07 {\mc UTC}
+on 19 January 2038. Switching to \\{Int64} would solve this problem
+(well, delay it for a time longer than the lifetime of the universe).
 
 @<Declare \\{FileDescr} data type@>=
    PFileDescr = ^FileDescr; @/
@@ -69,7 +82,10 @@ are just ``a file name'' and ``a timestamp''.
       destructor Done; virtual; @t\2\2\2@>
    end;
 
-@ \node{Constructor.}
+@ \node{Constructor.} When creating a new \\{FileDescr} object, we
+should allocate enough space for a copy of the file name. The object
+then ``owns'' this copy of the file name string, and must free it when
+the object is freed from memory.
 
 @<Implementation for \texttt{librenv.pas}@>=
 constructor FileDescr.Init(fIdent:string; fTime:LongInt);
@@ -77,7 +93,8 @@ begin
    nName:=NewStr(fIdent); Time:=fTime;
 end;
 
-@ \node{Destructor.}
+@ \node{Destructor.} We need to free the string ``owned'' by the file
+descriptor object.
 
 @p
 destructor FileDescr.Done;
@@ -85,7 +102,9 @@ begin
    DisposeStr(nName);
 end;
 
-@ \node{Collection of file descriptions.}
+@* [S] Collection of file descriptions.
+This is just \\{MSortedCollection} (\section\xref{MSortedCollection})
+of \\{FileDescr} objects.
 
 @<Declare \\{FileDescrCollection} data type@>=
    PFileDescrCollection = ^FileDescrCollection; @/
@@ -96,8 +115,11 @@ end;
       procedure InsertTimes; @t\2\2\2@>
    end;
 
-@ Comparing two entries in a file descriptor collection amounts to
-comparing the names for the file descriptors.
+@ \node{Ordering file descriptors.}
+Comparing two entries in a file descriptor collection amounts to
+comparing the names for the file descriptors. \Ithink{This should be
+the \\{CompareStringPtr} (\section\xref{CompareStringPtr}) function,
+just to keep the code {\mc DRY}.}
 
 @<Implementation for \texttt{librenv.pas}@>=
 function FileDescrCollection.Compare(Key1, Key2: Pointer): integer;
@@ -107,7 +129,8 @@ begin
    else Compare:=1;
 end;
 
-@ Inserting file times into the file descriptors relies
+@ \node{Populate time field.}
+Inserting file's ``last modified'' timestamp into the file descriptors relies
 upon \texttt{mizenv.pas}'s |GetFileTime| (\section\xref{GetFileTime})
 function.
 
@@ -174,11 +197,14 @@ This returns the path to the file, as a string.
 If the file cannot be found either in the local prel directory or the
 MML prel directory, then it returns the empty string.
 
-@p
+@<Public function declarations for \texttt{librenv.pas}@>=
+function LibraryPath(fName,fExt: string): string;
+
+@ @<Implementation for \texttt{librenv.pas}@>=
 function LibraryPath(fName,fExt: string): string;
 begin
    LibraryPath:='';
-   if MFileExists('prel'+DirSeparator+fName+fExt) then
+   if MFileExists('prel'+DirSeparator+fName+fExt) then {populate with local file}
    begin
       LocFilesCollection.Insert(New(PFileDescr,Init('prel'+DirSeparator+fName+fExt,0)));
       LibraryPath:='prel'+DirSeparator+fName+fExt; exit
@@ -190,8 +216,15 @@ end;
 @ This function actually is not used anywhere, so I am not sure why we
 have it.
 
-@p
+@^Unused code@>
+
+@<Public function declarations for \texttt{librenv.pas}@>=
 procedure ReadSortedNames(fName:string; var fList:MStringCollection);
+{UNUSED!}
+
+@ @<Implementation for \texttt{librenv.pas}@>=
+procedure ReadSortedNames(fName:string; var fList:MStringCollection);
+{UNUSED!}
 var NamesFile: text;
 begin
    if fName[1]='@@' then
@@ -215,8 +248,15 @@ end;
 @ Again, this function is not used anywhere, so I am not sure why we
 have it.
 
-@p
-procedure ReadNames(fName:string; var fList: StringColl);
+@^Unused code@>
+
+@<Public function declarations for \texttt{librenv.pas}@>=
+procedure ReadNames(fName: string; var fList: StringColl);
+{UNUSED!}
+
+@ @<Implementation for \texttt{librenv.pas}@>=
+procedure ReadNames(fName: string; var fList: StringColl);
+{UNUSED!}
 var NamesFile: text;
 begin
    if fName[1]='@@' then
@@ -237,17 +277,34 @@ begin
    fList.Insert(NewStr(fName));
 end;
 
-@ This function is used in \texttt{lisvoc.dpr}
+@ This function is used in \texttt{usrtools/lisvoc.dpr}. The \\{fList}
+is the \\{VocList} which consists of all the entries in
+``\texttt{\$MIZFILES/mml.vct}''. The \\{fParam} is either 1 or 2.
 
-@p
-procedure GetSortedNames(fParam:byte; var fList:MStringCollection);
-var FileName:string;
+If the user writes in a file ``\texttt{foobar}'' one vocabulary on a
+line (e.g., ``\texttt{GROUP\_1}'' on one line, ``\texttt{CAT\_1}'' on
+another), then |fName:='@@foobar'| will lookup the contents
+``\texttt{foobar}'' and load them into the \\{fList} parameter.
+
+@:MIZFILES}{\texttt{\$MIZFILES}@>
+
+@<Public function declarations for \texttt{librenv.pas}@>=
+procedure GetSortedNames(fParam: byte; var fList: MStringCollection);
+
+@ @<Implementation for \texttt{librenv.pas}@>=
+procedure GetSortedNames(fParam: byte; var fList: MStringCollection);
+var FileName: string;
 NamesFile: text;
 i: integer;
 begin
    if ParamCount < fParam then  begin fList.Init(0,0); exit end;
    FileName:=ParamStr(fParam);
    if FileName[1]='@@' then
+   @<Populate |fList| with the contents of |FileName| and exit@>;
+   @<Populate |fList| with the command-line arguments@>;
+end;
+
+@ @<Populate |fList| with the contents of |FileName| and exit@>=
    begin
       Delete(FileName,1,1);
       FileExam(FileName);
@@ -260,21 +317,26 @@ begin
          fList.Insert(NewStr(TrimString(FileName)));
       end;
       exit;
-   end;
+   end
+
+@ @<Populate |fList| with the command-line arguments@>=
    fList.Init(2,8);
    fList.Insert(NewStr(FileName));
    for i:=fParam+1 to ParamCount do
    begin
       FileName:=ParamStr(i);
       fList.Insert(NewStr(FileName));
-   end;
-end;
+   end
 
 @ Continuing with the ``this is not used anywhere'' theme, this
-function is not used anywhere.
+function is not used anywhere. The \\{GetNames} procedure turns out to
+be the same as \\{GetSortedNames}.
 
-@p
-procedure GetNames(fParam:byte; var fList: StringColl);
+@<Public function declarations for \texttt{librenv.pas}@>=
+procedure GetNames(fParam:byte; var fList: StringColl); {DUPLICATE CODE}
+
+@ @<Implementation for \texttt{librenv.pas}@>=
+procedure GetNames(fParam:byte; var fList: StringColl); {DUPLICATE CODE}
 var FileName:string;
 NamesFile: text;
 i: integer;
@@ -282,29 +344,11 @@ begin
    if ParamCount < fParam then  begin fList.Init(0,0); exit end;
    FileName:=ParamStr(fParam);
    if FileName[1]='@@' then
-   begin
-      Delete(FileName,1,1);
-      FileExam(FileName);
-      Assign(NamesFile,FileName);
-      Reset(NamesFile);
-      fList.Init(10,10);
-      while not seekEof(NamesFile) do
-      begin
-         ReadLn(NamesFile,FileName);
-         fList.Insert(NewStr(TrimString(FileName)));
-      end;
-      exit;
-   end;
-   fList.Init(2,8);
-   fList.Insert(NewStr(FileName));
-   for i:=fParam+1 to ParamCount do
-   begin
-      FileName:=ParamStr(i);
-      fList.Insert(NewStr(FileName));
-   end;
+   @<Populate |fList| with the contents of |FileName| and exit@>;
+   @<Populate |fList| with the command-line arguments@>;
 end;
 
-@ \node{Check compatibility of Mizar with MML.}
+@* [S] Check compatibility of Mizar with MML.
 We will load the \texttt{mml.ini} file for the MML version number, and
 we check it against the Mizar version. If they are not compatible,
 print a message to the screen, and halt as an error has occurred.
@@ -327,6 +371,14 @@ MMLVersion=5.94
 We will read line-by-line the \texttt{mml.ini} file to initialize
 several variables. This motivates the \\{Try\_read\_ini\_var} macro.
 
+\Ithink{We should probably move towards {\mc TOML} rather than {\mc INI}
+as the format for storing information, since {\mc INI} has no standard
+or specification but {\mc TOML} has one.}
+
+@:mml.ini}{\texttt{mml.ini}@>
+@:ini file}{\texttt{.ini} File@>
+@:file, ini}{File, \texttt{.ini}@>
+
 @d init_val_and_end(#)==val(lLine,#,lCode);
     end
 @d Try_read_ini_var(#)==@+
@@ -346,23 +398,28 @@ begin
    lMizarReleaseNbr:=-1;
    lMizarVersionNbr:=-1;
    lMizarVariantNbr:=-1;
-   while not seekEof(lFile) do
-   begin
-      ReadLn(lFile,lLine);
-      Try_read_ini_var('MizarReleaseNbr=')(lMizarReleaseNbr);
-      Try_read_ini_var('MizarVersionNbr=')(lMizarVersionNbr);
-      Try_read_ini_var('MizarVariantNbr=')(lMizarVariantNbr);
-   end;
+   @<Try to read the Mizar version from \texttt{mml.ini}@>;
    close(lFile); @/
    @<Assert MML version is compatible with Mizar version@>@;
 end;
 
 @ We open the \texttt{\$MIZFILES/mml.ini} file for reading.
 
+@:MIZFILES}{\texttt{\$MIZFILES}@>
+
 @<Open \texttt{mml.ini} file@>=
    FileExam(MizFiles+MML+'.ini');
    Assign(lFile,MizFiles+MML+'.ini');
    Reset(lFile);
+
+@ @<Try to read the Mizar version from \texttt{mml.ini}@>=
+   while not seekEof(lFile) do
+   begin
+      ReadLn(lFile,lLine);
+      Try_read_ini_var('MizarReleaseNbr=')(lMizarReleaseNbr);
+      Try_read_ini_var('MizarVersionNbr=')(lMizarVersionNbr);
+      Try_read_ini_var('MizarVariantNbr=')(lMizarVariantNbr);
+   end
 
 @ We need to check the MML version is compatible with the Mizar
 version. If they are not compatible, raise an error, print a warning
@@ -391,6 +448,7 @@ variable exists) or the directory of the program being executed. This
 We also initalize |MizFileName|, |EnvFileName|, |ArticleName|,
 |ArticleExt| to be empty strings.
 
+@:MIZFILES}{\texttt{\$MIZFILES}@>
 \label{InitLibrEnv}
 
 @d append_dir_separator(#)==@+if #[length(#)]<>DirSeparator then
@@ -401,22 +459,24 @@ procedure InitLibrEnv;
 begin
    LocFilesCollection.Init(0,20);
    MizPath:=ExtractFileDir(ParamStr(0));
-   @<Initialize |Mizfiles|@>@;
+   @<Initialize |MizFiles|@>@;
    MizFileName:=''; EnvFileName:=''; ArticleName:=''; ArticleExt:='';
 end;
 
-@ Initalizing |Mizfiles| requires a bit of work. We first guess it
+@ Initalizing |MizFiles| requires a bit of work. We first guess it
 based on environment variables. Then we need to ensure it is a
 directory path.
 
-@<Initialize |Mizfiles|@>=
+@<Initialize |MizFiles|@>=
    @<Guess |MizFiles| from environment variables or executable path@>@;
    if MizFiles<>'' then append_dir_separator(MizFiles);
-   if MizFiles='' then Mizfiles:=DirSeparator;
+   if MizFiles='' then MizFiles:=DirSeparator;
 
 @ When the \texttt{\$MIZFILES} environment variable is set, we just
 use it. When it is empty or missing, then we guess the path of the
 executable invoked.
+
+@:MIZFILES}{\texttt{\$MIZFILES}@>
 
 @<Guess |MizFiles| from environment variables or executable path@>=
    MizFiles:=GetEnvStr(EnvMizFiles);

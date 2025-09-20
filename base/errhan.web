@@ -37,6 +37,7 @@ positions are numbered starting from 1.'' Coincidentally, this would
 imply Mizar cannot properly parse files longer than $2^{31}-1$ columns
 wide (or $2^{63}-1$ columns wide for 64-bit computers).
 
+@:Posix}{\POSIX/@>
 \label{type:Position}
 
 @<Interface for \texttt{errhan.pas}@>=

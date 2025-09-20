@@ -2337,6 +2337,8 @@ For strings, it is faster to use pointer comparison than lexicographic
 ordering. Although pointer comparison is a total linear order, it may
 not produce intuitive comparisons.
 
+\label{CompareStringPtr}
+
 @<|MSortedStrList| implementation@>=
 {MSortedStrList}
 
@@ -2411,6 +2413,8 @@ and to avoid inserting duplicate entries.
 \caption{UML class diagram for MSortedCollection class.}
 \endfigure
 \medbreak\noindent%
+
+\label{MSortedCollection}
 
 @<Public interface for \texttt{mobjects.pas}@>=
 {MSortedCollection object}

@@ -367,6 +367,12 @@ the \POSIX/ standard, Volume~1 Chapter~8:
 The Free \PASCAL/ compiler handles this situation far friendlier than
 Delphi. 
 
+@^Environment variable@>
+@^Variable, Environment@>
+@:Posix}{\POSIX/@>
+
+\label{GetEnvStr}
+
 @<interface for mizenv.pas@>=
 function GetEnvStr(aEnvName: string): string;
 

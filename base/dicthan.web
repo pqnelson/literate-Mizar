@@ -517,6 +517,8 @@ vocabularies from different files. We search for the given article
 name (stored in the \\{fName} argument). When we find it, we construct
 the Vocabulary object (\section\xref{TVocabulary.LoadVoc}).
 
+@:MIZFILES}{\texttt{\$MIZFILES}@>
+
 @p
 function GetPublicVoc(@t\hskip-0.6667em@> @+const fName:string;@+ var fVocFile:text): PVocabulary;
 var lLine: string;
@@ -541,6 +543,8 @@ couple user tools. In those other functions, they
 pass \texttt{\$MIZFILES/mml.vct} as the value for \\{aFileName}.
 This procedure will then populate the \\{aMmlVcb} file associating to
 each article name its vocabulary.
+
+@:MIZFILES}{\texttt{\$MIZFILES}@>
 
 @p
 procedure LoadMmlVcb(@t\hskip-0.6667em@> @+const aFileName: string;@+ var aMmlVcb: MStringList);
