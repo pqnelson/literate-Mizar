@@ -1,6 +1,6 @@
 
 @* [F] XML Parser.
-The \XML/ parser module is used for extracting information from XML
+The \XML/ parser module is used for extracting information from \XML/
 files. It does not ``validate'' the \XML/ (it's assumed to already be
 valid). The scanner chops up the input stream into tokens, then the
 parser makes this available as tokens for the user.
@@ -26,7 +26,7 @@ and the other named ``alt'' whose value is ``Madonna''.
 something like (after some optional whitespace) ``\texttt{<?xml version="1.0" encoding="UTF-8"?>}''
 \endenumerate
 
-@<xml\_parser.pas@>=
+@<\texttt{base/xml\_parser.pas}@>=
   @<GNU License@>
 
 unit xml_parser;
@@ -39,14 +39,14 @@ uses mobjects,errhan; @#
 
 @t\4@> @<Type declarations for \texttt{xml\_parser.pas}@>@; @#
 
-   procedure XMLASSERT(aCond: boolean); @t\2@>
+   procedure XMLASSERT(aCond: Boolean); @t\2@>
 
-   procedure UnexpectedXMLElem(const aElem:string; aErr:integer); @t\2@>
+   procedure UnexpectedXMLElem(const aElem: string@+;@+ aErr:integer); @t\2@>
 
 implementation @|@/
-mdebug; uses info; end_mdebug; @#
+mdebug uses info @+ end_mdebug; @#
 
-@t\4@> @<Implementation of XML Parser@> @t\2@>
+@t\4@> @<Implementation of \XML/ Parser@> @t\2@>
 
 end.
 
@@ -65,8 +65,8 @@ const errBadXMLToken = 7506; {Unexpected \XML/ token}
 
 @ \node{Public type declarations.} We will defer the ``\PASCAL/ classes'' until
 we start implementing them. Right now, we have syntactic classes for
-the tokens. Specifically we have the start of an XML declaration
-``\texttt{<?}'', the end of an XML declaration ``\texttt{?>}'', the
+the tokens. Specifically we have the start of an \XML/ declaration
+``\texttt{<?}'', the end of an \XML/ declaration ``\texttt{?>}'', the
 start of a character data section ``\texttt{<!}'', the start and end
 of tags, quotation marks, equalities, entities, identifiers, and end
 of text.
@@ -90,14 +90,14 @@ type
                    EOTX);   {End of text}
    TokensSet = set of XMLTokenKind; @#
 
-   @<Declare XML Scanner Object type@>@; @#
+   @<Declare \XML/ Scanner Object type@>@; @#
 
    TElementState = ( eStart, eEnd); {high-level parser states, 
-    see procedure NextElementState} 
+    see procedure \\{NextElementState}} 
 
-   @<Declare XML Attribute Object@>@; @#
+   @<Declare \XML/ Attribute Object@>@; @#
 
-   @<Declare XML Parser object@>@;
+   @<Declare \XML/ Parser object@>@;
 
 @ \node{XML Attribute Object.} An \XML/ attribute contains the attribute
 name and its value. We can represent it as ``just'' an |MStrObj|
@@ -105,7 +105,7 @@ name and its value. We can represent it as ``just'' an |MStrObj|
 
 \label{XMLAttrPtr}
 
-@<Declare XML Attribute Object@>=
+@<Declare \XML/ Attribute Object@>=
    XMLAttrPtr = ^XMLAttrObj; @/
    XMLAttrObj = object(MStrObj) @t\1@> @/
       nValue: string; @/
@@ -115,7 +115,7 @@ name and its value. We can represent it as ``just'' an |MStrObj|
 @ \node{Constructor.} This uses the |MStrObj.Init| constructor to
 initialize the name, then it sets the value.
 
-@<Implementation of XML Parser@>=
+@<Implementation of \XML/ Parser@>=
 constructor XMLAttrObj.Init(const aName,aValue: string);
 begin
    inherited Init(aName);
@@ -126,8 +126,8 @@ end;
 about \XML/. This is just a wrapper around |MizAssert|
 (\section\xref{MizAssert}).
 
-@<Implementation of XML Parser@>=
-procedure XMLASSERT(aCond: boolean);
+@<Implementation of \XML/ Parser@>=
+procedure XMLASSERT(aCond: Boolean);
 begin
    MizAssert(errWrongXMLElement, aCond);
 end;
@@ -135,24 +135,25 @@ end;
 @ \node{Unexpected XML Element.} Another helper function for checking
 \XML/ parsing.
 
-@<Implementation of XML Parser@>=
-procedure UnexpectedXMLElem( const aElem:string; aErr:integer); @|@/
-mdebug;
+@<Implementation of \XML/ Parser@>=
+procedure UnexpectedXMLElem(const aElem:string@+;@+ aErr:integer); @|@/
+mdebug@;
 var lEl:string; @/
-end_mdebug; @t\2@>
+end_mdebug@; @t\2@>
 begin @|@/
-   mdebug;
+   mdebug@;
    InfoNewLine; @+
-   end_mdebug; @/
+   end_mdebug@; @/
    RunTimeError(aErr);
 end;
 
-@ \node{XML Scanner Object.} The scanner produces a stream of tokens,
-which is then consumed by the XML parser. Hence, besides the
+@* [S] XML Scanner Object.
+The scanner produces a stream of tokens,
+which is then consumed by the \XML/ parser. Hence, besides the
 constructor and destructor, there is only one public facing method:
 get the next token.
 
-@<Declare XML Scanner Object type@>=
+@<Declare \XML/ Scanner Object type@>=
    XMLScannObj = object(MObject) @t\1@> @/
       nSourceFile: text; @/
       nSourceFileBuff: pointer; @/
@@ -172,11 +173,11 @@ get the next token.
 IO stuff), then initialize the fields of the scanner to prepare to
 read the first line from the file.
 
-@<Implementation of XML Parser@>=
+@<Implementation of \XML/ Parser@>=
 constructor XMLScannObj.InitScanning(const aFileName:string);
 begin
    inherited Init;
-   @<Prepare to read in the contents of XML file@>;
+   @<Prepare to read in the contents of \XML/ file@>;
    nSpelling:='';
    nLine:='';
    nCurCol:=0;
@@ -188,7 +189,7 @@ end;
 @ This prepares to read in from an \XML/ file, setting up a text buffer,
 and opening the file in ``read mode''.
 
-@<Prepare to read in the contents of XML file@>=
+@<Prepare to read in the contents of \XML/ file@>=
 Assign(nSourceFile,aFileName);
 GetMem(nSourceFileBuff,InOutFileBuffSize);
 SetTextBuf(nSourceFile,nSourceFileBuff^,InOutFileBuffSize);
@@ -197,7 +198,7 @@ Reset(nSourceFile) {open for reading}
 @ \node{Destructor.} We need to close the \XML/ file, as well as free up
 the input buffer.
 
-@<Implementation of XML Parser@>=
+@<Implementation of \XML/ Parser@>=
 destructor XMLScannObj.Done;
 begin
    close(nSourceFile);
@@ -213,12 +214,18 @@ This method may look a bit foreign, since it's a procedure and not a function.
 The current token is stored in several fields in the scanner.
 The token's lexeme is stored into the \\{nSpelling} field.
 
+If the reader wants to extend Mizar to support \UTF8, then
+the \\{byte} parameter needs to be modified accordingly. A crude first
+approximation would be to set the entries indexed [128\dots 255] to $1$.
+
+@:utf8}{\UTF8@>
+
 \label{XMLScannObj.GetToken}
 \def\thickskip{\hskip3pt}
 
 @d update_lexeme == nSpelling:=Copy(nLine,nPos.Col,nCurCol-nPos.Col)
 
-@<Implementation of XML Parser@>=
+@<Implementation of \XML/ Parser@>=
 procedure XMLScannObj.GetToken;
 const CharKind: array[chr(0)..chr(255)] of byte = 
    (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,@/
@@ -233,7 +240,7 @@ const CharKind: array[chr(0)..chr(255)] of byte =
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,@/
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
 begin
-   @<Skip whitespace for XML parser@>;
+   @<Skip whitespace for \XML/ parser@>;
    nPos.Col := nCurCol; @/
    @<Get token kind based off of leading character@>;
    update_lexeme;
@@ -251,7 +258,7 @@ read in a line, increment the line number, reset the column to 1, and
 skip over any whitespace (specifically, ``\texttt{SP}'' are skipped
 over --- tabs or newlines are not skipped).
 
-@<Skip whitespace for XML parser@>=
+@<Skip whitespace for \XML/ parser@>=
    while nCurCol = length(nLine) do
    begin
       if eof(nSourceFile) then
@@ -329,8 +336,9 @@ tag kind'' macro.
    end;
    endcases
 
-@ Scanners can obtain attribute values as tokens.
-This is used by the XML parser
+@ \node{Get attribute value.}
+Scanners can obtain attribute values as tokens.
+This is used by the \XML/ parser
 (\section\section\xref{XMLParserObj.NextTag}, \xref{XMLParserObj.NextElementState}).
 I think one possible source of bugs is that this does not handle
 escaped quotes (e.g., ``\texttt{\BS"}'' is traditionally parsed as a
@@ -347,7 +355,7 @@ skip all whitespace \emph{after} the attribute.
 @d skip_spaces == @+ while is_space
    do inc(nCurCol)
 
-@<Implementation of XML Parser@>=
+@<Implementation of \XML/ Parser@>=
 procedure XMLScannObj.GetAttrValue;
 var lCol: integer;
 begin
@@ -359,13 +367,14 @@ begin
    skip_spaces;
 end;
 
-@ \node{XML Parser.} We recall (\section\xref{xmlparser:types}) the
+@* [S] XML Parser.
+We recall (\section\xref{xmlparser:types}) the
 type for element states (it's an enumerated type with two
 values, \\{eStart} and \\{eEnd}).
 
 \label{XMLParserObj}
 
-@<Declare XML Parser object@>=
+@<Declare \XML/ Parser object@>=
    XMLParserObj = object(XMLScannObj) @t\1@> @/
       nElName	: string;   {name of the current element}
       nState	: TElementState;
@@ -388,8 +397,8 @@ values, \\{eStart} and \\{eEnd}).
       procedure SetAttributeValue(const aVal:string); @t\2\2\2@>
    end;
 
-@ \node{Constructor.} The parser expects an XML file to start with 
-``\texttt{<?xml \dots?>}'' (everything after the ``xml'' is ignored).
+@ \node{Constructor.} The parser expects an \XML/ file to start with 
+``\texttt{<?xml \dots?>}'' (everything after the ``\texttt{xml}'' is ignored).
 If this is not the first non-whitespace entry, an error will be
 raised.
 
@@ -397,16 +406,15 @@ The constructor will then skip all other ``\texttt{<?\dots?>}'' entities.
 
 \label{XMLParserObj.InitParsing}
 
-@d skip_xml_prolog == @+ while (nCurTokenKind <> EOTX) and (nCurTokenKind <> EI) do GetToken;
-      if nCurTokenKind = EI then GetToken
-@d skip_all_other_ids == @+ while nCurTokenKind = BI do
+@d skip_xml_prolog == while (nCurTokenKind <> EOTX) and (nCurTokenKind <> EI) do GetToken; 
+ if nCurTokenKind = EI then GetToken
+@d skip_all_other_ids == while nCurTokenKind = BI do
       begin
          GetToken;
-         while (nCurTokenKind <> EOTX) and (nCurTokenKind <> EI) do GetToken;
-         if nCurTokenKind = EI then GetToken;
+         skip_xml_prolog;
       end
 
-@<Implementation of XML Parser@>=
+@<Implementation of \XML/ Parser@>=
 constructor XMLParserObj.InitParsing(const aFileName:string);
 begin
    inherited InitScanning(aFileName);
@@ -492,15 +500,7 @@ inherited procedure \\{GetToken} (\section\xref{XMLScannObj.GetToken}).
                 GetToken; @+
              end;
           ET:
-             begin
-                nState := eEnd;
-                GetToken;
-                xml_match(ID)(8, [LT, ET]);
-                OpenStartTag;
-                GetToken;
-                xml_match(GT)(7, [LT, ET]);
-                GetToken
-             end;
+             @<Parse \XML/ end tag@>;
        othercases ErrorRecovery(9,[LT,ET]);
        endcases;
     end;
@@ -537,13 +537,24 @@ inherited procedure \\{GetToken} (\section\xref{XMLScannObj.GetToken}).
                       endcases;
                    until nCurTokenKind = EOTX
 
+@ @<Parse \XML/ end tag@>=
+             begin
+                nState := eEnd;
+                GetToken;
+                xml_match(ID)(8, [LT, ET]);
+                OpenStartTag;
+                GetToken;
+                xml_match(GT)(7, [LT, ET]);
+                GetToken
+             end
+
 @ For Mizar, \emph{everything} will be encoded as an element or an
 attribute on an element. So we do not really need to consider the case
 where we would encounter text in the body of an element.
 
 \label{XMLParserObj.NextElementState}
 
-@<Implementation of XML Parser@>=
+@<Implementation of \XML/ Parser@>=
     {Parses next part of \XML/, setting the \\{nState} to \\{eStart} or \\{eEnd}.
     If $\\{nState}=\\{eStart}$, then \\{nElName}, \\{nAttrVals} are set properly.
     It is possible to go from $\\{nState}=\\{eStart}$ to $\\{nState}=\\{eStart}$
@@ -623,7 +634,7 @@ need to consider that situation here.
 @ We will want assertions reflecting the parser is in a ``start''
 state or an ``end'' state.
 
-@<Implementation of XML Parser@>=
+@<Implementation of \XML/ Parser@>=
     procedure XMLParserObj.AcceptEndState;
     begin
        NextElementState;
@@ -636,7 +647,7 @@ state or an ``end'' state.
        MizAssert( errElMissing, nState = eStart);
     end;
 
-@ @p
+@ @<Implementation of \XML/ Parser@>=
     procedure XMLParserObj.OpenStartTag;
     begin
        nElName:= nSpelling;

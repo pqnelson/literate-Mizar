@@ -155,6 +155,8 @@ character'' function is precisely |MizLoCase|.
 If the reader wished for a \UTF8 version of Mizar, then this function
 would require thinking very hard about how to generalize.
 
+@:utf8}{\UTF8@>
+
 @p
 function MizLoCase(aChar: char): char;
 begin

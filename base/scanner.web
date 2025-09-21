@@ -10,6 +10,8 @@ specifically to work with \ASCII/ characters, specifically accepting
 printable characters and the space (``{\tt\SP}'') characters as valid
 input.
 
+@:utf8}{\UTF8@>
+
 \label{scanner.pas}
 
 @<scanner.pas@>=
@@ -1173,12 +1175,20 @@ expects an article to be read in \\{aFileName} and a dictionary to
 be loaded (\\{aDctFileName}, loaded with \section\xref{TokensCollection.LoadDct}). The buffer size for
 reading \\{aFileName} is initially @"4000.
 
+\CAUTION/: This will cause a memory leak if you try to do unit testing
+with the parser. Specifically the \\{loadDct} method appears to
+allocate memory which is never freed adequately. I worry this might be
+sympotmatic of a larger problem.
+
+@^Memory leak@>
+@^Bug, Memory leak@>
+
 @<Implementation for scanner.pas@>=
 constructor MScannObj.InitScanning(const aFileName,aDctFileName:string);
 begin
    inherited Init;
    Allowed:=DefaultAllowed;
-   fTokens.LoadDct(aDctFileName);
+   fTokens.LoadDct(aDctFileName); {memory leaked}
    assign(fSourceFile,aFileName);
    fSourceBuffSize:=@"4000;
    getmem(fSourceBuff,fSourceBuffSize);

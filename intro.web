@@ -72,6 +72,15 @@ paragraph with a ``named code part''.)
    License terms: GNU General Public License Version 3 or any later version.
 }
 
+@ \node{System dependent assumptions.}
+We will note system dependent code when appropriate, but implicitly we
+will assume we are working with users on a \UNIX/-like operating
+system. Hardware should not matter (barring antiques from the 1960s or
+earlier). We will cite the \POSIX/ standard when appropriate, but only
+for the sake of discussion of things like ``How long can we expect a
+filename to be?'' (\POSIX/ says the maximum length of a filename is
+Operating System dependent, but must be at least 14 bytes long.)
+
 @ \node{Asides and opinions.} Some paragraphs will be labeled as
 ``asides'' which are tangential remarks not directly relevant to
 understanding the code, but will enrich the reader's life. \Ithink{The author
